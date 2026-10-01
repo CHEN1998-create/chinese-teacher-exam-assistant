@@ -1,8 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { examTargetService } from "@/lib/services";
 import { EDUCATION_LEVEL_LABELS } from "@/types";
+import { useCurrentExamTarget } from "@/lib/targets/useCurrentExamTarget";
 
 const pageTitles: Record<string, string> = {
   "/onboarding": "目标澄清",
@@ -15,8 +15,19 @@ const pageTitles: Record<string, string> = {
 
 export function Header() {
   const pathname = usePathname();
-  const currentExam = examTargetService.getCurrent();
+  const currentExam = useCurrentExamTarget();
   const title = pageTitles[pathname] || "考编助手";
+
+  const summary = currentExam
+    ? [
+        currentExam.region || "地区待确认",
+        currentExam.educationLevel
+          ? EDUCATION_LEVEL_LABELS[currentExam.educationLevel]
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
 
   return (
     <header className="md:hidden sticky top-0 z-40 bg-white border-b border-slate-200">
@@ -34,10 +45,9 @@ export function Header() {
           )}
           <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
         </div>
-        {currentExam && pathname !== "/onboarding" && (
+        {summary && pathname !== "/onboarding" && (
           <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="truncate max-w-[120px]">{currentExam.region}</span>
-            <span>{EDUCATION_LEVEL_LABELS[currentExam.educationLevel]}</span>
+            <span className="truncate max-w-[140px]">{summary}</span>
           </div>
         )}
       </div>

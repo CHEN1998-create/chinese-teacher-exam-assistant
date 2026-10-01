@@ -9,6 +9,7 @@ import { FeedbackForm } from "@/components/ui/FeedbackForm";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
 import { planService, examTargetService } from "@/lib/services";
+import { canGeneratePlan } from "@/lib/targets/domain";
 import { TaskFeedback } from "@/types";
 import { formatDateWithWeekday, getGreeting } from "@/lib/utils";
 
@@ -46,8 +47,21 @@ export default function TodayPage() {
       <EmptyState
         title="请先设置考试目标"
         description="在查看今日任务之前，需要先明确你的考试目标"
-        actionLabel="设置目标"
+        actionLabel="开始目标澄清"
         actionHref="/onboarding"
+      />
+    );
+  }
+
+  // 与计划页同一门禁：目标未澄清时不展示精确任务
+  if (!canGeneratePlan(currentExam)) {
+    return (
+      <EmptyState
+        icon={<span className="text-5xl">🧭</span>}
+        title="请先完成目标澄清"
+        description="目标明确前不会安排每日精确任务。"
+        actionLabel="去完成目标澄清"
+        actionHref="/exam"
       />
     );
   }

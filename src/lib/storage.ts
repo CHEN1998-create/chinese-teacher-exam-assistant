@@ -19,6 +19,16 @@ export function saveToStorage<T>(key: string, value: T): void {
   }
 }
 
+/**
+ * 严格写入：存储不可用或超限时抛出错误，
+ * 供需要向用户展示“保存失败”状态的业务使用。
+ */
+export function saveToStorageStrict<T>(key: string, value: T): void {
+  if (typeof window === "undefined") return;
+  const serialized = JSON.stringify(value);
+  localStorage.setItem(key, serialized);
+}
+
 export function removeFromStorage(key: string): void {
   if (typeof window === "undefined") return;
   try {

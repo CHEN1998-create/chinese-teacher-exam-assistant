@@ -8,6 +8,7 @@ import { TaskCard } from "@/components/ui/TaskCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
 import { planService, examTargetService } from "@/lib/services";
+import { canGeneratePlan } from "@/lib/targets/domain";
 import { formatDateWithWeekday, formatTime, getWeekdayName } from "@/lib/utils";
 
 export default function PlanPage() {
@@ -15,6 +16,8 @@ export default function PlanPage() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
   const currentExam = examTargetService.getCurrent();
+  const targetReady = currentExam ? canGeneratePlan(currentExam) : false;
+  const clarification = currentExam ? examTargetService.getClarification(currentExam.id) : null;
   const weeklyPlan = planService.getCurrentPlan();
 
   const dailyPlans = useMemo(() => {
@@ -46,8 +49,26 @@ export default function PlanPage() {
       <EmptyState
         title="请先设置考试目标"
         description="在生成计划之前，需要先明确你的考试目标"
-        actionLabel="设置目标"
+        actionLabel="开始目标澄清"
         actionHref="/onboarding"
+      />
+    );
+  }
+
+  // 门禁：目标信息不足时只提示完成澄清，不生成/展示精确复习比例
+  if (!targetReady) {
+    const taskCount = clarification?.tasks.filter((t) => t.status === "pending").length ?? 0;
+    return (
+      <EmptyState
+        icon={<span className="text-5xl">🧭</span>}
+        title="请先完成目标澄清"
+        description={
+          taskCount > 0
+            ? `当前目标「${currentExam.name}」还有 ${taskCount} 个查找任务待完成。目标明确前不会生成精确的复习比例与计划。`
+            : `当前目标「${currentExam.name}」信息还不充分，请补充地区/招聘单位/批次或公告信息。`
+        }
+        actionLabel="去完成目标澄清"
+        actionHref="/exam"
       />
     );
   }

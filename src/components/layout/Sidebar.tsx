@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { examTargetService } from "@/lib/services";
 import { EDUCATION_LEVEL_LABELS, STAFF_ROLES, USER_ROLE_LABELS } from "@/types";
 import { useCurrentUser } from "@/lib/auth";
+import { useCurrentExamTarget } from "@/lib/targets/useCurrentExamTarget";
+import { canGeneratePlan } from "@/lib/targets/domain";
+import { Badge } from "@/components/ui/Badge";
 
 const navItems = [
   { href: "/exam", label: "我的考试", icon: "📋" },
@@ -18,7 +20,7 @@ const navItems = [
 export function Sidebar() {
   const pathname = usePathname();
   const { user, role, hasRole, logout } = useCurrentUser();
-  const currentExam = examTargetService.getCurrent();
+  const currentExam = useCurrentExamTarget();
 
   return (
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0 bg-white border-r border-slate-200">
@@ -31,19 +33,38 @@ export function Sidebar() {
       </div>
 
       {/* Current Exam Info */}
-      {currentExam && (
-        <div className="px-4 py-3 border-b border-slate-200">
-          <div className="bg-blue-50 rounded-lg p-3">
-            <p className="text-xs text-blue-600 font-medium mb-1">当前目标考试</p>
+      <div className="px-4 py-3 border-b border-slate-200">
+        {currentExam ? (
+          <Link href="/exam" className="block bg-blue-50 hover:bg-blue-100/70 rounded-lg p-3 transition-colors">
+            <div className="flex items-center justify-between mb-1">
+              <p className="text-xs text-blue-600 font-medium">当前目标考试</p>
+              {canGeneratePlan(currentExam) ? (
+                <Badge variant="success">已确认</Badge>
+              ) : (
+                <Badge variant="warning">澄清中</Badge>
+              )}
+            </div>
             <p className="text-sm font-medium text-slate-900 line-clamp-2">
               {currentExam.name}
             </p>
             <p className="text-xs text-slate-500 mt-1">
-              {currentExam.region} · {EDUCATION_LEVEL_LABELS[currentExam.educationLevel]}
+              {[
+                currentExam.region || "地区待确认",
+                currentExam.educationLevel
+                  ? EDUCATION_LEVEL_LABELS[currentExam.educationLevel]
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </p>
-          </div>
-        </div>
-      )}
+          </Link>
+        ) : (
+          <Link href="/onboarding" className="block rounded-lg border border-dashed border-slate-300 p-3 hover:border-blue-400 transition-colors">
+            <p className="text-xs text-slate-500 font-medium mb-0.5">尚未设置目标考试</p>
+            <p className="text-sm font-medium text-blue-600">开始目标澄清 →</p>
+          </Link>
+        )}
+      </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">

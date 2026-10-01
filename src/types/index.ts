@@ -43,21 +43,119 @@ export interface UserSettings {
 
 // ==================== 目标考试 ====================
 
+/**
+ * 目标澄清的四种入口状态（跨层契约，存储值/UI/门禁共用，勿随意改名）：
+ * - announcement：已有明确公告
+ * - region：已确定地区但暂无公告
+ * - candidates：有几个候选地区或学段
+ * - subject：只确定语文学科
+ */
+export type TargetStatus = "announcement" | "region" | "candidates" | "subject";
+
+/** 学科：当前固定语文，保留枚举以便未来扩展 */
+export type SubjectType = "chinese";
+
+/** 查找任务的类型，用于生成澄清任务与图标/文案 */
+export type ClarificationTaskType =
+  | "find_announcement"
+  | "confirm_region"
+  | "confirm_unit_or_batch"
+  | "confirm_level"
+  | "compare_candidates"
+  | "other";
+
+/** 候选地区/学段（candidates 入口使用） */
+export interface TargetCandidate {
+  id: string;
+  province?: string;
+  city?: string;
+  educationLevel?: EducationLevel;
+  note?: string;
+}
+
+/** 信息不足时生成的查找任务（每次目标最多 1-3 个） */
+export interface ClarificationTask {
+  id: string;
+  title: string;
+  description?: string;
+  taskType: ClarificationTaskType;
+  status: "pending" | "done";
+  /** 时限提示，例如“本周内” */
+  dueHint?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+/** 已确定条件（澄清结果展示用） */
+export interface ConfirmedCondition {
+  label: string;
+  value: string;
+}
+
+/** 目标信息不足时的澄清结果 */
+export interface ClarificationResult {
+  targetId: string;
+  /** 已确定条件 */
+  confirmedConditions: ConfirmedCondition[];
+  /** 待确认问题 */
+  pendingQuestions: string[];
+  /** 1-3 个查找任务 */
+  tasks: ClarificationTask[];
+}
+
+/** 创建/编辑目标时的输入数据（字段均可部分填写，以支持草稿与逐步澄清） */
+export interface ExamTargetInput {
+  targetStatus: TargetStatus;
+  province?: string;
+  city?: string;
+  /** 招聘单位 */
+  recruiter?: string;
+  examType?: ExamType;
+  year?: number;
+  batch?: string;
+  educationLevel?: EducationLevel;
+  stage?: ExamStage;
+  announcementUrl?: string;
+  announcementFile?: string;
+  candidates?: TargetCandidate[];
+  /** 已确认为本周方向的候选 id（confirmCandidateDirection 内部使用） */
+  confirmedCandidateId?: string;
+}
+
 export interface ExamTarget {
   id: string;
   userId: string;
   name: string;
+  /** 地区展示串，由省份/城市/招聘单位派生，保持空串安全 */
   region: string;
   regionCode: string;
-  examType: ExamType;
-  educationLevel: EducationLevel;
-  year: number;
+  /** 省份 */
+  province?: string;
+  /** 城市 */
+  city?: string;
+  /** 招聘单位（与城市至少填一个即可满足地区条件） */
+  recruiter?: string;
+  examType?: ExamType;
+  educationLevel?: EducationLevel;
+  /** 年份或批次：年份允许为空（信息不足时不臆造） */
+  year?: number;
   batch?: string;
+  /** 学科，固定语文 */
+  subject: SubjectType;
   stage: ExamStage;
+  /** 生命周期：draft 信息填写中/信息不足，confirmed 已确认主目标，archived 已归档 */
   status: ExamStatus;
+  /** 四选一的澄清入口状态 */
+  targetStatus: TargetStatus;
   isCurrent: boolean;
   announcementUrl?: string;
   announcementFile?: string;
+  /** candidates 入口的候选列表 */
+  candidates?: TargetCandidate[];
+  /** 已确认为本周准备方向的候选 id */
+  confirmedCandidateId?: string;
+  /** 信息不足时生成的查找任务（随目标持久化，完成状态可保留） */
+  clarificationTasks?: ClarificationTask[];
   createdAt: string;
   updatedAt: string;
 }
@@ -348,6 +446,25 @@ export const EXAM_STAGE_LABELS: Record<ExamStage, string> = {
   written_exam: "笔试阶段",
   interview: "面试阶段",
   completed: "已完成",
+};
+
+/** 四种目标澄清入口的文案（存储值到展示文案的唯一映射） */
+export const TARGET_STATUS_LABELS: Record<TargetStatus, string> = {
+  announcement: "已有明确公告",
+  region: "已确定地区·暂无公告",
+  candidates: "候选地区/学段",
+  subject: "只确定语文学科",
+};
+
+export const SUBJECT_LABELS: Record<SubjectType, string> = {
+  chinese: "语文",
+};
+
+/** 目标生命周期状态文案 */
+export const TARGET_LIFECYCLE_LABELS: Record<ExamStatus, string> = {
+  draft: "澄清中",
+  confirmed: "已确认",
+  archived: "已归档",
 };
 
 export const EVIDENCE_LEVEL_LABELS: Record<EvidenceLevel, string> = {

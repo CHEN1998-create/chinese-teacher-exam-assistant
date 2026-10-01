@@ -1,5 +1,8 @@
 import {
   ExamTarget,
+  ExamTargetInput,
+  ClarificationResult,
+  ClarificationTask,
   EvidenceCard,
   UserMaterial,
   PublicResource,
@@ -21,8 +24,16 @@ import {
   mockUserSettings,
   STORAGE_KEYS,
 } from "./mock-data";
-import { loadFromStorage, saveToStorage, clearAllStorage } from "./storage";
+import { loadFromStorage, saveToStorage, saveToStorageStrict, clearAllStorage } from "./storage";
 import { authService } from "./auth";
+import {
+  buildClarification,
+  buildTarget,
+  canGeneratePlan,
+  normalizeTarget,
+  rebaseClarificationTasks,
+  validateConfirm,
+} from "./targets/domain";
 
 // ==================== 用户服务 ====================
 //
@@ -79,52 +90,270 @@ export const userService = {
 };
 
 // ==================== 目标考试服务 ====================
+//
+// 目标的就绪门禁与澄清任务由 lib/targets/domain.ts 统一计算，
+// 本服务只负责持久化（Mock：localStorage）与按用户存取。
+
+/** 目标数据变更订阅（切换/编辑/归档后通知 UI 立即刷新） */
+const targetListeners = new Set<() => void>();
+/** 每次成功持久化自增，供 useSyncExternalStore 判断是否需要重读 */
+let targetStoreVersion = 0;
+
+function notifyTargetChanged(): void {
+  targetStoreVersion += 1;
+  targetListeners.forEach((fn) => fn());
+}
 
 export const examTargetService = {
-  getAll(): ExamTarget[] {
-    return loadFromStorage(STORAGE_KEYS.EXAM_TARGETS, mockExamTargets);
+  /** 订阅目标数据变更，返回取消订阅函数 */
+  subscribe(listener: () => void): () => void {
+    targetListeners.add(listener);
+    return () => {
+      targetListeners.delete(listener);
+    };
   },
 
+  /** 当前存储版本号 */
+  getVersion(): number {
+    return targetStoreVersion;
+  },
+
+  /** 读取全部目标（含其他演示账号的数据，避免跨账号覆盖），已做旧数据归一化 */
+  getAllRaw(): ExamTarget[] {
+    const list = loadFromStorage<ExamTarget[]>(STORAGE_KEYS.EXAM_TARGETS, mockExamTargets);
+    return list.map(normalizeTarget);
+  },
+
+  /** 当前登录用户的全部目标，未登录返回空数组 */
+  getAll(): ExamTarget[] {
+    const userId = userService.getUser()?.id;
+    if (!userId) return [];
+    return this.getAllRaw().filter((t) => t.userId === userId);
+  },
+
+  /** 当前主目标：优先取会话指针，回退 isCurrent 标记；归档目标不作为主目标 */
   getCurrent(): ExamTarget | null {
     const targets = this.getAll();
     const currentId = userService.getUser()?.currentExamTargetId;
-    return targets.find((t) => t.id === currentId) || targets.find((t) => t.isCurrent) || null;
+    const found =
+      targets.find((t) => t.id === currentId) ||
+      targets.find((t) => t.isCurrent) ||
+      null;
+    return found && found.status !== "archived" ? found : null;
   },
 
   getById(id: string): ExamTarget | null {
     return this.getAll().find((t) => t.id === id) || null;
   },
 
-  create(data: Omit<ExamTarget, "id" | "userId" | "createdAt" | "updatedAt">): ExamTarget {
-    const targets = this.getAll();
-    const newTarget: ExamTarget = {
-      ...data,
-      id: `et-${Date.now()}`,
-      userId: userService.getUser()?.id ?? "anonymous",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    targets.push(newTarget);
-    saveToStorage(STORAGE_KEYS.EXAM_TARGETS, targets);
-    return newTarget;
+  /** 保存草稿（信息填写中，不做完整性校验，不允许直接覆盖为当前主目标） */
+  saveDraft(input: ExamTargetInput): ExamTarget {
+    return this.persistNew(input);
   },
 
-  update(id: string, updates: Partial<ExamTarget>): ExamTarget | null {
-    const targets = this.getAll();
-    const index = targets.findIndex((t) => t.id === id);
+  /**
+   * 确认目标：校验进入条件后保存。
+   * 条件不足时抛出 Error（调用方展示“保存失败/还缺什么”）。
+   */
+  confirmTarget(input: ExamTargetInput): ExamTarget {
+    validateConfirm(input);
+    const target = this.persistNew(input);
+    if (!canGeneratePlan(target)) {
+      // 例如 subject/candidates 入口即使字段校验通过也不满足门禁
+      return target;
+    }
+    this.setCurrent(target.id);
+    return target;
+  },
+
+  persistNew(input: ExamTargetInput): ExamTarget {
+    const userId = userService.getUser()?.id ?? "anonymous";
+    const id = `et-${Date.now()}`;
+    const newTarget = buildTarget({ id, userId, input });
+    // 新建目标（含信息不足的草稿）即成为当前主目标，
+    // 旧主目标保留在历史目标中，可随时切换回来
+    newTarget.isCurrent = true;
+
+    const all = this.getAllRaw().map((t) =>
+      t.userId === userId ? { ...t, isCurrent: false } : t
+    );
+    all.push(newTarget);
+    this.persist(all);
+
+    // 生成初始澄清任务并持久化（保留在目标上，完成状态可追踪）
+    const withTasks = this.attachGeneratedTasks(newTarget.id);
+    userService.updateUser({ currentExamTargetId: newTarget.id });
+    return withTasks ?? newTarget;
+  },
+
+  /** 编辑目标：重新派生名称/地区/生命周期与澄清任务 */
+  update(id: string, input: ExamTargetInput): ExamTarget | null {
+    const all = this.getAllRaw();
+    const index = all.findIndex((t) => t.id === id);
     if (index === -1) return null;
-    targets[index] = { ...targets[index], ...updates, updatedAt: new Date().toISOString() };
-    saveToStorage(STORAGE_KEYS.EXAM_TARGETS, targets);
-    return targets[index];
+
+    const rebuilt = buildTarget({ id, userId: all[index].userId, input, existing: all[index] });
+    all[index] = rebuilt;
+    this.persist(all);
+    this.attachGeneratedTasks(id);
+    return this.getById(id);
   },
 
-  setCurrent(id: string): void {
-    const targets = this.getAll().map((t) => ({
+  /** 切换当前主目标；归档目标不允许被切换为主目标 */
+  setCurrent(id: string): ExamTarget {
+    const target = this.getById(id);
+    if (!target) throw new Error("目标不存在或不属于当前账号");
+    if (target.status === "archived") throw new Error("已归档目标不能设为当前目标");
+
+    const all = this.getAllRaw().map((t) => ({
       ...t,
       isCurrent: t.id === id,
     }));
-    saveToStorage(STORAGE_KEYS.EXAM_TARGETS, targets);
+    this.persist(all);
     userService.updateUser({ currentExamTargetId: id });
+    return this.getById(id)!;
+  },
+
+  /** 归档目标：移出主目标；若无其他主目标则当前目标为空 */
+  archive(id: string): ExamTarget {
+    const all = this.getAllRaw();
+    const index = all.findIndex((t) => t.id === id);
+    if (index === -1) throw new Error("目标不存在");
+    all[index] = { ...all[index], status: "archived", isCurrent: false };
+
+    // 若归档的是当前主目标，自动选择最近的非归档目标
+    const remainingActive = all
+      .filter((t) => t.userId === all[index].userId && t.status !== "archived")
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    if (remainingActive.length > 0) {
+      remainingActive.forEach((t, i) => {
+        const idx = all.findIndex((x) => x.id === t.id);
+        all[idx] = { ...all[idx], isCurrent: i === 0 };
+      });
+      userService.updateUser({ currentExamTargetId: remainingActive[0].id });
+    } else {
+      userService.updateUser({ currentExamTargetId: undefined });
+    }
+
+    this.persist(all);
+    return all[index];
+  },
+
+  /** 从历史归档中重新启用目标 */
+  restore(id: string): ExamTarget {
+    const all = this.getAllRaw();
+    const index = all.findIndex((t) => t.id === id);
+    if (index === -1) throw new Error("目标不存在");
+    const input: ExamTargetInput = {
+      targetStatus: all[index].targetStatus,
+      province: all[index].province,
+      city: all[index].city,
+      recruiter: all[index].recruiter,
+      examType: all[index].examType,
+      year: all[index].year,
+      batch: all[index].batch,
+      educationLevel: all[index].educationLevel,
+      stage: all[index].stage,
+      announcementUrl: all[index].announcementUrl,
+      candidates: all[index].candidates,
+      confirmedCandidateId: all[index].confirmedCandidateId,
+    };
+    all[index] = buildTarget({ id, userId: all[index].userId, input, existing: all[index] });
+    all[index].status = canGeneratePlan(all[index]) ? "confirmed" : "draft";
+    this.persist(all);
+    return all[index];
+  },
+
+  /** candidates 入口：确认一个候选为本周准备方向（门禁条件之一），并自动切为主目标 */
+  confirmCandidateDirection(targetId: string, candidateId: string): ExamTarget {
+    const target = this.getById(targetId);
+    if (!target) throw new Error("目标不存在");
+    const candidate = target.candidates?.find((c) => c.id === candidateId);
+    if (!candidate) throw new Error("候选方向不存在");
+
+    this.update(targetId, {
+      targetStatus: "candidates",
+      candidates: target.candidates,
+      confirmedCandidateId: candidateId,
+      province: candidate.province,
+      city: candidate.city,
+      educationLevel: candidate.educationLevel ?? target.educationLevel,
+      examType: target.examType,
+      stage: target.stage,
+    });
+    // 方向一经确认即成为当前主目标（此时已满足门禁）
+    return this.setCurrent(targetId);
+  },
+
+  /** 信息不足时的澄清结果；已充分返回 null */
+  getClarification(id: string): ClarificationResult | null {
+    const target = this.getById(id);
+    return target ? buildClarification(target) : null;
+  },
+
+  /** 勾选/取消查找任务 */
+  toggleClarificationTask(targetId: string, taskId: string, done: boolean): ClarificationTask | null {
+    const all = this.getAllRaw();
+    const index = all.findIndex((t) => t.id === targetId);
+    if (index === -1) return null;
+    const tasks = all[index].clarificationTasks ?? [];
+    const updatedTasks = tasks.map((t) =>
+      t.id === taskId
+        ? {
+            ...t,
+            status: done ? ("done" as const) : ("pending" as const),
+            completedAt: done ? new Date().toISOString() : undefined,
+          }
+        : t
+    );
+    all[index] = { ...all[index], clarificationTasks: updatedTasks };
+    this.persist(all);
+    return updatedTasks.find((t) => t.id === taskId) ?? null;
+  },
+
+  /** 目标是否可以生成完整计划（门禁的 service 出口） */
+  canGeneratePlan(id: string): boolean {
+    const target = this.getById(id);
+    return target ? canGeneratePlan(target) : false;
+  },
+
+  /** 编辑表单用：把目标还原为输入结构 */
+  toInput(target: ExamTarget): ExamTargetInput {
+    return {
+      targetStatus: target.targetStatus,
+      province: target.province,
+      city: target.city,
+      recruiter: target.recruiter,
+      examType: target.examType,
+      year: target.year,
+      batch: target.batch,
+      educationLevel: target.educationLevel,
+      stage: target.stage,
+      announcementUrl: target.announcementUrl,
+      candidates: target.candidates,
+      confirmedCandidateId: target.confirmedCandidateId,
+    };
+  },
+
+  /** 重新计算并保存澄清任务（保留已完成状态） */
+  attachGeneratedTasks(id: string): ExamTarget | null {
+    const all = this.getAllRaw();
+    const index = all.findIndex((t) => t.id === id);
+    if (index === -1) return null;
+    const tasks = rebaseClarificationTasks(all[index]);
+    all[index] = { ...all[index], clarificationTasks: tasks };
+    try {
+      this.persist(all);
+    } catch {
+      // 任务生成失败不阻断主流程
+    }
+    return all[index];
+  },
+
+  /** 严格持久化：存储失败时向上抛出，由页面展示“保存失败” */
+  persist(all: ExamTarget[]): void {
+    saveToStorageStrict(STORAGE_KEYS.EXAM_TARGETS, all);
+    notifyTargetChanged();
   },
 };
 
