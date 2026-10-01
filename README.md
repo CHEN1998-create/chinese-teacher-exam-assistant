@@ -583,6 +583,66 @@ src/components/ui/
 7. 控制台 `JSON.parse(localStorage.getItem("kb_task_feedbacks"))` 核对关联字段与每任务一条；
 8. 模拟写入失败：重写 `Storage.prototype.setItem` 对 `kb_task_feedbacks` 抛错 → 表单红字且不丢输入，恢复后重试成功。
 
+## 动态计划重排与第 7 天周复盘（当前为本地 Mock，非生产实现）
+
+根据真实执行结果调整剩余计划：任务未完成时不把全部欠账堆到第二天，而是在保留、缩减、顺延、替换、放弃之间作出可解释选择。重排规则全部在独立规则层 `src/lib/plans/replanEngine.ts`（纯函数，无 AI 时为确定性规则，同样输入得到同样输出）。
+
+### 重排读取与修改的数据
+
+- 读取（不修改）：执行中周计划与其全部日计划、本周全部真实执行反馈（跨版本族收集：同目标同起止日期的全部版本）、能力基线（每日可用时间）、资料诊断快照、考情证据、已加入计划的资源；
+- 写入（只追加）：新周计划版本（草稿）与对应日计划、任务级调整记录 `kb_plan_adjustments`、周复盘 `kb_weekly_reviews`；
+- 历史版本、日计划与反馈一律不修改、不删除；确认重排后旧版本标记 completed 保留。
+
+### 七类触发信号（`detectTriggers`，纯读取）
+
+可用时间变化、任务未完成/部分完成、连续相同错因（≥2 次）、资料不适合、第 4 天中期重排（剩余 ≤4 天提示）、高影响考情变化（计划生成后更新的报名/考试时间、科目、分值、资格条件）、用户主动要求。`/plan` 的「调整剩余计划（重排）」卡片可一键检测并逐条展示信号与依据。
+
+### 五种调整动作与记录
+
+每项受影响任务只能选择：保留 keep / 缩减 reduce / 顺延 postpone / 替换 replace / 放弃 abandon。每次调整保存：调整前内容、调整后内容、动作、原因、引用的反馈或考情变化、新计划版本（`fromVersion`→`toVersion`）。草稿态在重排面板逐条展示前后对比，确认后可在版本历史中对比任意两版。
+
+### 重排决策规则（确定性）
+
+1. 剩余任务总时长不超过当天可用时间（已完成任务保留、不计容量）；
+2. 未完成欠账分散到多个剩余日：顺延 ≥2 次或最后一天仍放不下才放弃，不会全部堆到第二天；
+3. 时间不足时按优先级贪心：高优先级可减半一次，每天第一项保底压缩为最低可完成任务，关键模块先保留；
+4. 资料不适合（反馈错因 material_unsuitable 或诊断 pause）→ 优先替换为其他适用资料的同类任务，不机械顺延；
+5. 同一模块同一错因本周 ≥2 次 → 替换为基础巩固任务（降低难度、回到基础）；
+6. 高影响考情在计划生成后更新 → 相关任务标记 needsConfirmation（待重新确认），任务卡显示黄色徽章。
+
+### 第 7 天周复盘
+
+计划结束日当天或之后（或计划已完结），`/plan` 出现「第 7 天周复盘」卡片，可生成复盘，展示：完成天数与任务数（完成/部分完成/未完成/未提交反馈分列）、预计时间与实际时间、主要中断原因、高频错因、使用过的资料与资源、调整效果评估（放弃→待观察、调整后已完成→有效）、下一周建议（确定性规则，仅基于真实统计）。
+
+口径声明：只聚合真实提交的反馈，不编造结果；任务级完成统计只计「当天实际执行所用版本」的日计划（按版本创建时间取当天生效版本）；未提交反馈的任务单独计数并在 dataNote 中说明，不计入完成数据。
+
+### 文件结构
+
+```
+src/lib/plans/
+├── replanEngine.ts      # ReplanEngine 纯函数：触发检测/上下文推导/五动作决策/新版本生成
+├── replanService.ts     # 重排草稿生成/确认/放弃、调整记录查询、第 7 天周复盘生成与查询
+src/components/plans/
+├── ReplanPanel.tsx      # 重排面板：信号检测/生成草稿/前后对比/确认与放弃/历史调整记录
+└── WeeklyReviewCard.tsx # 周复盘展示卡
+src/components/ui/
+└── TaskCard.tsx         # 新增「待重新确认」徽章（needsConfirmation）
+```
+
+存储键：`kb_plan_adjustments`（只追加的任务级调整记录）、`kb_weekly_reviews`（周复盘）。
+
+### 三案例验证（均在 `student@demo.app` 账号、杭州初中 2026 目标下）
+
+1. **时间减少**：设置页把每日可用时间从 180 分钟调到 60 分钟 → 「检测重排信号」出现时间变化信号 → 生成草稿后剩余每日任务总时长全部 ≤60 分钟，欠账分散到多个剩余日（不堆到第二天），顺延 ≥2 次的任务被放弃；
+2. **连续未完成**：对同一模块连续两天提交"未完成 + 知识点不会" → 触发连续相同错因信号 → 重排后该模块任务替换为"基础巩固练习"（降低难度）；
+3. **资料不适合**：`/today` 对任务提交"未完成 + 资料或任务不适合" → 触发资料不适合信号 → 重排草稿出现 replace 动作（本次验证 actionCounts 为 replace 3 / postpone 3 / abandon 2，替换记录引用反馈与诊断依据）。
+
+注意：重排只关联真实提交的反馈；直接往 localStorage 注入历史版本的 taskId 无法命中（重排生成新任务 id），请通过 `/today` 表单提交。
+
+### 本次不实现
+
+AI 驱动的重排建议（当前为确定性规则）、跨周计划衔接、任务反馈驱动的自动重排（需用户主动触发或按信号提示手动生成）、大范围撤回与计划回滚（历史版本仅可查看对比）。
+
 ## 目录结构
 
 ```
@@ -761,6 +821,7 @@ export const examTargetService = {
 | 2026-10-01 | 公共资源索引与资料缺口匹配 | 新增 `ResourceItem`/`RightsStatus`/`ResourceStatus`/`ResourceMatch`/`ResourcePlanLink`/`ResourceViewRecord`/`ResourceQueueKey` 类型与标签（旧 `PublicResource` 保留为别名）；新增 `src/lib/resources/`（domain 纯规则层：权利层级、合规闸门、范围匹配、打分排序、180 天复核周期、队列分类、旧数据归一化；resourceService：浏览/匹配/查看与加入计划记录/后台 CRUD 双重角色校验/队列统计；events；useResources hooks）与 `src/components/resources/GapResourcePanel.tsx`；诊断结果页按缺口展示最多 3 个资源（理由/范围/权利/查看来源/加入本周计划/空态查找建议），公共资源浏览列表改走同一闸门；新增 `/admin/resources`（五队列计数、新增/编辑/停用/启用/标记复核、不强推原因与使用统计，resource_reviewer/admin 可写、exam_reviewer 只读）与 `ResourceFormModal`，后台导航与概览卡上线；mock 资源重写为 13 条 `mockResources`（四组匹配案例 + 坏链/停用/权利不明/过期/超期未复核），新增 `kb_resource_views`、`kb_resource_plan_links` 存储键；私有资料与公共资源物理隔离、无私有上传自动入库路径。不含付费、网盘下载、第三方全文复制 |
 | 2026-10-01 | 7 天计划与任务生成 | 新增 `PlanStatus`/`TaskPriority`/`TaskSourceType` 类型，`WeeklyPlan` 增加 `generationReason`，`DailyPlan` 增加 `availableMinutes`，`PlanTask` 增加 `sourceType`/`chapterTitle`/`resourceId`/`arrangementReason`/`reviewAction`/`priority`；新增 `src/lib/plans/`（domain 纯函数 PlanEngine：就绪检查、任务来源收集、优先级排序、每天≤3 项/总时长≤可用时间/每天≥1 项最低任务的时间分配；planService：草稿生成/确认执行/重新生成/调整每日时间/版本历史；usePlans 订阅 hook）与 `src/components/plans/DailyPlanCard.tsx`；`/plan` 重写为缺失信息提示→生成草稿→七天概览→展开任务（含安排原因/完成标准/复盘动作/优先级）→确认→版本历史→调整时间；`/today` 改为读取已确认计划（status=active）的当日任务；移除旧版 `mockWeeklyPlan`/`mockDailyPlans`，新增 `kb_daily_plans` 存储键。不含任务反馈驱动的自动重排、第 4 天自适应重排、跨周计划衔接 |
 | 2026-10-01 | 今日任务与执行反馈 | 新增 `CompletionStatus`/`ErrorCategory`（旧 `ErrorType` 保留别名）/`IncompleteReason`/`TaskFeedbackInput` 类型与完成状态/未完成原因/错因中文标签（错因七项：知识点不会/题目理解错误/答题结构不清/时间不够/粗心/资料或任务不适合/其他）；`TaskFeedback` 扩展为关联用户+计划版本（weeklyPlanId/weeklyVersion）+日计划+日期+任务，新增 `updatedAt`；新增 `src/lib/plans/feedbackService.ts`（独立 `kb_task_feedbacks` 存储、一任务一反馈重复提交抛 `DuplicateFeedbackError`、修改保留 createdAt 刷 updatedAt、同步任务状态但不删除不顺延、listByTask/DailyPlan/WeeklyPlan/Date 查询出口）与 `useToday.ts`（跨午夜 30s/visibility/focus 自动切天）；重写 `FeedbackForm` 为一分钟点选式表单（完成三态/±15 用时/条件原因/错因多选/二次练习/选填说明/修改模式/保存失败内联重试）；新增 `TodayTaskItem`/`FeedbackSummary` 组件，`/today` 重写为只读 active 计划、核心+补充分组、最低任务标记、待反馈计数、提交后状态化下一步提示；planService 移除旧 submitTaskFeedback，归一化兼容旧版内嵌反馈。不含自动重排与任务顺延 |
+| 2026-10-01 | 动态计划重排与第 7 天周复盘 | 新增 `ReplanTrigger`/`TaskAdjustmentAction`/`TaskAdjustment`/`ReplanRef`/`WeeklyReview(Stat/AdjustmentOutcome)` 类型与中文标签，`PlanTask` 增加 `needsConfirmation`；新增 `src/lib/plans/replanEngine.ts`（独立 ReplanEngine 纯函数：七类触发信号检测、上下文推导〔错因频次/资料不适合/诊断暂停/考情变更〕、五动作确定性决策、容量贪心分配〔优先级减半/最低任务保底/顺延≥2 次或末日才放弃/欠账分散〕、基础巩固替换、待重新确认标记）与 `replanService.ts`（跨版本族反馈收集、重排草稿生成/确认/放弃只追加不覆盖历史、调整记录查询、第 7 天周复盘：仅聚合真实反馈、未反馈任务单独计数、调整效果评估、确定性下周建议）；新增 `ReplanPanel`（信号展示/草稿前后对比/确认与放弃/本版本调整记录）与 `WeeklyReviewCard` 组件，`/plan` 接入重排面板与周复盘区块，`TaskCard` 支持待重新确认徽章；新增 `kb_plan_adjustments`/`kb_weekly_reviews` 存储键。三案例验证：时间减少（60 分钟容量约束+欠账分散）、连续未完成（同错因≥2 次替换为基础巩固）、资料不适合（replace 3/postpone 3/abandon 2）。无 AI 时为确定性规则；不含 AI 建议、跨周衔接、自动重排与计划回滚 |
 
 ## 构建与部署
 

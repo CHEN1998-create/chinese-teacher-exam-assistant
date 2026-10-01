@@ -808,5 +808,7 @@ export const STORAGE_KEYS = {
   PLANS: "kb_plans",
   DAILY_PLANS: "kb_daily_plans",
   TASK_FEEDBACKS: "kb_task_feedbacks",
+  PLAN_ADJUSTMENTS: "kb_plan_adjustments",
+  WEEKLY_REVIEWS: "kb_weekly_reviews",
   SETTINGS: "kb_settings",
 } as const;

@@ -365,6 +365,10 @@ export { planService } from "./plans/planService";
 // 一条任务仅一条反馈（可修改），供后续计划重排模块读取。
 export { feedbackService, DuplicateFeedbackError, nextStepHint } from "./plans/feedbackService";
 
+// 动态计划重排与第 7 天周复盘：ReplanEngine 规则层（lib/plans/replanEngine）+ 服务。
+// 重排生成新版本（草稿→确认），历史版本只追加不覆盖；周复盘仅聚合真实反馈。
+export { replanService } from "./plans/replanService";
+
 // ==================== 统计服务 ====================
 
 export const statsService = {

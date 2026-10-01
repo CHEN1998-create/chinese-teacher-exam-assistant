@@ -38,6 +38,7 @@ export function TaskCard({
           <div className="flex items-center gap-2 mb-1 flex-wrap">
             <TaskStatusBadge status={task.status} />
             {task.isCore && <Badge variant="primary">核心</Badge>}
+            {task.needsConfirmation && <Badge variant="warning">待重新确认</Badge>}
             <Badge variant={PRIORITY_VARIANT[task.priority] ?? "muted"}>
               优先级{TASK_PRIORITY_LABELS[task.priority] ?? task.priority}
             </Badge>

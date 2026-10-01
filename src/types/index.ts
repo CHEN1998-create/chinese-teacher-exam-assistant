@@ -697,6 +697,8 @@ export interface PlanTask {
   priority: TaskPriority;
   /** 是否核心任务（priority === high） */
   isCore: boolean;
+  /** 高影响考情在计划生成后发生变化：任务待用户重新确认 */
+  needsConfirmation?: boolean;
   feedback?: TaskFeedback;
   createdAt: string;
   updatedAt: string;
@@ -710,6 +712,120 @@ export interface PlanAdjustment {
   affectedTaskIds: string[];
   notes?: string;
   createdAt: string;
+}
+
+// ==================== 动态计划重排 ====================
+
+/** 单项任务调整动作：保留 / 缩减 / 顺延 / 替换 / 放弃 */
+export type TaskAdjustmentAction = "keep" | "reduce" | "postpone" | "replace" | "abandon";
+
+/** 重排触发类型 */
+export type ReplanTriggerType =
+  | "user_request" // 用户主动要求调整
+  | "time_change" // 可用时间发生变化
+  | "task_incomplete" // 任务部分完成或未完成
+  | "repeated_error" // 连续出现相同错因
+  | "material_unsuitable" // 资料被判断不适合
+  | "midweek_day4" // 第4天中期重排
+  | "evidence_change"; // 考情或目标发生变化
+
+/** 重排依据引用：反馈 / 考情证据 / 基线 / 诊断 / 计划本身 */
+export interface ReplanRef {
+  kind: "feedback" | "evidence" | "baseline" | "diagnosis" | "plan";
+  id?: string;
+  /** 展示用说明，如「10-01 「文言文实词」未完成」 */
+  label: string;
+}
+
+/** 一次重排分析检出的触发信号 */
+export interface ReplanTrigger {
+  type: ReplanTriggerType;
+  detail: string;
+  refs: ReplanRef[];
+}
+
+/**
+ * 任务级调整记录：每次调整保存调整前后内容、动作、原因、
+ * 引用的反馈/考情变化，以及所属的新计划版本。
+ * 历史版本与调整记录只追加、不覆盖。
+ */
+export interface TaskAdjustment {
+  id: string;
+  /** 调整后（新版本）的周计划 id */
+  weeklyPlanId: string;
+  fromVersion: number;
+  toVersion: number;
+  /** 原任务 id（替换/顺延产生的新任务会有新 id） */
+  taskId: string;
+  /** 原日期 */
+  date: string;
+  /** 调整后日期（同日调整时与 date 相同；放弃时为决策当天） */
+  toDate: string;
+  action: TaskAdjustmentAction;
+  reason: string;
+  refs: ReplanRef[];
+  /** 调整前任务快照 */
+  before: PlanTask | null;
+  /** 调整后任务快照；放弃时为 null */
+  after: PlanTask | null;
+  createdAt: string;
+}
+
+/** 周复盘统计项 */
+export interface WeeklyReviewStat {
+  key: string;
+  label: string;
+  count: number;
+}
+
+/** 单条调整的效果判定 */
+export interface WeeklyReviewAdjustmentOutcome {
+  adjustmentId: string;
+  action: TaskAdjustmentAction;
+  reason: string;
+  /** effective：调整后的任务最终被完成；pending：暂无反馈可评估 */
+  outcome: "effective" | "pending";
+  note: string;
+}
+
+/**
+ * 第 7 天周复盘。
+ * 只统计用户真实提交的执行反馈，未提交反馈的任务不计入完成数据。
+ */
+export interface WeeklyReview {
+  id: string;
+  userId: string;
+  examTargetId: string;
+  weeklyPlanId: string;
+  version: number;
+  startDate: string;
+  endDate: string;
+  generatedAt: string;
+  /** 有任务安排的天数 / 其中全部任务完成的天数 */
+  daysWithTasks: number;
+  completedDays: number;
+  totalTasks: number;
+  completedTasks: number;
+  partialTasks: number;
+  notCompletedTasks: number;
+  /** 未提交反馈的任务数（诚实呈现） */
+  noFeedbackTasks: number;
+  plannedMinutes: number;
+  actualMinutes: number;
+  /** 主要中断原因（未完成原因聚合） */
+  interruptionReasons: WeeklyReviewStat[];
+  /** 高频错因 */
+  errorCategories: WeeklyReviewStat[];
+  /** 实际执行过（有反馈）的资料与资源 */
+  usedSources: { id: string; name: string; type: "material" | "resource" }[];
+  /** 本周期内的重排调整总数 */
+  adjustmentCount: number;
+  /** 哪些调整有效（依据调整后任务的后续反馈判定，无反馈时标记待观察） */
+  adjustmentOutcomes: WeeklyReviewAdjustmentOutcome[];
+  /** 下一周建议（确定性规则生成） */
+  suggestions: string[];
+  /** 数据口径说明 */
+  dataNote: string;
 }
 
 // ==================== 执行反馈 ====================
@@ -1088,4 +1204,24 @@ export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
   high: "高",
   medium: "中",
   low: "低",
+};
+
+/** 任务调整动作文案 */
+export const TASK_ADJUSTMENT_ACTION_LABELS: Record<TaskAdjustmentAction, string> = {
+  keep: "保留",
+  reduce: "缩减",
+  postpone: "顺延",
+  replace: "替换",
+  abandon: "放弃",
+};
+
+/** 重排触发类型文案 */
+export const REPLAN_TRIGGER_LABELS: Record<ReplanTriggerType, string> = {
+  user_request: "用户主动调整",
+  time_change: "可用时间变化",
+  task_incomplete: "任务未完成",
+  repeated_error: "连续相同错因",
+  material_unsuitable: "资料不适合",
+  midweek_day4: "第4天中期重排",
+  evidence_change: "考情或目标变化",
 };

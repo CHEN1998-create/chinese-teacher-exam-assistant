@@ -8,11 +8,14 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
 import { DailyPlanCard } from "@/components/plans/DailyPlanCard";
-import { planService, examTargetService } from "@/lib/services";
+import { ReplanPanel } from "@/components/plans/ReplanPanel";
+import { WeeklyReviewCard } from "@/components/plans/WeeklyReviewCard";
+import { planService, replanService, examTargetService } from "@/lib/services";
 import { usePlans } from "@/lib/plans/usePlans";
+import { todayString } from "@/lib/plans/useToday";
 import { canGeneratePlan } from "@/lib/targets/domain";
 import { formatDateWithWeekday, formatTime } from "@/lib/utils";
-import { PLAN_STATUS_LABELS } from "@/types";
+import { PLAN_STATUS_LABELS, WeeklyReview } from "@/types";
 
 export default function PlanPage() {
   const router = useRouter();
@@ -23,6 +26,7 @@ export default function PlanPage() {
   const currentExam = examTargetService.getCurrent();
   const targetId = currentExam?.id ?? null;
   const { currentPlan, dailyPlans, versions } = usePlans(targetId);
+  const [todayStr] = useState<string>(() => todayString());
 
   const readiness = targetId ? planService.getReadiness(targetId) : null;
 
@@ -233,6 +237,11 @@ export default function PlanPage() {
         )}
       </Card>
 
+      {/* 动态重排（仅执行中的计划） */}
+      {currentPlan.status === "active" && targetId && (
+        <ReplanPanel targetId={targetId} activePlan={currentPlan} />
+      )}
+
       {/* 版本历史 */}
       {showVersions && versions.length > 0 && (
         <Card>
@@ -271,6 +280,11 @@ export default function PlanPage() {
         </div>
       </Card>
 
+      {/* 第 7 天周复盘 */}
+      {targetId && (todayStr >= currentPlan.endDate || currentPlan.status === "completed") && (
+        <WeeklyReviewSection key={currentPlan.id} targetId={targetId} />
+      )}
+
       {/* 说明 */}
       <Card className="bg-slate-50">
         <CardHeader title="计划规则说明" />
@@ -280,9 +294,47 @@ export default function PlanPage() {
           <p>• 每天至少保留 1 项最低可完成任务</p>
           <p>• 关键考试模块与薄弱模块优先安排</p>
           <p>• 未通过适用性判断的资料不会作为主要任务来源</p>
-          <p>• 调整每日时间不会自动重排，需重新生成草稿</p>
+          <p>• 执行反馈会驱动重排建议：重排草稿确认后生成新版本，历史版本保留可对比</p>
+          <p>• 未完成欠账不会全部堆到第二天，系统在保留/缩减/顺延/替换/放弃之间分配</p>
         </div>
       </Card>
     </div>
+  );
+}
+
+/** 第 7 天周复盘区块：计划结束后可生成（数据仅来自真实反馈）。父组件以 key={planId} 控制重挂载 */
+function WeeklyReviewSection({ targetId }: { targetId: string }) {
+  const [review, setReview] = useState<WeeklyReview | null>(() =>
+    replanService.getLatestReview(targetId)
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleGenerate = (): void => {
+    setBusy(true);
+    setError(null);
+    try {
+      setReview(replanService.generateReview(targetId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成周复盘失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="第 7 天周复盘"
+        description="完成情况、时间使用、中断原因、错因与下周建议（仅统计真实提交的反馈）"
+        action={
+          <Button variant={review ? "outline" : "primary"} size="sm" onClick={handleGenerate} disabled={busy}>
+            {busy ? "生成中…" : review ? "重新生成复盘" : "生成周复盘"}
+          </Button>
+        }
+      />
+      {error && <div className="p-2.5 bg-rose-50 text-rose-700 rounded-lg text-sm">{error}</div>}
+      {review && <WeeklyReviewCard review={review} />}
+    </Card>
   );
 }
