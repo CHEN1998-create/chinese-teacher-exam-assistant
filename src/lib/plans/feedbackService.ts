@@ -22,6 +22,7 @@ import {
 import { STORAGE_KEYS } from "@/lib/mock-data";
 import { loadFromStorage, saveToStorageStrict } from "@/lib/storage";
 import { authService } from "@/lib/auth";
+import { track, classifyErrorCode } from "@/lib/analytics/eventService";
 
 const listeners = new Set<() => void>();
 let storeVersion = 0;
@@ -197,7 +198,7 @@ export const feedbackService = {
     const userId = currentUserId();
     if (!userId) throw new Error("请先登录后再提交反馈");
 
-    const { daily, weekly } = locateTask(taskId, userId);
+    const { daily, weekly, task } = locateTask(taskId, userId);
 
     const existing = loadFeedbacks().find((f) => f.userId === userId && f.taskId === taskId);
     if (existing) throw new DuplicateFeedbackError(normalizeFeedback(existing));
@@ -223,9 +224,37 @@ export const feedbackService = {
 
     const all = loadFeedbacks();
     all.push(feedback);
-    persistFeedbacks(all);
-    syncTaskFeedback(feedback);
+    try {
+      persistFeedbacks(all);
+      syncTaskFeedback(feedback);
+    } catch (e) {
+      track("feedback_submit_failed", "feedback", {
+        targetId: weekly.examTargetId,
+        props: { reasonCode: classifyErrorCode(e) },
+      });
+      throw e;
+    }
     notifyChanged();
+
+    const dayMs = 24 * 60 * 60 * 1000;
+    const dayIndex = Math.max(
+      1,
+      Math.round(
+        (new Date(`${daily.date}T00:00:00`).getTime() -
+          new Date(`${weekly.startDate}T00:00:00`).getTime()) /
+          dayMs
+      ) + 1
+    );
+    track("task_feedback_submitted", "feedback", {
+      targetId: weekly.examTargetId,
+      props: {
+        planId: weekly.id,
+        date: daily.date,
+        dayIndex,
+        status: feedback.status,
+        isCore: task.isCore ? 1 : 0,
+      },
+    });
     return feedback;
   },
 

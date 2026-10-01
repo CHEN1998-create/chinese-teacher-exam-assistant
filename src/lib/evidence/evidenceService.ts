@@ -36,6 +36,7 @@ import {
   subscribeEvidence,
 } from "./events";
 import { correctionService } from "@/lib/governance/correctionService";
+import { track, classifyErrorCode } from "@/lib/analytics/eventService";
 
 let extractor: EvidenceExtractor = mockEvidenceExtractor;
 
@@ -216,6 +217,10 @@ export const evidenceService = {
         stage: "提取失败",
         failReason: reason,
         finishedAt: new Date().toISOString(),
+      });
+      track("extraction_failed", "evidence", {
+        targetId,
+        props: { jobId: job.id, reasonCode: classifyErrorCode(e) },
       });
       return this.getJobById(job.id)!;
     } finally {

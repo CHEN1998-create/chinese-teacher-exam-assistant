@@ -31,7 +31,7 @@ npm run dev
 | `/plan` | 本周计划 | 查看7天计划、每日任务、调整说明；目标未澄清时显示门禁提示（需登录） |
 | `/today` | 今天与复盘 | 查看今日任务、提交执行反馈；目标未澄清时显示门禁提示（需登录） |
 | `/settings` | 设置与数据 | 账号信息、修改学段/每日时间/通知偏好、退出登录（需登录） |
-| `/admin` | 运营后台概览 | 后台模块入口与队列计数，仅工作人员角色可访问 |
+| `/admin` | 运营后台概览 | 数据指标卡、用户闭环漏斗、待处理事项、审核积压与资源失效提醒、最近异常监控、指标/事件字典、后台模块入口，仅工作人员角色可访问 |
 | `/admin/exams` | 考情与证据管理 | 跨用户查看全部目标的证据状态统计，跳转审核（需工作人员角色） |
 | `/admin/reviews` | 考情审核队列 | 五队列审核 AI 提取结论、处理来源冲突、查看历史版本与操作留痕（需工作人员角色） |
 | `/admin/resources` | 公共资源管理 | 资源新增/编辑/停用/复核、来源与权利状态维护、待复核与已失效队列、查看/加计划统计（资源审核员与管理员可写，其他工作人员只读） |
@@ -714,6 +714,122 @@ localStorage 键：`kb_corrections`、`kb_notification_prefs`、`kb_notification
 
 真实推送通道（短信/邮件/服务端 push）、真实数据删除服务与合规时限 SLA、撤回的跨设备实时广播（当前依赖页面事件与刷新）、删除申请的人工审核工作流。
 
+## 数据指标、后台概览与异常监控（当前为本地 Mock，非生产实现）
+
+让产品负责人在 `/admin` 判断核心闭环是否成立，并及时发现审核积压、资源失效、计划生成失败与关键数据写入失败。
+
+> **非生产说明**：事件流与指标均基于浏览器 localStorage，无真实埋点上报与数据仓库；
+> 演示种子为虚构数据。页面内每张卡片、漏斗与异常均标注数据来源（live / seed / 实时存量）。
+
+### 架构：事件层 → 唯一指标规则层 → 展示层
+
+```
+用户操作/失败（各 service）
+      │ track(type, module, {targetId, props})   ← 埋点永不抛错，不阻断业务
+      ▼
+src/lib/analytics/eventService.ts   # kb_analytics_events：写入/会话去重查看/订阅/首次播种
+      │
+      ▼
+src/lib/analytics/metrics/domain.ts # computeDashboard() 纯函数：全后台唯一指标口径
+      │ （另读 kb_evidence_items / kb_public_resources / kb_corrections /
+      │   kb_retraction_logs / kb_extraction_jobs 的实时快照）
+      ▼
+src/lib/analytics/useMetrics.ts     # useDashboardMetrics(rangeKey)：订阅四个存储自动刷新
+      ▼
+src/components/admin/AdminOverview.tsx + AnalyticsDictionaries.tsx → /admin
+```
+
+- **组件不允许自行计算任何比率**：所有指标由 `computeDashboard(input, rangeKey)` 统一产出，UI 只做展示；
+- **事件型指标随时间范围变化**（近 7 天 / 近 30 天 / 全部），**存量型指标恒为实时值**（卡片标“实时”）；
+- 比率分母为 0 时输出 `null`，页面显示“—”，不伪造 0%；用户一律按账号 ID 去重。
+
+### 事件字典（19 类，登记处：`src/lib/analytics/dictionary.ts`）
+
+需求规定的 13 类核心事件：
+
+| 事件 | 触发动作 | 记录维度（不含正文） |
+| ---- | ---- | ---- |
+| `target_created` | 创建/保存目标成功 | 目标ID、是否达门禁 ready、状态 |
+| `evidence_viewed` | 打开“考情画像”标签（会话内每目标一次） | 目标ID |
+| `source_opened` | 点击“打开原始来源” | 目标ID、字段枚举；**不记录 URL** |
+| `material_added` | 新增私有资料成功 | 目标ID、来源类型枚举 |
+| `diagnosis_viewed` | 打开“诊断结果”标签（会话内每目标一次） | 目标ID |
+| `resource_viewed` | 点击资源“查看来源” | 资源ID |
+| `resource_added_to_plan` | 资源“加入本周计划”成功 | 目标ID、资源ID、模块枚举 |
+| `plan_confirmed` | 确认计划（kind=initial 首版 / replan 重排版） | 目标/计划ID、开始日期、版本、首版/重排 |
+| `task_feedback_submitted` | 首次提交任务反馈成功（修改不计） | 计划ID、日期、第几天、状态枚举、是否核心任务；**不记录备注** |
+| `plan_replanned` | 确认 v2+ 重排计划 | 目标/计划ID、版本号 |
+| `weekly_review_completed` | 生成周复盘 | 目标/计划ID |
+| `correction_submitted` | 提交纠错成功 | 目标ID、纠错对象类型枚举；**不记录描述正文** |
+| `data_delete_requested` | 发起个人数据删除申请 | 范围类别数量 |
+
+6 类内部扩展事件：`resource_used`（资源首次进入使用中/已使用）、`review_completed`（审核动作、处理时长分钟、是否高影响、是否修正、证据归属用户ID）、`extraction_failed`、`plan_generation_failed`、`feedback_submit_failed`、`critical_write_failed`（模块、存储键名、短错误码；“数据不足”的正常门禁拦截**不计**计划失败）。
+
+**隐私边界**：props 仅允许 string/number/boolean 标量；不保存昵称、公告全文、反馈备注、纠错描述、链接 URL；失败原因统一归类为短错误码（quota_exceeded / storage_unavailable / network_error / session_expired / unknown_error），不回传报错原文。
+
+### 指标字典（19 项，口径登记处同样在 dictionary.ts，/admin 页面可展开查看）
+
+用户价值（8 组，事件驱动，随时间范围变化）：首次填写完成率、证据卡查看率、计划确认率、第 1/4/7 天反馈完成率（分母只含已走到第 N 天的计划）、7 天内完成核心任务的平均天数、中断后重新开始率、资源 查看→加入→使用 三级转化、完整闭环用户数（确认首版计划+提交反馈+完成周复盘）。
+
+质量与运营：高影响事实待审核数量（实时存量）、审核平均处理时间、AI 提取人工修正率（修改后通过 ÷ 通过+修改后通过+驳回）、用户纠错数量、错误结论撤回数量、受影响用户数量、资源链接失效率（实时存量，分母排除已停用）、计划生成失败率、反馈提交失败率、单个用户人工审核时间、关键数据写入失败数量。
+
+### 后台概览（`/admin`）
+
+- 时间范围筛选：近 7 天 / 近 30 天 / 全部；
+- 核心指标卡（用户价值 + 质量运营）、用户闭环漏斗（创建目标→证据卡→首版计划→反馈→周复盘）；
+- 待处理事项（高影响待审核/审核超时/待处理纠错/AI 失败/失效资源/资源待复核，点击直达队列）；
+- 审核积压提醒（24h 内 / 24–48h / 超 48h 三桶，标注高影响数，SLA=24h）、资源失效提醒（坏链过期 / 超 180 天未复核 / 待复核）；
+- 最近异常（最多 15 条，按时间倒序）。
+
+### 异常监控六类与隐私
+
+AI 提取失败（业务存储中的真实 failed 任务 + `extraction_failed` 事件，按 jobId 去重）、审核超时（高影响字段 pending 超 24h，>48h 升为高严重度）、资源失效/过期、计划生成失败、反馈保存失败、关键写入失败。每条异常可定位到**模块**与时间，附短错误码，用户 ID 一律脱敏为首尾片段（如 `u-**05`），不含昵称与任何用户正文；种子异常标“演示种子”，真实检出标“真实检出”。
+
+### 数据来源：真实数据 vs Mock
+
+| 数据 | 来源 | 性质 |
+| ---- | ---- | ---- |
+| 事件型指标（转化率、完成率、失败率、审核时长等） | `kb_analytics_events` 中 `source:"live"` 事件 | 本浏览器真实操作产生（Mock 存储，非真实上报） |
+| 同上 | `kb_analytics_events` 中 `source:"seed"` 事件 | 首次读取自动播种的 10 个模拟用户（u-m01~u-m10，跨最近 20 天），用于开箱演示与三态展示 |
+| 存量型指标（待审核数、失效率、待处理纠错、失败任务数） | `kb_evidence_items` / `kb_public_resources` / `kb_corrections` / `kb_extraction_jobs` 实时快照 | 来自业务模块的真实记录（本地 Mock） |
+| 撤回数 / 受影响用户 | `kb_retraction_logs` | 业务审计记录，按时间范围过滤 |
+| 审核超时 / 资源失效异常 | 业务存储实时派生 | 真实检出 |
+
+概览顶部数据条实时显示 live/seed 事件条数；“演示空态”按钮只清空事件流（不动业务数据，用于展示空状态），“重播演示种子”可恢复播种。清除浏览器站点数据后事件键消失，下次访问自动重新播种。
+
+### 文件结构
+
+```
+src/lib/analytics/
+├── types.ts            # AnalyticsEvent/EventType/Module/MetricValue/AnomalyItem 等跨层契约
+├── eventService.ts     # track/trackView（静默不抛错）、listEvents 首次播种、clearAllEvents/reseedEvents
+├── dictionary.ts       # 事件字典 19 条 + 指标字典 19 项（统一口径登记处）
+├── useMetrics.ts       # useDashboardMetrics(rangeKey)：订阅 analytics/evidence/governance/resources
+└── metrics/domain.ts   # computeDashboard 纯函数：用户价值/质量运营/存量/积压/待办/异常
+src/components/admin/
+├── AdminOverview.tsx           # 范围筛选/指标卡/漏斗/待办/积压/资源提醒/异常列表
+└── AnalyticsDictionaries.tsx   # 产品内可折叠的指标/事件字典
+```
+
+localStorage 新增键：`kb_analytics_events`。
+
+### 接入真实后端
+
+保持 `track(type, module, options)` 签名，将 `eventService` 替换为上报真实埋点 SDK 的实现（或让 `listEvents` 拉取服务端事件），并将 `useDashboardMetrics` 的业务快照改为接口数据；`metrics/domain.ts` 纯函数与 `/admin` 页面无需改动。
+
+### 如何验证（对照验收标准）
+
+1. `admin@demo.app` / `demo1234` 登录访问 `/admin`：默认近 7 天有指标、漏斗、3 个闭环用户、积压三桶、失效资源与 6 类异常中的种子条目；
+2. 切换 近 7 天 / 近 30 天 / 全部：事件型指标与 live/seed 计数变化，“实时”卡片（待审核数、失效率）保持不变；
+3. 点“演示空态”：出现空状态提示、比率全部显示“—”，但实时存量卡片与存量异常仍在；点“重播演示种子”恢复；
+4. 用学生账号真实操作（创建目标、打开证据卡、确认计划、提交反馈、资源加入计划）后回 `/admin`：live 计数增加，漏斗与转化率相应变化；
+5. `student@demo.app` 直接访问 `/admin` 被 `RequireRole(STAFF_ROLES)` 拦截显示权限不足；
+6. 异常列表用户 ID 为脱敏片段，详情只有模块/错误码/时间，无昵称、URL 与正文。
+
+### 本次不实现
+
+真实埋点上报与跨用户聚合、服务端 SLA 告警与通知、指标下钻明细页、AB 实验与留存 cohort 分析。
+
 ## 目录结构
 
 ```
@@ -761,6 +877,8 @@ src/
 │   │   ├── AnnouncementSubmitForm.tsx# 公告链接/文本/文件三入口
 │   │   └── ExtractionJobPanel.tsx    # 提取进度/失败/重试/历史
 │   ├── admin/              # 考情审核后台组件
+│   │   ├── AdminOverview.tsx # 后台概览：指标卡/漏斗/待办/积压/资源提醒/异常
+│   │   ├── AnalyticsDictionaries.tsx # 产品内指标/事件字典
 │   │   ├── ReviewQueue.tsx  # 五队列标签 + 结论卡片
 │   │   ├── ReviewDetail.tsx # 详情/动作表单（必填原因）/历史版本
 │   │   ├── AdminExamList.tsx# 目标证据状态总览
@@ -813,6 +931,12 @@ src/
 │   │   ├── feedbackService.ts # 执行反馈：防重复提交/修改留痕/任务状态同步（不重排）
 │   │   ├── usePlans.ts
 │   │   └── useToday.ts     # 本地日期与跨午夜自动切天
+│   ├── analytics/          # 数据指标与异常监控（本地 Mock，非生产）
+│   │   ├── types.ts        # 事件/指标/异常跨层类型契约（props 仅标量，无正文）
+│   │   ├── eventService.ts # track/trackView 静默埋点、首次播种 10 个模拟用户、清空/重播
+│   │   ├── dictionary.ts   # 事件字典 19 条 + 指标字典 19 项（口径唯一登记处）
+│   │   ├── useMetrics.ts   # useDashboardMetrics：订阅事件+业务存储，唯一取数 Hook
+│   │   └── metrics/domain.ts # computeDashboard 纯函数（全后台唯一指标口径）
 │   ├── mock-data.ts        # Mock数据
 │   ├── services.ts         # 数据服务层（当前用户从会话读取）
 │   ├── storage.ts          # 本地存储工具（含严格写入 saveToStorageStrict）
@@ -833,6 +957,7 @@ src/
 - 周计划与每日任务
 - 用户设置
 - 治理演示数据（`mockCorrections`：2 条纠错种子；通知/偏好/删除申请/撤回留痕首次使用时自动初始化）
+- 分析事件种子（`buildSeedEvents()`，位于 `src/lib/analytics/eventService.ts`，非 mock-data.ts）：首次读取 `kb_analytics_events`（键不存在）时自动播种 10 个模拟用户（u-m01~u-m10）跨最近 20 天的旅程事件（3 个完整闭环、进行中、首日中断、停在诊断、证据卡流失、草稿未达门禁、已申请删除、只看资源）、8 条审核完成（含 2 条修改后通过）与 6 条失败事件，全部标 `source:"seed"`，使近 7 天/近 30 天/全部呈现差异并覆盖正常/空/异常三态；真实操作事件标 `source:"live"`
 
 数据通过 `src/lib/storage.ts` 进行 localStorage 持久化，刷新页面后数据不会丢失。
 
@@ -880,6 +1005,7 @@ export const examTargetService = {
 - **登录鉴权**: 已有登录/会话/角色与路由保护，但是 **Demo 模拟实现**（本地校验 + localStorage），不是真实安全认证
 - **纠错与治理**: `/admin/feedback` 纠错处理、错误结论撤回（影响范围识别/留痕/用户通知/计划待确认）、四类站内通知与偏好开关、隐私数据类别与删除申请四状态均为本地 Mock + localStorage；无真实消息推送与数据删除服务，审核/撤回/删除记录只追加不物理删除；详见“纠错、通知、隐私与数据删除治理”章节
 - **管理后台**: 考情审核、纠错与治理、公共资源索引均已上线（本地 Mock，非生产级安全审计）
+- **数据指标与异常监控**: `/admin` 已实现 19 项指标（统一口径纯函数计算）、用户闭环漏斗、待办、审核积压/资源失效提醒与 6 类异常监控、7d/30d/全部时间筛选及产品内指标/事件字典；但事件流为 localStorage Mock（首次播种 10 个模拟用户的 seed 事件，真实操作记 live），无真实埋点上报、跨用户聚合与告警通道；详见上方“数据指标、后台概览与异常监控”章节
 
 ## 模块变更记录
 
@@ -896,6 +1022,7 @@ export const examTargetService = {
 | 2026-10-01 | 今日任务与执行反馈 | 新增 `CompletionStatus`/`ErrorCategory`（旧 `ErrorType` 保留别名）/`IncompleteReason`/`TaskFeedbackInput` 类型与完成状态/未完成原因/错因中文标签（错因七项：知识点不会/题目理解错误/答题结构不清/时间不够/粗心/资料或任务不适合/其他）；`TaskFeedback` 扩展为关联用户+计划版本（weeklyPlanId/weeklyVersion）+日计划+日期+任务，新增 `updatedAt`；新增 `src/lib/plans/feedbackService.ts`（独立 `kb_task_feedbacks` 存储、一任务一反馈重复提交抛 `DuplicateFeedbackError`、修改保留 createdAt 刷 updatedAt、同步任务状态但不删除不顺延、listByTask/DailyPlan/WeeklyPlan/Date 查询出口）与 `useToday.ts`（跨午夜 30s/visibility/focus 自动切天）；重写 `FeedbackForm` 为一分钟点选式表单（完成三态/±15 用时/条件原因/错因多选/二次练习/选填说明/修改模式/保存失败内联重试）；新增 `TodayTaskItem`/`FeedbackSummary` 组件，`/today` 重写为只读 active 计划、核心+补充分组、最低任务标记、待反馈计数、提交后状态化下一步提示；planService 移除旧 submitTaskFeedback，归一化兼容旧版内嵌反馈。不含自动重排与任务顺延 |
 | 2026-10-01 | 纠错、通知、隐私与数据删除治理 | 新增 `Correction`（五状态+来源+时间线+旧数据归一化）/`NotificationPreference`/`NotificationItem`（四类+必要/非必要）/`DataDeletionRequest`（四状态+范围快照）/`RetractionRecord` 类型与文案常量；新增 `src/lib/governance/`（domain 纯规则层：队列/通知闸门与每日一次/撤回影响范围分析/13 类数据元数据；events；correctionService 用户提交补充与后台采纳/驳回/要求补充双重角色鉴权、撤回预览与执行〔同值结论批量置待确认+ReviewLog 只追加+高影响字段联动计划 needsConfirmation+用户通知+撤回留痕〕；notificationService 偏好即时生效；privacyService 私有删除/公共与审计保留/纠错匿名化）；新增用户端组件（纠错弹窗/我的纠错/通知中心铃铛/变化横幅/通知偏好面板/隐私与删除面板）与 `/admin/feedback`（纠错队列+撤回留痕）、审核详情撤回入口；`/exam`、`/settings`、`/plan`、`/today`、导航铃铛、后台导航与概览接入；新增 `kb_notification_prefs`/`kb_notifications`/`kb_deletion_requests`/`kb_retraction_logs` 存储键与 2 条纠错种子。本地站内 Mock，无真实推送与删除服务；不含真实消息通道、删除 SLA 与人工审批流 |
 | 2026-10-01 | 动态计划重排与第 7 天周复盘 | 新增 `ReplanTrigger`/`TaskAdjustmentAction`/`TaskAdjustment`/`ReplanRef`/`WeeklyReview(Stat/AdjustmentOutcome)` 类型与中文标签，`PlanTask` 增加 `needsConfirmation`；新增 `src/lib/plans/replanEngine.ts`（独立 ReplanEngine 纯函数：七类触发信号检测、上下文推导〔错因频次/资料不适合/诊断暂停/考情变更〕、五动作确定性决策、容量贪心分配〔优先级减半/最低任务保底/顺延≥2 次或末日才放弃/欠账分散〕、基础巩固替换、待重新确认标记）与 `replanService.ts`（跨版本族反馈收集、重排草稿生成/确认/放弃只追加不覆盖历史、调整记录查询、第 7 天周复盘：仅聚合真实反馈、未反馈任务单独计数、调整效果评估、确定性下周建议）；新增 `ReplanPanel`（信号展示/草稿前后对比/确认与放弃/本版本调整记录）与 `WeeklyReviewCard` 组件，`/plan` 接入重排面板与周复盘区块，`TaskCard` 支持待重新确认徽章；新增 `kb_plan_adjustments`/`kb_weekly_reviews` 存储键。三案例验证：时间减少（60 分钟容量约束+欠账分散）、连续未完成（同错因≥2 次替换为基础巩固）、资料不适合（replace 3/postpone 3/abandon 2）。无 AI 时为确定性规则；不含 AI 建议、跨周衔接、自动重排与计划回滚 |
+| 2026-10-01 | 数据指标、后台概览与异常监控 | 新增 `src/lib/analytics/`（types 跨层契约；eventService：track/trackView 静默埋点与会话去重、短错误码归类、listEvents 首次播种 10 个模拟用户跨 20 天旅程+8 审核+6 失败事件（source=seed/live）、clearAllEvents/reseedEvents 空态演示；dictionary：19 事件+19 指标统一口径登记；metrics/domain.ts：computeDashboard 纯函数统一产出用户价值 8 组/质量运营 11 项/实时存量/审核积压三桶/待办/≤15 条异常，比率分母 0 显“—”，用户 ID 脱敏；useMetrics 订阅四存储）；各 service 接入 13 类核心+6 扩展事件埋点（目标/证据查看与来源打开/资料/诊断/资源三级转化/计划确认与重排/反馈/周复盘/纠错/删除申请/审核完成/四类失败），props 仅标量不含正文与 URL；新增 `AdminOverview`/`AnalyticsDictionaries` 组件并重写 `/admin`（时间筛选、指标卡、闭环漏斗、待办、积压与资源失效提醒、异常监控、字典、模块入口）；新增 `kb_analytics_events` 存储键。后台仍由 RequireRole(STAFF_ROLES) 保护，异常仅含模块/错误码/脱敏 ID。本地 Mock；不含真实上报、服务端告警与指标下钻 |
 
 ## 构建与部署
 

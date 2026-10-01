@@ -270,6 +270,7 @@ export default function ExamPage() {
             <EvidenceProfile
               rows={evidence.rows}
               counts={evidence.counts}
+              targetId={currentExam.id}
               onCorrect={(item) =>
                 openCorrection({
                   field: item.field,

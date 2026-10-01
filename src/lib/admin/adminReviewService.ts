@@ -29,6 +29,7 @@ import { STORAGE_KEYS, mockEvidenceItems, mockExamTargets } from "@/lib/mock-dat
 import { normalizeTarget } from "@/lib/targets/domain";
 import {
   buildProfileRows,
+  isHighImpact,
   summarizeRows,
 } from "@/lib/evidence/domain";
 import {
@@ -46,6 +47,7 @@ import {
   queueCounts,
   selectQueue,
 } from "./domain";
+import { track } from "@/lib/analytics/eventService";
 
 // ==================== 读取 ====================
 
@@ -299,6 +301,25 @@ export const adminReviewService = {
     saveToStorageStrict(STORAGE_KEYS.EVIDENCE_ITEMS, items);
     saveToStorageStrict(STORAGE_KEYS.REVIEW_LOGS, logs);
     emitEvidenceChanged();
+
+    // 审核完成留痕事件（不包含审核前后的值正文，仅记录动作与耗时）
+    const owner = loadAllTargets().find((t) => t.id === before.examTargetId);
+    const durationMinutes = Math.max(
+      0,
+      Math.round(
+        (new Date(now).getTime() - new Date(before.updatedAt).getTime()) / 60000
+      )
+    );
+    track("review_completed", "review", {
+      targetId: before.examTargetId,
+      props: {
+        action: input.action,
+        durationMinutes,
+        highImpact: isHighImpact(before.field) ? 1 : 0,
+        edited: input.action === "approve_with_edit" ? 1 : 0,
+        ownerId: owner?.userId ?? "unknown",
+      },
+    });
 
     return { item: updatedItem, log };
   },

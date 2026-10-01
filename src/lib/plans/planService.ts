@@ -31,6 +31,7 @@ import {
   type PlanGenerationInput,
   type PlanReadiness,
 } from "./domain";
+import { track, classifyErrorCode } from "@/lib/analytics/eventService";
 
 const listeners = new Set<() => void>();
 let storeVersion = 0;
@@ -210,14 +211,23 @@ export const planService = {
 
     const { weekly, daily } = generatePlan(input);
 
-    // 保存草稿
-    const allWeekly = loadWeeklyPlans();
-    allWeekly.push(weekly);
-    persistWeeklyPlans(allWeekly);
+    // 保存草稿（门禁通过后的失败属于真实异常，需要进异常监控；
+    // “数据不足”的拦截在上方 readiness 处抛出，不计失败事件）
+    try {
+      const allWeekly = loadWeeklyPlans();
+      allWeekly.push(weekly);
+      persistWeeklyPlans(allWeekly);
 
-    const allDaily = loadDailyPlans();
-    allDaily.push(...daily);
-    persistDailyPlans(allDaily);
+      const allDaily = loadDailyPlans();
+      allDaily.push(...daily);
+      persistDailyPlans(allDaily);
+    } catch (e) {
+      track("plan_generation_failed", "plan", {
+        targetId,
+        props: { reasonCode: classifyErrorCode(e) },
+      });
+      throw e;
+    }
 
     notifyChanged();
     return { weekly, daily };
@@ -241,7 +251,26 @@ export const planService = {
     all[idx] = { ...all[idx], status: "active", updatedAt: now };
     persistWeeklyPlans(all);
     notifyChanged();
-    return all[idx];
+
+    // 首版确认计入“计划确认率”；v2+ 确认同时计入“重排确认”
+    const confirmed = all[idx];
+    const kind = confirmed.version > 1 ? "replan" : "initial";
+    track("plan_confirmed", "plan", {
+      targetId: confirmed.examTargetId,
+      props: {
+        planId: confirmed.id,
+        startDate: confirmed.startDate,
+        version: confirmed.version,
+        kind,
+      },
+    });
+    if (kind === "replan") {
+      track("plan_replanned", "replan", {
+        targetId: confirmed.examTargetId,
+        props: { planId: confirmed.id, toVersion: confirmed.version },
+      });
+    }
+    return confirmed;
   },
 
   /**

@@ -40,6 +40,7 @@ import { STORAGE_KEYS, mockEvidenceItems, mockExamTargets, mockResources } from 
 import { authService } from "@/lib/auth";
 import { DATA_CATEGORY_META } from "./domain";
 import { emitGovernanceChanged } from "./events";
+import { track, classifyErrorCode } from "@/lib/analytics/eventService";
 
 function load<T>(key: string, fallback: T): T {
   return loadFromStorage<T>(key, fallback);
@@ -198,7 +199,22 @@ export const privacyService = {
       (r) => !(r.userId === session.user.id && ["pending", "failed"].includes(r.status))
     );
     all.push(request);
-    persistRequests(all);
+    try {
+      persistRequests(all);
+    } catch (e) {
+      track("critical_write_failed", "storage", {
+        props: {
+          module: "privacy",
+          storageKey: STORAGE_KEYS.DELETION_REQUESTS,
+          reasonCode: classifyErrorCode(e),
+        },
+      });
+      throw e;
+    }
+    // 只记录申请事实与类别数量，不记录具体数据内容
+    track("data_delete_requested", "privacy", {
+      props: { scopeCount: request.scope.length },
+    });
     return request;
   },
 

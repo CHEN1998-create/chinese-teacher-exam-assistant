@@ -22,6 +22,7 @@ import {
   validateConfirm,
 } from "./targets/domain";
 import { planService as planServiceImpl } from "./plans/planService";
+import { track, classifyErrorCode } from "./analytics/eventService";
 
 // ==================== 用户服务 ====================
 //
@@ -171,7 +172,15 @@ export const examTargetService = {
     // 生成初始澄清任务并持久化（保留在目标上，完成状态可追踪）
     const withTasks = this.attachGeneratedTasks(newTarget.id);
     userService.updateUser({ currentExamTargetId: newTarget.id });
-    return withTasks ?? newTarget;
+    const result = withTasks ?? newTarget;
+    track("target_created", "target", {
+      targetId: newTarget.id,
+      props: {
+        ready: canGeneratePlan(result) ? 1 : 0,
+        status: result.status,
+      },
+    });
+    return result;
   },
 
   /** 编辑目标：重新派生名称/地区/生命周期与澄清任务 */
@@ -340,7 +349,18 @@ export const examTargetService = {
 
   /** 严格持久化：存储失败时向上抛出，由页面展示“保存失败” */
   persist(all: ExamTarget[]): void {
-    saveToStorageStrict(STORAGE_KEYS.EXAM_TARGETS, all);
+    try {
+      saveToStorageStrict(STORAGE_KEYS.EXAM_TARGETS, all);
+    } catch (e) {
+      track("critical_write_failed", "storage", {
+        props: {
+          module: "target",
+          storageKey: STORAGE_KEYS.EXAM_TARGETS,
+          reasonCode: classifyErrorCode(e),
+        },
+      });
+      throw e;
+    }
     notifyTargetChanged();
   },
 };

@@ -33,6 +33,7 @@ import {
   normalizeMaterial,
 } from "./domain";
 import type { ExamTarget } from "@/types";
+import { track, classifyErrorCode } from "@/lib/analytics/eventService";
 
 export type MaterialItemInput = Omit<MaterialItem, "id" | "userId" | "createdAt" | "updatedAt">;
 
@@ -53,7 +54,18 @@ function loadAllMaterials(): MaterialItem[] {
 }
 
 function persistMaterials(all: MaterialItem[]): void {
-  saveToStorageStrict(STORAGE_KEYS.MATERIALS, all);
+  try {
+    saveToStorageStrict(STORAGE_KEYS.MATERIALS, all);
+  } catch (e) {
+    track("critical_write_failed", "storage", {
+      props: {
+        module: "material",
+        storageKey: STORAGE_KEYS.MATERIALS,
+        reasonCode: classifyErrorCode(e),
+      },
+    });
+    throw e;
+  }
 }
 
 function loadAllBaselines(): AbilityBaseline[] {
@@ -135,6 +147,10 @@ export const materialService = {
     persistMaterials(all);
     this.syncInventoryStatus(input.examTargetId);
     notifyChanged();
+    track("material_added", "material", {
+      targetId: material.examTargetId,
+      props: { sourceType: material.sourceType },
+    });
     return material;
   },
 

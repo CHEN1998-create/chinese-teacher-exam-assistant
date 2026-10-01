@@ -38,6 +38,7 @@ import { planService } from "./planService";
 import { feedbackService } from "./feedbackService";
 import { todayString } from "./useToday";
 import { applyReplan, detectTriggers, type ReplanEngineInput } from "./replanEngine";
+import { track } from "@/lib/analytics/eventService";
 
 const listeners = new Set<() => void>();
 let storeVersion = 0;
@@ -432,6 +433,12 @@ export const replanService = {
     else all[idx] = review;
     persistReviews(all);
     notifyChanged();
+    if (idx === -1) {
+      track("weekly_review_completed", "replan", {
+        targetId: review.examTargetId,
+        props: { planId: review.weeklyPlanId },
+      });
+    }
     return review;
   },
 

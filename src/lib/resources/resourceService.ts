@@ -32,6 +32,7 @@ import {
   matchGap as matchGapRules,
   normalizeResource,
 } from "./domain";
+import { track } from "@/lib/analytics/eventService";
 
 export type ResourceItemInput = Omit<ResourceItem, "id" | "createdAt" | "updatedAt">;
 
@@ -134,6 +135,7 @@ export const resourceService = {
     views.push(record);
     persistViews(views);
     emitResourcesChanged();
+    track("resource_viewed", "resource", { props: { resourceId } });
     return record;
   },
 
@@ -188,6 +190,10 @@ export const resourceService = {
     links.push(link);
     persistLinks(links);
     emitResourcesChanged();
+    track("resource_added_to_plan", "resource", {
+      targetId: examTargetId,
+      props: { resourceId, module },
+    });
     return link;
   },
 
@@ -197,9 +203,21 @@ export const resourceService = {
     const links = loadLinks();
     const index = links.findIndex((l) => l.id === linkId && l.userId === userId);
     if (index === -1) return null;
+    const previous = links[index].status;
     links[index] = { ...links[index], status, updatedAt: nowIso() };
     persistLinks(links);
     emitResourcesChanged();
+    // 首次进入“使用中/已使用”记一次实际使用转化（重复状态变更不重复计数）
+    if (
+      (status === "in_use" || status === "used") &&
+      previous !== "in_use" &&
+      previous !== "used"
+    ) {
+      track("resource_used", "resource", {
+        targetId: links[index].examTargetId,
+        props: { resourceId: links[index].resourceId, stage: status },
+      });
+    }
     return links[index];
   },
 

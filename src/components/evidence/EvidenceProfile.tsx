@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import {
   EVIDENCE_TYPE_LABELS,
   EvidenceItem,
@@ -12,15 +13,22 @@ import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDate } from "@/lib/utils";
 import { PROFILE_GROUPS, ProfileRow, isHighImpact } from "@/lib/evidence/domain";
+import { track, trackView } from "@/lib/analytics/eventService";
 
 interface EvidenceProfileProps {
   rows: ProfileRow[];
   counts: Record<ReviewStatus, number> | null;
+  targetId: string;
   onCorrect: (item: EvidenceItem) => void;
 }
 
 /** 考情画像：11 个结构化字段，逐条展示结论值/证据标签/原始来源/适用范围/更新时间/审核状态 */
-export function EvidenceProfile({ rows, counts, onCorrect }: EvidenceProfileProps) {
+export function EvidenceProfile({ rows, counts, targetId, onCorrect }: EvidenceProfileProps) {
+  // 查看证据卡（同一会话只计一次），用于“证据卡查看率”
+  useEffect(() => {
+    trackView(targetId, "evidence_viewed", "evidence", { targetId });
+  }, [targetId]);
+
   if (!counts) return null;
 
   const hasAnyConclusion = rows.some((r) => r.reviewStatus !== "unconfirmed");
@@ -77,7 +85,7 @@ export function EvidenceProfile({ rows, counts, onCorrect }: EvidenceProfileProp
             {group.fields.map((field) => {
               const row = rows.find((r) => r.field === field);
               if (!row) return null;
-              return <EvidenceRow key={field} row={row} onCorrect={onCorrect} />;
+              return <EvidenceRow key={field} row={row} targetId={targetId} onCorrect={onCorrect} />;
             })}
           </div>
         </div>
@@ -94,7 +102,15 @@ function SummaryItem({ label, count, tone }: { label: string; count: number; ton
   );
 }
 
-function EvidenceRow({ row, onCorrect }: { row: ProfileRow; onCorrect: (item: EvidenceItem) => void }) {
+function EvidenceRow({
+  row,
+  targetId,
+  onCorrect,
+}: {
+  row: ProfileRow;
+  targetId: string;
+  onCorrect: (item: EvidenceItem) => void;
+}) {
   const missing = row.reviewStatus === "unconfirmed" || !row.value;
   const high = isHighImpact(row.field);
   // 仅展示与主结论实质不同的备选；同值不同源不构成冲突，不重复展示
@@ -154,6 +170,13 @@ function EvidenceRow({ row, onCorrect }: { row: ProfileRow; onCorrect: (item: Ev
                   target="_blank"
                   rel="noopener noreferrer"
                   className="ml-1 text-blue-600 hover:underline"
+                  onClick={() =>
+                    // 仅记录“打开了哪个字段的来源”，不记录 URL 本身
+                    track("source_opened", "evidence", {
+                      targetId,
+                      props: { field: row.field },
+                    })
+                  }
                 >
                   打开原始来源 ↗
                 </a>

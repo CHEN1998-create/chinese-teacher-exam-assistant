@@ -918,5 +918,7 @@ export const STORAGE_KEYS = {
   NOTIFICATIONS: "kb_notifications",
   DELETION_REQUESTS: "kb_deletion_requests",
   RETRACTION_LOGS: "kb_retraction_logs",
+  // —— 数据指标与异常监控：统一分析事件流（live 真实操作 + seed 演示种子） ——
+  ANALYTICS_EVENTS: "kb_analytics_events",
   SETTINGS: "kb_settings",
 } as const;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   EVIDENCE_TYPE_LABELS,
   MaterialDiagnosisSnapshot,
@@ -21,6 +21,7 @@ import {
 } from "@/lib/materials/domain";
 import { ExamTarget, MaterialItem } from "@/types";
 import { GapResourcePanel } from "@/components/resources/GapResourcePanel";
+import { trackView } from "@/lib/analytics/eventService";
 
 const RECOMMENDATION_VARIANT: Record<MaterialRecommendation, "success" | "warning" | "danger"> = {
   continue: "success",
@@ -49,6 +50,11 @@ export function DiagnosisPanel({
 }: DiagnosisPanelProps) {
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+
+  // 打开“诊断结果”标签即记录一次查看（同一会话去重）
+  useEffect(() => {
+    trackView(targetId, "diagnosis_viewed", "material", { targetId });
+  }, [targetId]);
 
   const handleRecompute = () => {
     setRunning(true);

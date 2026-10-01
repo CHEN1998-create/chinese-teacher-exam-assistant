@@ -51,6 +51,7 @@ import {
   selectCorrections,
   type CorrectionQueueKey,
 } from "./domain";
+import { track, classifyErrorCode } from "@/lib/analytics/eventService";
 
 // ==================== 读取辅助 ====================
 
@@ -61,7 +62,18 @@ function loadAll(): Correction[] {
 }
 
 function persistAll(all: Correction[]): void {
-  saveToStorageStrict(STORAGE_KEYS.CORRECTIONS, all);
+  try {
+    saveToStorageStrict(STORAGE_KEYS.CORRECTIONS, all);
+  } catch (e) {
+    track("critical_write_failed", "storage", {
+      props: {
+        module: "correction",
+        storageKey: STORAGE_KEYS.CORRECTIONS,
+        reasonCode: classifyErrorCode(e),
+      },
+    });
+    throw e;
+  }
   emitGovernanceChanged();
 }
 
@@ -251,6 +263,10 @@ export const correctionService = {
     const all = loadAll();
     all.push(correction);
     persistAll(all);
+    track("correction_submitted", "correction", {
+      targetId: correction.examTargetId,
+      props: { targetType: correction.targetType },
+    });
     return correction;
   },
 
