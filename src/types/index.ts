@@ -627,6 +627,15 @@ export type ResourceQueueKey = "all" | "active" | "pending_review" | "expired" |
 
 // ==================== 计划与任务 ====================
 
+/** 计划状态：草稿 → 执行中 → 已完成/已放弃 */
+export type PlanStatus = "draft" | "active" | "completed" | "abandoned";
+
+/** 任务优先级：高（薄弱/必需）→ 中（必需）→ 低（补充） */
+export type TaskPriority = "high" | "medium" | "low";
+
+/** 任务来源：私有资料 or 公共资源 */
+export type TaskSourceType = "material" | "resource";
+
 export interface WeeklyPlan {
   id: string;
   userId: string;
@@ -634,10 +643,13 @@ export interface WeeklyPlan {
   weekNumber: number;
   startDate: string;
   endDate: string;
+  /** 本周重点 */
   focus: string;
-  status: "draft" | "active" | "completed" | "abandoned";
+  status: PlanStatus;
   version: number;
   previousVersionId?: string;
+  /** 生成原因：为什么生成本周计划（数据依据与缺口说明） */
+  generationReason: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -649,7 +661,10 @@ export interface DailyPlan {
   dayOfWeek: number;
   tasks: PlanTask[];
   totalEstimatedTime: number;
+  /** 当天是否只安排了最低可完成任务（时间不足时） */
   isMinimumViable: boolean;
+  /** 当天可用时间（分钟），生成时快照，可单独调整 */
+  availableMinutes: number;
   adjustmentNote?: string;
   createdAt: string;
   updatedAt: string;
@@ -659,13 +674,28 @@ export interface PlanTask {
   id: string;
   dailyPlanId: string;
   title: string;
+  /** 考试模块 key（mod_*） */
   module: string;
+  /** 来源类型：私有资料 / 公共资源 */
+  sourceType: TaskSourceType;
   materialId?: string;
   materialChapterId?: string;
+  /** 具体章节标题（展示用，避免每次反查资料） */
+  chapterTitle?: string;
+  resourceId?: string;
+  /** 预计时间（分钟） */
   estimatedTime: number;
+  /** 完成标准 */
   completionCriteria: string;
+  /** 安排原因：为什么把这项放在今天、为什么用这份资料/资源 */
+  arrangementReason: string;
+  /** 复盘动作：完成后如何检验效果 */
+  reviewAction: string;
   order: number;
   status: TaskStatus;
+  /** 优先级 */
+  priority: TaskPriority;
+  /** 是否核心任务（priority === high） */
   isCore: boolean;
   feedback?: TaskFeedback;
   createdAt: string;
@@ -990,4 +1020,19 @@ export const FEEDBACK_INCOMPLETE_REASONS: Record<string, string> = {
   material: "资料不合适",
   mood: "状态不好",
   other: "其他",
+};
+
+/** 计划状态文案 */
+export const PLAN_STATUS_LABELS: Record<PlanStatus, string> = {
+  draft: "草稿",
+  active: "执行中",
+  completed: "已完成",
+  abandoned: "已放弃",
+};
+
+/** 任务优先级文案 */
+export const TASK_PRIORITY_LABELS: Record<TaskPriority, string> = {
+  high: "高",
+  medium: "中",
+  low: "低",
 };

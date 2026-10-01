@@ -458,6 +458,70 @@ src/app/admin/resources/
 
 本次明确**不包含**：资源付费、网盘下载、第三方全文复制、用户私有资料自动入库、真实链接巡检与生产级鉴权。
 
+## 7 天计划与任务生成
+
+将当前目标考试、已审核考情、资料诊断、已加入计划的公共资源和用户可用时间转化为可执行的 7 天计划。计划规则全部在独立的 PlanEngine（`src/lib/plans/domain.ts`，纯函数），没有真实 AI 接口时使用确定性规则生成，同样输入永远得到同样结果。
+
+### 计划输入与就绪检查
+
+生成计划依赖：当前主目标、考情证据、资料诊断快照、已加入计划的公共资源、薄弱模块、每日/每周可用时间。
+
+`checkPlanReadiness` 判定是否可生成：
+- **硬性缺失（不生成）**：目标未确认 / 没有任何可用学习内容（无 continue/partial 资料 且 无已加入计划资源）/ 每日可用时间 ≤ 0；
+- **软警告（生成但提示）**：考试科目未官方确认 → 默认只排语文学科模块；其他高影响字段未官方确认 → 提示计划可能需调整。
+
+### 生成规则（PlanEngine 唯一口径）
+
+1. 每天最多 3 项任务；
+2. 每天任务总时长不超过当天可用时间；
+3. 每天至少保留 1 项最低可完成任务；
+4. 关键考试模块与薄弱模块优先（薄弱 → 必需 → 补充）；
+5. 诊断结论为 pause 的资料/模块不作为任务来源；
+6. 目标或关键数据不足时不生成完整计划；
+7. 生成结果先为草稿（status=draft），用户确认后进入执行状态（status=active）。
+
+### 任务字段（`PlanTask`）
+
+日期（DailyPlan.date）、学习模块（module）、使用资料或资源（materialId/resourceId + sourceType）、具体章节（chapterTitle）、预计时间（estimatedTime）、完成标准（completionCriteria）、安排原因（arrangementReason）、复盘动作（reviewAction）、优先级（priority：high/medium/low）、当前状态（status）。
+
+### 页面交互（`/plan`）
+
+- 七天概览卡片，点击展开每日任务；
+- 查看每项任务的安排原因、完成标准、复盘动作；
+- 草稿状态下「确认计划，开始执行」；
+- 调整每日可用时间（不自动重排，需重新生成）；
+- 「重新生成草稿」基于当前输入产出新版本；
+- 查看计划版本历史。
+
+### 今日任务模块联动
+
+确认后的计划（status=active）会被 `/today` 读取，展示当天任务。未确认的草稿不会出现在今日任务。
+
+### 文件结构
+
+```
+src/lib/plans/
+├── domain.ts          # PlanEngine：就绪检查、来源收集、优先级排序、时间分配（纯函数）
+├── planService.ts     # 持久化、生成草稿、确认、重新生成、调整时间、版本历史
+└── usePlans.ts        # 响应式订阅（计划/目标/资料/资源/会话变化自动刷新）
+src/components/plans/
+└── DailyPlanCard.tsx  # 可展开的每日任务卡（含时间调整）
+```
+
+### 三种可用时间案例验证
+
+以杭州初中 2026 主目标（1 套适用资料 + 5 个模块）为例：
+
+| 每日可用时间 | 每天任务数 | 说明 |
+| ---- | ---- | ---- |
+| 60 分钟（低） | 1 项 | 仅最低可完成任务，isMinimumViable=true |
+| 120 分钟（中） | 2 项 | 两项核心任务，总时长不超 120 分钟 |
+| 180 分钟（高） | 最多 3 项 | 前几天排满 3 项，来源用完后保底复盘任务 |
+
+### 本次不实现
+
+任务反馈驱动的自动重排、第 4 天自适应重排、跨周计划衔接。调整每日时间只更新标记，不重新分配任务。
+
 ## 目录结构
 
 ```
@@ -518,6 +582,8 @@ src/
 │   │   ├── AbilityBaselineForm.tsx   # 能力基线表单
 │   │   ├── DiagnosisPanel.tsx        # 诊断结果面板
 │   │   └── PublicResourceList.tsx    # 公共资源只读列表
+│   ├── plans/              # 7 天计划组件
+│   │   └── DailyPlanCard.tsx        # 可展开每日任务卡 + 时间调整
 │   └── layout/             # 布局组件
 │       ├── AppShell.tsx
 │       ├── Sidebar.tsx
@@ -547,6 +613,10 @@ src/
 │   │   ├── resourceService.ts # 浏览/匹配/查看与加计划记录/后台 CRUD 与角色校验
 │   │   ├── events.ts       # 资源存储共享事件
 │   │   └── useResources.ts
+│   ├── plans/              # 7 天计划与任务生成（本地 Mock，非生产）
+│   │   ├── domain.ts       # PlanEngine：就绪检查/来源收集/优先级/时间分配（纯函数，唯一规则层）
+│   │   ├── planService.ts  # 草稿/确认/重新生成/调整时间/版本历史
+│   │   └── usePlans.ts
 │   ├── mock-data.ts        # Mock数据
 │   ├── services.ts         # 数据服务层（当前用户从会话读取）
 │   ├── storage.ts          # 本地存储工具（含严格写入 saveToStorageStrict）
@@ -624,6 +694,7 @@ export const examTargetService = {
 | 2026-10-03 | 资料与能力基线 | 新增 `UsageStatus`/`MaterialSourceType`/`MaterialItem`/`AbilityBaseline`/`MaterialDiagnosis(Snapshot)`/`MaterialConflictGroup` 等类型与标签常量；新增 `src/lib/materials/`（domain 纯规则层：15 个考试模块、章节关键词预填、考情就绪与必需模块、地区/学段/年份匹配、逐模块诊断、多套确定性取舍、8 小时时间约束、薄弱项并集、djb2 签名；materialService：私有资料 CRUD/基线/快照播种与 recompute；useMaterials 订阅 hook）与 `src/components/materials/` 六个组件；`/materials` 重写为四个标签（我的资料/能力基线/诊断结果/公共资源），考情未确认横幅、过时重算提示、无资料最小类别清单；resourceService 存储键修正为独立 `kb_public_resources`；mock-data 新增 2 个演示目标与三组案例资料/基线及 `kb_ability_baselines`/`kb_material_diagnoses` 键；导航更名"资料与基线"。不含购买、PDF 解析、排行与公共资源匹配 |
 | 2026-09-30 | 考情审核后台 | 新增 `ReviewLog`/`ReviewActionType`/`ReviewQueueKey` 类型与队列/动作/原因预置文案，`EvidenceItem` 增加 `reviewerFlaggedConflict`；新增 `src/lib/evidence/events.ts` 共享事件（用户端与审核后台写同一份证据存储并互相同步）；新增 `src/lib/admin/`（domain 纯函数：字段级权限/五队列分类/高风险排序/45 天临期判定；adminReviewService：队列、详情、目标分组、留痕查询、submitReview 双重鉴权+必填原因+已发布修改才升版本+不可变留痕；useAdminReviews hooks）与 `src/components/admin/` 三个组件；新增 `/admin/exams`、`/admin/reviews` 页面与后台子导航，后台概览改为真实入口；画像冲突口径修正（驳回/待确认不参与主结论，历史/个人仅备选，支持手动冲突标记）；mock-data 增加 5 条审核演示种子与 `kb_review_logs` 键。本地 Mock 非生产；不含真实后端鉴权、大范围撤回与纠错处理流 |
 | 2026-10-01 | 公共资源索引与资料缺口匹配 | 新增 `ResourceItem`/`RightsStatus`/`ResourceStatus`/`ResourceMatch`/`ResourcePlanLink`/`ResourceViewRecord`/`ResourceQueueKey` 类型与标签（旧 `PublicResource` 保留为别名）；新增 `src/lib/resources/`（domain 纯规则层：权利层级、合规闸门、范围匹配、打分排序、180 天复核周期、队列分类、旧数据归一化；resourceService：浏览/匹配/查看与加入计划记录/后台 CRUD 双重角色校验/队列统计；events；useResources hooks）与 `src/components/resources/GapResourcePanel.tsx`；诊断结果页按缺口展示最多 3 个资源（理由/范围/权利/查看来源/加入本周计划/空态查找建议），公共资源浏览列表改走同一闸门；新增 `/admin/resources`（五队列计数、新增/编辑/停用/启用/标记复核、不强推原因与使用统计，resource_reviewer/admin 可写、exam_reviewer 只读）与 `ResourceFormModal`，后台导航与概览卡上线；mock 资源重写为 13 条 `mockResources`（四组匹配案例 + 坏链/停用/权利不明/过期/超期未复核），新增 `kb_resource_views`、`kb_resource_plan_links` 存储键；私有资料与公共资源物理隔离、无私有上传自动入库路径。不含付费、网盘下载、第三方全文复制 |
+| 2026-10-01 | 7 天计划与任务生成 | 新增 `PlanStatus`/`TaskPriority`/`TaskSourceType` 类型，`WeeklyPlan` 增加 `generationReason`，`DailyPlan` 增加 `availableMinutes`，`PlanTask` 增加 `sourceType`/`chapterTitle`/`resourceId`/`arrangementReason`/`reviewAction`/`priority`；新增 `src/lib/plans/`（domain 纯函数 PlanEngine：就绪检查、任务来源收集、优先级排序、每天≤3 项/总时长≤可用时间/每天≥1 项最低任务的时间分配；planService：草稿生成/确认执行/重新生成/调整每日时间/版本历史；usePlans 订阅 hook）与 `src/components/plans/DailyPlanCard.tsx`；`/plan` 重写为缺失信息提示→生成草稿→七天概览→展开任务（含安排原因/完成标准/复盘动作/优先级）→确认→版本历史→调整时间；`/today` 改为读取已确认计划（status=active）的当日任务；移除旧版 `mockWeeklyPlan`/`mockDailyPlans`，新增 `kb_daily_plans` 存储键。不含任务反馈驱动的自动重排、第 4 天自适应重排、跨周计划衔接 |
 
 ## 构建与部署
 

@@ -1,45 +1,43 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { TaskCard } from "@/components/ui/TaskCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { DailyPlanCard } from "@/components/plans/DailyPlanCard";
 import { planService, examTargetService } from "@/lib/services";
+import { usePlans } from "@/lib/plans/usePlans";
 import { canGeneratePlan } from "@/lib/targets/domain";
-import { formatDateWithWeekday, formatTime, getWeekdayName } from "@/lib/utils";
+import { formatDateWithWeekday, formatTime } from "@/lib/utils";
+import { PLAN_STATUS_LABELS } from "@/types";
 
 export default function PlanPage() {
+  const router = useRouter();
   const [isLoading] = useState(false);
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showVersions, setShowVersions] = useState(false);
 
   const currentExam = examTargetService.getCurrent();
-  const targetReady = currentExam ? canGeneratePlan(currentExam) : false;
-  const clarification = currentExam ? examTargetService.getClarification(currentExam.id) : null;
-  const weeklyPlan = planService.getCurrentPlan();
+  const targetId = currentExam?.id ?? null;
+  const { currentPlan, dailyPlans, versions } = usePlans(targetId);
 
-  const dailyPlans = useMemo(() => {
-    if (!weeklyPlan) return [];
-    return planService.getDailyPlans(weeklyPlan.id);
-  }, [weeklyPlan]);
-
-  const selectedPlan = useMemo(() => {
-    if (!selectedDay) return null;
-    return dailyPlans.find((d) => d.date === selectedDay);
-  }, [selectedDay, dailyPlans]);
+  const readiness = targetId ? planService.getReadiness(targetId) : null;
 
   const stats = useMemo(() => {
     let total = 0;
     let completed = 0;
+    let totalMinutes = 0;
     dailyPlans.forEach((day) => {
       day.tasks.forEach((t) => {
         total++;
+        totalMinutes += t.estimatedTime;
         if (t.status === "completed") completed++;
       });
     });
-    return { total, completed };
+    return { total, completed, totalMinutes };
   }, [dailyPlans]);
 
   if (isLoading) return <LoadingPage />;
@@ -55,44 +53,144 @@ export default function PlanPage() {
     );
   }
 
-  // 门禁：目标信息不足时只提示完成澄清，不生成/展示精确复习比例
-  if (!targetReady) {
-    const taskCount = clarification?.tasks.filter((t) => t.status === "pending").length ?? 0;
+  if (!canGeneratePlan(currentExam)) {
     return (
       <EmptyState
         icon={<span className="text-5xl">🧭</span>}
         title="请先完成目标澄清"
-        description={
-          taskCount > 0
-            ? `当前目标「${currentExam.name}」还有 ${taskCount} 个查找任务待完成。目标明确前不会生成精确的复习比例与计划。`
-            : `当前目标「${currentExam.name}」信息还不充分，请补充地区/招聘单位/批次或公告信息。`
-        }
+        description={`当前目标「${currentExam.name}」信息还不充分，目标明确前不会生成精确计划。`}
         actionLabel="去完成目标澄清"
         actionHref="/exam"
       />
     );
   }
 
-  if (!weeklyPlan) {
+  const handleGenerate = () => {
+    setError(null);
+    try {
+      planService.generateDraft(targetId!);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "生成失败，请稍后重试");
+    }
+  };
+
+  const handleConfirm = () => {
+    if (!currentPlan) return;
+    planService.confirmPlan(currentPlan.id);
+  };
+
+  const handleRegenerate = () => {
+    setError(null);
+    try {
+      planService.regenerate(targetId!);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "重新生成失败");
+    }
+  };
+
+  const handleAdjustTime = (dailyPlanId: string, minutes: number) => {
+    planService.adjustDailyTime(dailyPlanId, minutes);
+  };
+
+  // 数据不足：展示缺失项，不生成计划
+  if (!currentPlan && readiness && !readiness.ready) {
     return (
-      <EmptyState
-        title="暂无学习计划"
-        description="请先完善资料诊断，系统才能为你生成个性化的学习计划"
-        actionLabel="去添加资料"
-        actionHref="/materials"
-      />
+      <div className="space-y-6">
+        <Card>
+          <CardHeader
+            title="还不能生成学习计划"
+            description="以下信息缺失时不会生成假精确的计划，请先补全"
+          />
+          <ul className="space-y-2 mt-2">
+            {readiness.missing.map((m, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-slate-700">
+                <span className="text-red-500 mt-0.5">●</span>
+                <span>{m}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 mt-4">
+            <Button variant="primary" onClick={() => router.push("/materials")}>
+              去补全资料
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/exam")}>
+              去补全考情
+            </Button>
+          </div>
+        </Card>
+        {readiness.warnings.length > 0 && (
+          <Card className="bg-amber-50/50">
+            <CardHeader title="温馨提示" description="即使生成计划，以下信息也会影响准确性" />
+            <ul className="space-y-1 text-sm text-amber-800">
+              {readiness.warnings.map((w, i) => (
+                <li key={i}>• {w}</li>
+              ))}
+            </ul>
+          </Card>
+        )}
+      </div>
     );
   }
 
+  // 没有计划但数据就绪：展示生成入口
+  if (!currentPlan) {
+    return (
+      <div className="space-y-6">
+        {error && (
+          <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+        )}
+        <Card>
+          <CardHeader
+            title="生成 7 天学习计划"
+            description={`目标：${currentExam.name}`}
+          />
+          <p className="text-sm text-slate-600 mt-2">
+            系统将根据你的目标、已审核考情、资料诊断、已加入计划的资源和可用时间，
+            自动生成一份可执行的 7 天计划。生成后为草稿状态，确认后开始执行。
+          </p>
+          {readiness?.warnings && readiness.warnings.length > 0 && (
+            <div className="mt-3 p-3 bg-amber-50 rounded-lg text-sm text-amber-800">
+              {readiness.warnings.map((w, i) => (
+                <p key={i}>• {w}</p>
+              ))}
+            </div>
+          )}
+          <Button className="mt-4" onClick={handleGenerate}>
+            生成草稿计划
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  // 已有计划：展示概览 + 每日任务
   return (
     <div className="space-y-6">
+      {error && (
+        <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
+      )}
+
       {/* 本周概览 */}
       <Card>
         <CardHeader
-          title={weeklyPlan.focus}
-          description={`${weeklyPlan.startDate} 至 ${weeklyPlan.endDate}`}
+          title={currentPlan.focus}
+          description={`${currentPlan.startDate} 至 ${currentPlan.endDate}`}
+          action={
+            <Badge
+              variant={
+                currentPlan.status === "active"
+                  ? "success"
+                  : currentPlan.status === "draft"
+                    ? "warning"
+                    : "muted"
+              }
+            >
+              {PLAN_STATUS_LABELS[currentPlan.status]} · v{currentPlan.version}
+            </Badge>
+          }
         />
-        <div className="grid grid-cols-3 gap-4">
+        <p className="text-sm text-slate-500 mt-1">{currentPlan.generationReason}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
           <div className="p-3 bg-blue-50 rounded-lg text-center">
             <p className="text-2xl font-bold text-blue-700">{dailyPlans.length}</p>
             <p className="text-xs text-blue-600">计划天数</p>
@@ -107,126 +205,82 @@ export default function PlanPage() {
             </p>
             <p className="text-xs text-slate-600">完成率</p>
           </div>
+          <div className="p-3 bg-purple-50 rounded-lg text-center">
+            <p className="text-2xl font-bold text-purple-700">{formatTime(stats.totalMinutes)}</p>
+            <p className="text-xs text-purple-600">总预计时长</p>
+          </div>
         </div>
+
+        {/* 操作按钮 */}
+        <div className="flex flex-wrap gap-2 mt-4">
+          {currentPlan.status === "draft" && (
+            <Button variant="primary" onClick={handleConfirm}>
+              确认计划，开始执行
+            </Button>
+          )}
+          <Button variant="outline" onClick={handleRegenerate}>
+            重新生成草稿
+          </Button>
+          <Button variant="ghost" onClick={() => setShowVersions(!showVersions)}>
+            {showVersions ? "收起版本历史" : "查看版本历史"}
+          </Button>
+        </div>
+
+        {currentPlan.status === "draft" && (
+          <p className="text-xs text-amber-600 mt-2">
+            当前为草稿状态，确认后计划将进入执行状态，今日任务模块可读取。
+          </p>
+        )}
       </Card>
 
-      {/* 七天概览 */}
-      <Card>
-        <CardHeader title="七天概览" description="点击查看每日详情" />
-        <div className="grid grid-cols-7 gap-2">
-          {dailyPlans.map((day) => {
-            const isToday = day.date === new Date().toISOString().split("T")[0];
-            const dayCompleted = day.tasks.filter((t) => t.status === "completed").length;
-            const allCompleted = dayCompleted === day.tasks.length && day.tasks.length > 0;
-            const isSelected = selectedDay === day.date;
-
-            return (
-              <button
-                key={day.id}
-                onClick={() => setSelectedDay(isSelected ? null : day.date)}
-                className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-                  isSelected
-                    ? "bg-blue-100 border-2 border-blue-500"
-                    : isToday
-                    ? "bg-blue-50 border-2 border-blue-300"
-                    : allCompleted
-                    ? "bg-emerald-50"
-                    : "bg-slate-50 hover:bg-slate-100"
+      {/* 版本历史 */}
+      {showVersions && versions.length > 0 && (
+        <Card>
+          <CardHeader title="计划版本历史" description={`共 ${versions.length} 个版本`} />
+          <div className="space-y-2">
+            {versions.map((v) => (
+              <div
+                key={v.id}
+                className={`flex items-center justify-between p-2 rounded-lg ${
+                  v.id === currentPlan.id ? "bg-blue-50" : "hover:bg-slate-50"
                 }`}
               >
-                <span className="text-xs text-slate-500">{getWeekdayName(day.dayOfWeek)}</span>
-                <span
-                  className={`text-lg font-bold my-1 ${
-                    isSelected
-                      ? "text-blue-700"
-                      : allCompleted
-                      ? "text-emerald-700"
-                      : "text-slate-900"
-                  }`}
-                >
-                  {day.date.split("-")[2]}
-                </span>
-                <div className="flex gap-0.5">
-                  {day.tasks.map((t, i) => (
-                    <div
-                      key={i}
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        t.status === "completed"
-                          ? "bg-emerald-400"
-                          : t.status === "partial"
-                          ? "bg-amber-400"
-                          : "bg-slate-300"
-                      }`}
-                    />
-                  ))}
+                <div>
+                  <span className="font-medium text-sm">v{v.version}</span>
+                  <span className="text-sm text-slate-500 ml-2">{v.focus}</span>
                 </div>
-                {day.isMinimumViable && (
-                  <span className="text-[10px] text-amber-600 mt-0.5">最低</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </Card>
-
-      {/* 今日任务详情 */}
-      {selectedPlan && (
-        <Card>
-          <CardHeader
-            title={`${formatDateWithWeekday(selectedPlan.date)}`}
-            description={`${selectedPlan.tasks.length} 个任务 · 预计 ${formatTime(
-              selectedPlan.totalEstimatedTime
-            )}`}
-            action={
-              <Badge variant={selectedPlan.isMinimumViable ? "warning" : "muted"}>
-                {selectedPlan.isMinimumViable ? "最低可完成" : "标准"}
-              </Badge>
-            }
-          />
-          {selectedPlan.adjustmentNote && (
-            <p className="text-sm text-amber-700 bg-amber-50 px-3 py-2 rounded-lg mb-4">
-              {selectedPlan.adjustmentNote}
-            </p>
-          )}
-          <div className="space-y-3">
-            {selectedPlan.tasks.map((task) => (
-              <TaskCard key={task.id} task={task} />
+                <div className="flex items-center gap-2">
+                  <Badge variant="muted">{PLAN_STATUS_LABELS[v.status]}</Badge>
+                  <span className="text-xs text-slate-400">
+                    {formatDateWithWeekday(v.startDate)}
+                  </span>
+                </div>
+              </div>
             ))}
           </div>
         </Card>
       )}
 
-      {/* 重排与复盘提示 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="bg-blue-50/50">
-          <CardHeader
-            title="第4天重排"
-            description="根据前3天的执行情况，调整后半周计划"
-          />
-          <Button variant="outline" size="sm" className="w-full">
-            预览重排建议
-          </Button>
-        </Card>
-        <Card className="bg-emerald-50/50">
-          <CardHeader
-            title="第7天复盘"
-            description="回顾本周完成情况，规划下周重点"
-          />
-          <Button variant="outline" size="sm" className="w-full">
-            开始周复盘
-          </Button>
-        </Card>
-      </div>
+      {/* 七天概览 */}
+      <Card>
+        <CardHeader title="七天任务概览" description="点击展开查看每日任务详情、安排原因与复盘动作" />
+        <div className="space-y-3 mt-2">
+          {dailyPlans.map((day) => (
+            <DailyPlanCard key={day.id} plan={day} onAdjustTime={handleAdjustTime} />
+          ))}
+        </div>
+      </Card>
 
       {/* 说明 */}
       <Card className="bg-slate-50">
-        <CardHeader title="计划说明" description="了解计划的调整逻辑" />
-        <div className="space-y-2 text-sm text-slate-600">
+        <CardHeader title="计划规则说明" />
+        <div className="space-y-1.5 text-sm text-slate-600">
           <p>• 每天最多 3 项核心任务，避免任务堆积</p>
-          <p>• 时间不足时只保留 1 项最低任务</p>
-          <p>• 未完成的任务不会自动堆到第二天</p>
-          <p>• 第 4 天会根据前 3 天反馈自动重排</p>
-          <p>• 可用时间变化时，任务数量和时长同步调整</p>
+          <p>• 每天任务总时长不超过当天可用时间</p>
+          <p>• 每天至少保留 1 项最低可完成任务</p>
+          <p>• 关键考试模块与薄弱模块优先安排</p>
+          <p>• 未通过适用性判断的资料不会作为主要任务来源</p>
+          <p>• 调整每日时间不会自动重排，需重新生成草稿</p>
         </div>
       </Card>
     </div>

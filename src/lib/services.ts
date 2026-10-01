@@ -3,17 +3,11 @@ import {
   ExamTargetInput,
   ClarificationResult,
   ClarificationTask,
-  WeeklyPlan,
-  DailyPlan,
-  PlanTask,
-  TaskFeedback,
   User,
   UserSettings,
 } from "@/types";
 import {
   mockExamTargets,
-  mockWeeklyPlan,
-  mockDailyPlans,
   mockUserSettings,
   STORAGE_KEYS,
 } from "./mock-data";
@@ -27,6 +21,7 @@ import {
   rebaseClarificationTasks,
   validateConfirm,
 } from "./targets/domain";
+import { planService as planServiceImpl } from "./plans/planService";
 
 // ==================== 用户服务 ====================
 //
@@ -362,64 +357,9 @@ export { materialService } from "./materials/materialService";
 export { resourceService } from "./resources/resourceService";
 export type { ResourceItemInput, ResourceQueues } from "./resources/resourceService";
 
-// ==================== 计划服务 ====================
-
-export const planService = {
-  getCurrentPlan(): WeeklyPlan | null {
-    const plans = loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, [mockWeeklyPlan]);
-    return plans.find((p) => p.status === "active") || plans[0] || null;
-  },
-
-  getDailyPlans(weeklyPlanId: string): DailyPlan[] {
-    return loadFromStorage<DailyPlan[]>(STORAGE_KEYS.PLANS, mockDailyPlans).filter(
-      (d) => d.weeklyPlanId === weeklyPlanId
-    );
-  },
-
-  getTodayPlan(): DailyPlan | null {
-    const today = new Date().toISOString().split("T")[0];
-    const dailyPlans = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.PLANS, mockDailyPlans);
-    return dailyPlans.find((d) => d.date === today) || null;
-  },
-
-  getDayPlan(date: string): DailyPlan | null {
-    const dailyPlans = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.PLANS, mockDailyPlans);
-    return dailyPlans.find((d) => d.date === date) || null;
-  },
-
-  submitTaskFeedback(taskId: string, feedback: Omit<TaskFeedback, "id" | "createdAt">): void {
-    const dailyPlans = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.PLANS, mockDailyPlans);
-    const newFeedback: TaskFeedback = {
-      ...feedback,
-      id: `tf-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-
-    for (const plan of dailyPlans) {
-      const taskIndex = plan.tasks.findIndex((t) => t.id === taskId);
-      if (taskIndex !== -1) {
-        plan.tasks[taskIndex] = {
-          ...plan.tasks[taskIndex],
-          status: feedback.status === "completed" ? "completed" : feedback.status === "partial" ? "partial" : "pending",
-          feedback: newFeedback,
-          updatedAt: new Date().toISOString(),
-        };
-        break;
-      }
-    }
-
-    saveToStorage(STORAGE_KEYS.PLANS, dailyPlans);
-  },
-
-  getTaskById(taskId: string): PlanTask | null {
-    const dailyPlans = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.PLANS, mockDailyPlans);
-    for (const plan of dailyPlans) {
-      const task = plan.tasks.find((t) => t.id === taskId);
-      if (task) return task;
-    }
-    return null;
-  },
-};
+// 7 天计划与任务生成已独立到 lib/plans（PlanEngine 规则层 + service + 订阅）。
+// 旧版 mock 周计划/每日计划不再作为默认数据，计划由用户点击"生成草稿"后按规则产出。
+export { planService } from "./plans/planService";
 
 // ==================== 统计服务 ====================
 
@@ -431,7 +371,7 @@ export const statsService = {
     actualTime: number;
     completionRate: number;
   } {
-    const dailyPlans = planService.getDailyPlans(planService.getCurrentPlan()?.id || "");
+    const dailyPlans = planServiceImpl.getDailyPlans(planServiceImpl.getCurrentPlan()?.id || "");
     let totalTasks = 0;
     let completedTasks = 0;
     let totalTime = 0;
