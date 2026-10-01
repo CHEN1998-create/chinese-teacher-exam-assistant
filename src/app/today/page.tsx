@@ -2,55 +2,33 @@
 
 import { useMemo, useState } from "react";
 import { Card, CardHeader } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
-import { TaskCard } from "@/components/ui/TaskCard";
-import { FeedbackForm } from "@/components/ui/FeedbackForm";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { LoadingPage } from "@/components/ui/Loading";
-import { planService, examTargetService } from "@/lib/services";
+import { examTargetService, feedbackService, nextStepHint } from "@/lib/services";
 import { usePlans } from "@/lib/plans/usePlans";
+import { useTodayString } from "@/lib/plans/useToday";
 import { canGeneratePlan } from "@/lib/targets/domain";
-import { TaskFeedback } from "@/types";
+import { CompletionStatus } from "@/types";
+import { TodayTaskItem } from "@/components/plans/TodayTaskItem";
 import { formatDateWithWeekday, formatTime, getGreeting } from "@/lib/utils";
 
 export default function TodayPage() {
-  const [isLoading] = useState(false);
-  const [feedbackTaskId, setFeedbackTaskId] = useState<string | null>(null);
-  const [showFeedbackSuccess, setShowFeedbackSuccess] = useState(false);
-
   const currentExam = examTargetService.getCurrent();
   const targetId = currentExam?.id ?? null;
   const { currentPlan, dailyPlans } = usePlans(targetId);
+  const todayStr = useTodayString();
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  const [hint, setHint] = useState<{ status: CompletionStatus; nonce: number } | null>(null);
+
   const todayPlan = useMemo(
     () => dailyPlans.find((d) => d.date === todayStr) ?? null,
     [dailyPlans, todayStr]
   );
 
-  const coreTasks = useMemo(
-    () => todayPlan?.tasks.filter((t) => t.isCore) ?? [],
-    [todayPlan]
-  );
+  // 反馈在渲染时直接读取：usePlans 已订阅 feedbackService，提交/修改会触发重渲染
+  const feedbacks = todayPlan ? feedbackService.listByDailyPlan(todayPlan.id) : [];
 
-  const pendingTasks = useMemo(
-    () =>
-      todayPlan?.tasks.filter(
-        (t) => t.status === "pending" || t.status === "in_progress"
-      ) ?? [],
-    [todayPlan]
-  );
-
-  const completedTasks = useMemo(
-    () =>
-      todayPlan?.tasks.filter(
-        (t) => t.status === "completed" || t.status === "partial"
-      ) ?? [],
-    [todayPlan]
-  );
-
-  if (isLoading) return <LoadingPage />;
+  const feedbackByTask = new Map(feedbacks.map((f) => [f.taskId, f]));
 
   if (!currentExam) {
     return (
@@ -75,7 +53,7 @@ export default function TodayPage() {
     );
   }
 
-  // 没有已确认的计划
+  // 计划未确认（没有计划或只有草稿）
   if (!currentPlan || currentPlan.status !== "active") {
     return (
       <EmptyState
@@ -92,41 +70,48 @@ export default function TodayPage() {
     );
   }
 
-  // 今天不在计划周期内
-  if (!todayPlan) {
+  // 今天没有任务（不在计划周期内，或当日未排任务）
+  if (!todayPlan || todayPlan.tasks.length === 0) {
     return (
       <EmptyState
+        icon={<span className="text-5xl">🌤️</span>}
         title="今日暂无任务"
-        description={`当前计划周期为 ${currentPlan.startDate} 至 ${currentPlan.endDate}，今天不在计划范围内。`}
+        description={`当前执行中计划周期为 ${currentPlan.startDate} 至 ${currentPlan.endDate}，今天没有安排任务。`}
         actionLabel="查看本周计划"
         actionHref="/plan"
       />
     );
   }
 
-  const handleSubmitFeedback = (feedback: Omit<TaskFeedback, "id" | "createdAt">) => {
-    planService.submitTaskFeedback(feedback.taskId, feedback);
-    setFeedbackTaskId(null);
-    setShowFeedbackSuccess(true);
-    setTimeout(() => setShowFeedbackSuccess(false), 3000);
-  };
+  const sortedTasks = [...todayPlan.tasks].sort((a, b) => a.order - b.order);
+  const coreTasks = sortedTasks.filter((t) => t.isCore);
+  const extraTasks = sortedTasks.filter((t) => !t.isCore);
+  const pendingCount = sortedTasks.filter((t) => !feedbackByTask.has(t.id)).length;
+  const totalActual = feedbacks.reduce((sum, f) => sum + (f.actualTime ?? 0), 0);
 
   return (
     <div className="space-y-6">
+      {/* 概览 */}
       <div>
         <h2 className="text-xl font-bold text-slate-900">
-          {getGreeting()}，今天有 {pendingTasks.length} 项任务待完成
+          {getGreeting()}，今天有 {pendingCount} 项任务待反馈
         </h2>
         <p className="text-sm text-slate-500 mt-1">
-          {todayPlan ? formatDateWithWeekday(todayPlan.date) : ""} · 预计用时{" "}
+          {formatDateWithWeekday(todayPlan.date)} · 计划用时{" "}
           {formatTime(todayPlan.totalEstimatedTime)} / 可用{" "}
           {formatTime(todayPlan.availableMinutes)}
+          {totalActual > 0 && ` · 已记录实际用时 ${formatTime(totalActual)}`}
         </p>
       </div>
 
-      {showFeedbackSuccess && (
-        <div className="p-4 bg-emerald-50 text-emerald-800 rounded-xl text-sm font-medium">
-          反馈已提交
+      {/* 提交后的下一步提示（正式重排由下一模块负责） */}
+      {hint && (
+        <div
+          key={hint.nonce}
+          className="p-3.5 bg-emerald-50 text-emerald-800 rounded-xl text-sm font-medium flex items-start gap-2"
+        >
+          <span className="shrink-0">✅</span>
+          <span>{nextStepHint(hint.status)}</span>
         </div>
       )}
 
@@ -136,40 +121,28 @@ export default function TodayPage() {
         </div>
       )}
 
-      {/* 核心任务 */}
+      {/* 今日核心任务（1—3 项） */}
       <Card>
         <CardHeader
           title="今日核心任务"
-          description="这些是最重要、必须完成的学习任务"
+          description="这些是今天最重要的学习任务，完成后请花一分钟提交反馈"
           action={
-            pendingTasks.length > 0 && (
-              <Badge variant="primary">{pendingTasks.length} 项待完成</Badge>
+            pendingCount > 0 ? (
+              <Badge variant="primary">{pendingCount} 项待反馈</Badge>
+            ) : (
+              <Badge variant="success">今日已全部反馈</Badge>
             )
           }
         />
-        <div className="space-y-3">
-          {coreTasks.map((task) => (
-            <div key={task.id}>
-              <TaskCard task={task} showPlanMeta />
-              {task.status !== "completed" && feedbackTaskId !== task.id && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 w-full"
-                  onClick={() => setFeedbackTaskId(task.id)}
-                >
-                  {task.status === "pending" ? "开始任务" : "提交反馈"}
-                </Button>
-              )}
-              {feedbackTaskId === task.id && (
-                <FeedbackForm
-                  taskId={task.id}
-                  taskTitle={task.title}
-                  onSubmit={handleSubmitFeedback}
-                  onCancel={() => setFeedbackTaskId(null)}
-                />
-              )}
-            </div>
+        <div className="space-y-4">
+          {coreTasks.map((task, idx) => (
+            <TodayTaskItem
+              key={task.id}
+              task={task}
+              feedback={feedbackByTask.get(task.id) ?? null}
+              isMinimumViableTask={todayPlan.isMinimumViable && idx === 0}
+              onSubmitted={(status) => setHint({ status, nonce: Date.now() })}
+            />
           ))}
           {coreTasks.length === 0 && (
             <p className="text-sm text-slate-500">今天没有核心任务。</p>
@@ -177,30 +150,21 @@ export default function TodayPage() {
         </div>
       </Card>
 
-      {/* 非核心任务 */}
-      {todayPlan.tasks.some((t) => !t.isCore) && (
+      {/* 补充任务 */}
+      {extraTasks.length > 0 && (
         <Card>
           <CardHeader
             title="补充任务"
-            description="有时间可以尝试，不影响核心进度"
+            description="有时间可以尝试，不影响核心进度；完成后同样可以提交反馈"
           />
-          <div className="space-y-3">
-            {todayPlan.tasks
-              .filter((t) => !t.isCore)
-              .map((task) => (
-                <TaskCard key={task.id} task={task} compact showPlanMeta />
-              ))}
-          </div>
-        </Card>
-      )}
-
-      {/* 已完成任务 */}
-      {completedTasks.length > 0 && (
-        <Card>
-          <CardHeader title="已完成" description="今天已经完成的任务" />
-          <div className="space-y-3">
-            {completedTasks.map((task) => (
-              <TaskCard key={task.id} task={task} showFeedback />
+          <div className="space-y-4">
+            {extraTasks.map((task) => (
+              <TodayTaskItem
+                key={task.id}
+                task={task}
+                feedback={feedbackByTask.get(task.id) ?? null}
+                onSubmitted={(status) => setHint({ status, nonce: Date.now() })}
+              />
             ))}
           </div>
         </Card>
@@ -211,8 +175,18 @@ export default function TodayPage() {
         <Card className="bg-amber-50/50">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
-              <svg className="w-4 h-4 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <svg
+                className="w-4 h-4 text-amber-600"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
             </div>
             <div>

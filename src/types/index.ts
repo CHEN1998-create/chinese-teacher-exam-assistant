@@ -714,27 +714,69 @@ export interface PlanAdjustment {
 
 // ==================== 执行反馈 ====================
 
+/** 任务完成状态：完成 / 部分完成 / 未完成 */
+export type CompletionStatus = "completed" | "partial" | "not_completed";
+
+/**
+ * 主要错因（可多选）：
+ * 知识点不会 / 题目理解错误 / 答题结构不清 / 时间不够 / 粗心 / 资料或任务不适合 / 其他
+ */
+export type ErrorCategory =
+  | "knowledge_gap"
+  | "misunderstanding"
+  | "structure_unclear"
+  | "time_management"
+  | "careless"
+  | "material_unsuitable"
+  | "other";
+
+/** @deprecated 旧名，保留兼容；新代码请用 ErrorCategory */
+export type ErrorType = ErrorCategory;
+
+/** 未完成原因 */
+export type IncompleteReason =
+  | "time" // 时间不够
+  | "difficulty" // 内容太难
+  | "material" // 资料不合适
+  | "mood" // 状态不好
+  | "other"; // 其他
+
+/**
+ * 任务执行反馈。
+ * 必须关联：用户（userId）、计划版本（weeklyPlanId + weeklyVersion）、任务（taskId）。
+ * 一个任务同一用户仅一条反馈；修改时保留 createdAt、更新 updatedAt。
+ */
 export interface TaskFeedback {
   id: string;
   taskId: string;
   userId: string;
-  status: "completed" | "partial" | "not_completed";
+  /** 所属周计划 ID（计划版本载体） */
+  weeklyPlanId: string;
+  /** 提交/修改时的计划版本号（冗余快照，便于重排模块按版本聚合） */
+  weeklyVersion: number;
+  dailyPlanId: string;
+  /** 反馈对应日期 YYYY-MM-DD */
+  date: string;
+  status: CompletionStatus;
   actualTime?: number;
-  incompleteReason?: "time" | "difficulty" | "material" | "mood" | "other";
-  errorTypes: ErrorType[];
+  incompleteReason?: IncompleteReason;
+  errorTypes: ErrorCategory[];
   hasSecondPractice: boolean;
   notes?: string;
   createdAt: string;
+  /** 最近修改时间；未修改时与 createdAt 相同 */
+  updatedAt: string;
 }
 
-export type ErrorType = 
-  | "knowledge_gap" 
-  | "misunderstanding" 
-  | "structure_unclear" 
-  | "time_management" 
-  | "careless" 
-  | "material_unsuitable"
-  | "other";
+/** 反馈表单输入（id、关联关系、时间由 service 补全） */
+export interface TaskFeedbackInput {
+  status: CompletionStatus;
+  actualTime?: number;
+  incompleteReason?: IncompleteReason;
+  errorTypes: ErrorCategory[];
+  hasSecondPractice: boolean;
+  notes?: string;
+}
 
 export interface DailyFeedback {
   id: string;
@@ -1004,23 +1046,34 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   abandoned: "已放弃",
 };
 
-export const ERROR_TYPE_LABELS: Record<ErrorType, string> = {
+export const ERROR_TYPE_LABELS: Record<ErrorCategory, string> = {
   knowledge_gap: "知识点不会",
-  misunderstanding: "理解错误",
+  misunderstanding: "题目理解错误",
   structure_unclear: "答题结构不清",
   time_management: "时间不够",
   careless: "粗心",
-  material_unsuitable: "资料不适合",
+  material_unsuitable: "资料或任务不适合",
   other: "其他",
 };
 
-export const FEEDBACK_INCOMPLETE_REASONS: Record<string, string> = {
+/** 任务完成状态文案 */
+export const COMPLETION_STATUS_LABELS: Record<CompletionStatus, string> = {
+  completed: "完成",
+  partial: "部分完成",
+  not_completed: "未完成",
+};
+
+/** 未完成原因文案 */
+export const INCOMPLETE_REASON_LABELS: Record<IncompleteReason, string> = {
   time: "时间不够",
   difficulty: "内容太难",
   material: "资料不合适",
   mood: "状态不好",
   other: "其他",
 };
+
+/** @deprecated 旧名，保留兼容 */
+export const FEEDBACK_INCOMPLETE_REASONS: Record<string, string> = INCOMPLETE_REASON_LABELS;
 
 /** 计划状态文案 */
 export const PLAN_STATUS_LABELS: Record<PlanStatus, string> = {

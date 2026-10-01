@@ -361,6 +361,10 @@ export type { ResourceItemInput, ResourceQueues } from "./resources/resourceServ
 // 旧版 mock 周计划/每日计划不再作为默认数据，计划由用户点击"生成草稿"后按规则产出。
 export { planService } from "./plans/planService";
 
+// 今日任务执行反馈：独立持久化（kb_task_feedbacks），关联用户/计划版本/任务，
+// 一条任务仅一条反馈（可修改），供后续计划重排模块读取。
+export { feedbackService, DuplicateFeedbackError, nextStepHint } from "./plans/feedbackService";
+
 // ==================== 统计服务 ====================
 
 export const statsService = {

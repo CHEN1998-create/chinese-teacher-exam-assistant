@@ -2,7 +2,12 @@ import { PlanTask } from "@/types";
 import { Card } from "./Card";
 import { Badge, TaskStatusBadge } from "./Badge";
 import { formatTime } from "@/lib/utils";
-import { TASK_PRIORITY_LABELS } from "@/types";
+import {
+  TASK_PRIORITY_LABELS,
+  COMPLETION_STATUS_LABELS,
+  ERROR_TYPE_LABELS,
+  INCOMPLETE_REASON_LABELS,
+} from "@/types";
 import { moduleLabel } from "@/lib/materials/domain";
 
 interface TaskCardProps {
@@ -73,23 +78,37 @@ export function TaskCard({
 
       {showFeedback && task.feedback && (
         <div className="mt-3 p-3 bg-slate-50 rounded-lg">
-          <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-3 text-sm flex-wrap">
+            <Badge
+              variant={
+                task.feedback.status === "completed"
+                  ? "success"
+                  : task.feedback.status === "partial"
+                    ? "warning"
+                    : "danger"
+              }
+            >
+              {COMPLETION_STATUS_LABELS[task.feedback.status]}
+            </Badge>
             <span className="text-slate-500">实际用时：</span>
             <span className="font-medium">
               {task.feedback.actualTime ? formatTime(task.feedback.actualTime) : "-"}
             </span>
-            {task.feedback.hasSecondPractice && (
-              <Badge variant="success">已二次练习</Badge>
-            )}
+            {task.feedback.hasSecondPractice && <Badge variant="info">已二次练习</Badge>}
           </div>
+          {task.feedback.incompleteReason && (
+            <div className="mt-2 text-sm text-slate-600">
+              原因：{INCOMPLETE_REASON_LABELS[task.feedback.incompleteReason]}
+            </div>
+          )}
           {task.feedback.errorTypes.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
               {task.feedback.errorTypes.map((type) => (
                 <span
                   key={type}
-                  className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded"
+                  className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded border border-amber-200"
                 >
-                  {type}
+                  {ERROR_TYPE_LABELS[type]}
                 </span>
               ))}
             </div>

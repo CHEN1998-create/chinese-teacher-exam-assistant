@@ -16,7 +16,6 @@ import {
   MaterialItem,
   ResourceItem,
   ResourcePlanLink,
-  TaskFeedback,
   WeeklyPlan,
 } from "@/types";
 import { STORAGE_KEYS } from "@/lib/mock-data";
@@ -74,6 +73,19 @@ function normalizeDailyPlan(raw: DailyPlan): DailyPlan {
       reviewAction: t.reviewAction ?? "回顾本任务学习内容",
       priority: t.priority ?? (t.isCore ? "high" : "medium"),
       order: t.order ?? i + 1,
+      // 旧版内嵌反馈补齐关联字段（新反馈由 feedbackService 写入完整结构）
+      feedback: t.feedback
+        ? {
+            ...t.feedback,
+            weeklyPlanId: t.feedback.weeklyPlanId || raw.weeklyPlanId,
+            weeklyVersion: t.feedback.weeklyVersion ?? 1,
+            dailyPlanId: t.feedback.dailyPlanId || raw.id,
+            date: t.feedback.date || raw.date,
+            errorTypes: Array.isArray(t.feedback.errorTypes) ? t.feedback.errorTypes : [],
+            hasSecondPractice: t.feedback.hasSecondPractice ?? false,
+            updatedAt: t.feedback.updatedAt ?? t.feedback.createdAt,
+          }
+        : undefined,
     })),
   };
 }
@@ -268,36 +280,6 @@ export const planService = {
   /** 列出当前目标的全部计划版本（含草稿/执行中/已完成） */
   listVersions(targetId: string): WeeklyPlan[] {
     return this.listPlans(targetId);
-  },
-
-  // ==================== 任务反馈（复用旧接口，本次不扩展重排） ====================
-
-  submitTaskFeedback(taskId: string, feedback: Omit<TaskFeedback, "id" | "createdAt">): void {
-    const all = loadDailyPlans();
-    const newFeedback: TaskFeedback = {
-      ...feedback,
-      id: `tf-${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-    for (const plan of all) {
-      const taskIndex = plan.tasks.findIndex((t) => t.id === taskId);
-      if (taskIndex !== -1) {
-        plan.tasks[taskIndex] = {
-          ...plan.tasks[taskIndex],
-          status:
-            feedback.status === "completed"
-              ? "completed"
-              : feedback.status === "partial"
-                ? "partial"
-                : "pending",
-          feedback: newFeedback,
-          updatedAt: new Date().toISOString(),
-        };
-        break;
-      }
-    }
-    persistDailyPlans(all);
-    notifyChanged();
   },
 
   getTaskById(taskId: string) {

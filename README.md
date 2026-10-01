@@ -522,6 +522,67 @@ src/components/plans/
 
 任务反馈驱动的自动重排、第 4 天自适应重排、跨周计划衔接。调整每日时间只更新标记，不重新分配任务。
 
+## 今日任务与执行反馈
+
+让用户在 `/today` 快速看到当天最重要的任务，并在一分钟内提交真实执行结果，为下一模块（计划重排）积累数据。今日页只读取**当前执行中计划**（`status=active`），不涉及任何计划生成规则。
+
+### 今日任务展示
+
+- 当天 1—3 项核心任务 + 补充任务分组；时间不足的日子标记"最低可完成任务"；
+- 每项展示：学习模块、资料/资源与具体章节、预计时间、完成标准、安排原因；
+- 顶部汇总待反馈数、计划用时/可用时间、已记录实际用时。
+
+### 反馈字段（`TaskFeedback`，独立存储 `kb_task_feedbacks`）
+
+每条反馈**关联用户、计划版本与任务**：`userId` / `weeklyPlanId` + `weeklyVersion` / `dailyPlanId` / `date` / `taskId`。
+
+- 完成状态（`CompletionStatus`）：完成 / 部分完成 / 未完成；
+- 实际用时（分钟，默认带出预计时间，±15 快捷调整）；
+- 未完成原因（`IncompleteReason`）：时间不够 / 内容太难 / 资料不合适 / 状态不好 / 其他（仅非"完成"时出现）；
+- 主要错因（`ErrorCategory`，七项多选）：知识点不会、题目理解错误、答题结构不清、时间不够、粗心、资料或任务不适合、其他；
+- 是否完成二次练习；补充说明（选填）。
+
+### 交互规则（`src/lib/plans/feedbackService.ts`）
+
+1. 一分钟表单：除补充说明外全部点选，实际用时默认带出预计时间；
+2. **一任务一反馈**：同一任务重复提交时 service 抛 `DuplicateFeedbackError`，UI 只显示"修改反馈"；
+3. 已提交反馈可修改：保留 `createdAt`、刷新 `updatedAt`，摘要显示"已修改 · 更新于 …"；
+4. 未完成只记录事实：任务状态同步为 completed/partial，未完成不改任务状态，**不删除、不顺延到明天**；
+5. 提交后按状态显示简短下一步提示（正式重排由下一模块负责）；
+6. 保存失败（严格写入抛错）时表单保留输入并红字提示，可直接重试。
+
+### 状态覆盖
+
+计划未确认 → 引导去 `/plan`；今天不在计划周期/当日无任务 → 空态；正常执行；已提交反馈（只读摘要+修改入口）；保存失败（内联重试）；重复提交（service 拦截+UI 无重复入口）；日期变化（`useTodayString` 监听 30s 定时/visibilitychange/focus，跨午夜自动切天）。
+
+### 为重排模块预留的数据出口
+
+`feedbackService.listByTask / listByDailyPlan / listByWeeklyPlan / listByDate / listMine`，反馈含计划版本号，后续可按版本聚合错因与未完成原因。
+
+### 文件结构
+
+```
+src/lib/plans/
+├── feedbackService.ts   # 反馈持久化/防重复/修改/任务状态同步（不重排）
+└── useToday.ts          # 本地日期与跨午夜自动切天
+src/components/plans/
+├── TodayTaskItem.tsx    # 单任务+反馈交互状态机（表单开合/保存中/失败重试）
+└── FeedbackSummary.tsx  # 已提交反馈只读摘要（含更新时间）
+src/components/ui/
+└── FeedbackForm.tsx     # 一分钟点选式反馈表单（支持修改模式）
+```
+
+### 手动验证步骤
+
+1. `/login` 用 `student@demo.app` 登录 → `/plan` 生成草稿并确认；
+2. `/today`：核对核心任务数（≤3）、最低任务标记、模块/章节/完成标准/安排原因；
+3. 任务 1 提交"完成"（错因/二次练习）→ 绿色提示、摘要出现、待反馈数 -1；
+4. 任务 2 提交"部分完成"（原因+两个错因）→ 摘要徽章与标签正确；
+5. 任务 3 提交"未完成"（原因+错因）→ 任务仍在当天，未被移动；
+6. 已反馈任务无"提交"入口（防重复），点"修改反馈"后字段保留、保存后显示更新时间；
+7. 控制台 `JSON.parse(localStorage.getItem("kb_task_feedbacks"))` 核对关联字段与每任务一条；
+8. 模拟写入失败：重写 `Storage.prototype.setItem` 对 `kb_task_feedbacks` 抛错 → 表单红字且不丢输入，恢复后重试成功。
+
 ## 目录结构
 
 ```
@@ -582,8 +643,10 @@ src/
 │   │   ├── AbilityBaselineForm.tsx   # 能力基线表单
 │   │   ├── DiagnosisPanel.tsx        # 诊断结果面板
 │   │   └── PublicResourceList.tsx    # 公共资源只读列表
-│   ├── plans/              # 7 天计划组件
-│   │   └── DailyPlanCard.tsx        # 可展开每日任务卡 + 时间调整
+│   ├── plans/              # 7 天计划与今日反馈组件
+│   │   ├── DailyPlanCard.tsx        # 可展开每日任务卡 + 时间调整
+│   │   ├── TodayTaskItem.tsx        # 今日任务+反馈交互（提交/失败重试/修改）
+│   │   └── FeedbackSummary.tsx      # 已提交反馈只读摘要（含更新时间）
 │   └── layout/             # 布局组件
 │       ├── AppShell.tsx
 │       ├── Sidebar.tsx
@@ -616,7 +679,9 @@ src/
 │   ├── plans/              # 7 天计划与任务生成（本地 Mock，非生产）
 │   │   ├── domain.ts       # PlanEngine：就绪检查/来源收集/优先级/时间分配（纯函数，唯一规则层）
 │   │   ├── planService.ts  # 草稿/确认/重新生成/调整时间/版本历史
-│   │   └── usePlans.ts
+│   │   ├── feedbackService.ts # 执行反馈：防重复提交/修改留痕/任务状态同步（不重排）
+│   │   ├── usePlans.ts
+│   │   └── useToday.ts     # 本地日期与跨午夜自动切天
 │   ├── mock-data.ts        # Mock数据
 │   ├── services.ts         # 数据服务层（当前用户从会话读取）
 │   ├── storage.ts          # 本地存储工具（含严格写入 saveToStorageStrict）
@@ -695,6 +760,7 @@ export const examTargetService = {
 | 2026-09-30 | 考情审核后台 | 新增 `ReviewLog`/`ReviewActionType`/`ReviewQueueKey` 类型与队列/动作/原因预置文案，`EvidenceItem` 增加 `reviewerFlaggedConflict`；新增 `src/lib/evidence/events.ts` 共享事件（用户端与审核后台写同一份证据存储并互相同步）；新增 `src/lib/admin/`（domain 纯函数：字段级权限/五队列分类/高风险排序/45 天临期判定；adminReviewService：队列、详情、目标分组、留痕查询、submitReview 双重鉴权+必填原因+已发布修改才升版本+不可变留痕；useAdminReviews hooks）与 `src/components/admin/` 三个组件；新增 `/admin/exams`、`/admin/reviews` 页面与后台子导航，后台概览改为真实入口；画像冲突口径修正（驳回/待确认不参与主结论，历史/个人仅备选，支持手动冲突标记）；mock-data 增加 5 条审核演示种子与 `kb_review_logs` 键。本地 Mock 非生产；不含真实后端鉴权、大范围撤回与纠错处理流 |
 | 2026-10-01 | 公共资源索引与资料缺口匹配 | 新增 `ResourceItem`/`RightsStatus`/`ResourceStatus`/`ResourceMatch`/`ResourcePlanLink`/`ResourceViewRecord`/`ResourceQueueKey` 类型与标签（旧 `PublicResource` 保留为别名）；新增 `src/lib/resources/`（domain 纯规则层：权利层级、合规闸门、范围匹配、打分排序、180 天复核周期、队列分类、旧数据归一化；resourceService：浏览/匹配/查看与加入计划记录/后台 CRUD 双重角色校验/队列统计；events；useResources hooks）与 `src/components/resources/GapResourcePanel.tsx`；诊断结果页按缺口展示最多 3 个资源（理由/范围/权利/查看来源/加入本周计划/空态查找建议），公共资源浏览列表改走同一闸门；新增 `/admin/resources`（五队列计数、新增/编辑/停用/启用/标记复核、不强推原因与使用统计，resource_reviewer/admin 可写、exam_reviewer 只读）与 `ResourceFormModal`，后台导航与概览卡上线；mock 资源重写为 13 条 `mockResources`（四组匹配案例 + 坏链/停用/权利不明/过期/超期未复核），新增 `kb_resource_views`、`kb_resource_plan_links` 存储键；私有资料与公共资源物理隔离、无私有上传自动入库路径。不含付费、网盘下载、第三方全文复制 |
 | 2026-10-01 | 7 天计划与任务生成 | 新增 `PlanStatus`/`TaskPriority`/`TaskSourceType` 类型，`WeeklyPlan` 增加 `generationReason`，`DailyPlan` 增加 `availableMinutes`，`PlanTask` 增加 `sourceType`/`chapterTitle`/`resourceId`/`arrangementReason`/`reviewAction`/`priority`；新增 `src/lib/plans/`（domain 纯函数 PlanEngine：就绪检查、任务来源收集、优先级排序、每天≤3 项/总时长≤可用时间/每天≥1 项最低任务的时间分配；planService：草稿生成/确认执行/重新生成/调整每日时间/版本历史；usePlans 订阅 hook）与 `src/components/plans/DailyPlanCard.tsx`；`/plan` 重写为缺失信息提示→生成草稿→七天概览→展开任务（含安排原因/完成标准/复盘动作/优先级）→确认→版本历史→调整时间；`/today` 改为读取已确认计划（status=active）的当日任务；移除旧版 `mockWeeklyPlan`/`mockDailyPlans`，新增 `kb_daily_plans` 存储键。不含任务反馈驱动的自动重排、第 4 天自适应重排、跨周计划衔接 |
+| 2026-10-01 | 今日任务与执行反馈 | 新增 `CompletionStatus`/`ErrorCategory`（旧 `ErrorType` 保留别名）/`IncompleteReason`/`TaskFeedbackInput` 类型与完成状态/未完成原因/错因中文标签（错因七项：知识点不会/题目理解错误/答题结构不清/时间不够/粗心/资料或任务不适合/其他）；`TaskFeedback` 扩展为关联用户+计划版本（weeklyPlanId/weeklyVersion）+日计划+日期+任务，新增 `updatedAt`；新增 `src/lib/plans/feedbackService.ts`（独立 `kb_task_feedbacks` 存储、一任务一反馈重复提交抛 `DuplicateFeedbackError`、修改保留 createdAt 刷 updatedAt、同步任务状态但不删除不顺延、listByTask/DailyPlan/WeeklyPlan/Date 查询出口）与 `useToday.ts`（跨午夜 30s/visibility/focus 自动切天）；重写 `FeedbackForm` 为一分钟点选式表单（完成三态/±15 用时/条件原因/错因多选/二次练习/选填说明/修改模式/保存失败内联重试）；新增 `TodayTaskItem`/`FeedbackSummary` 组件，`/today` 重写为只读 active 计划、核心+补充分组、最低任务标记、待反馈计数、提交后状态化下一步提示；planService 移除旧 submitTaskFeedback，归一化兼容旧版内嵌反馈。不含自动重排与任务顺延 |
 
 ## 构建与部署
 

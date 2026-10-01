@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { planService } from "./planService";
+import { feedbackService } from "./feedbackService";
 import { examTargetService } from "@/lib/services";
 import { authService } from "@/lib/auth";
 import { materialService } from "@/lib/materials/materialService";
@@ -9,18 +10,20 @@ import { subscribeResources, getResourceStoreVersion } from "@/lib/resources/eve
 
 /**
  * 计划模块的响应式读取：
- * 计划数据、目标、资料、资源、会话任一变化都会重新读取。
+ * 计划数据、反馈、目标、资料、资源、会话任一变化都会重新读取。
  */
 export function usePlans(targetId: string | null) {
   useSyncExternalStore(
     (cb) => {
       const unsubPlan = planService.subscribe(cb);
+      const unsubFeedback = feedbackService.subscribe(cb);
       const unsubTarget = examTargetService.subscribe(cb);
       const unsubMaterial = materialService.subscribe(cb);
       const unsubResource = subscribeResources(cb);
       const unsubAuth = authService.subscribe(cb);
       return () => {
         unsubPlan();
+        unsubFeedback();
         unsubTarget();
         unsubMaterial();
         unsubResource();
@@ -31,6 +34,8 @@ export function usePlans(targetId: string | null) {
       [
         "plan",
         planService.getVersion(),
+        "fb",
+        feedbackService.getVersion(),
         "tgt",
         examTargetService.getVersion(),
         "mat",
