@@ -1,6 +1,6 @@
 import {
   ExamTarget,
-  EvidenceCard,
+  EvidenceItem,
   UserMaterial,
   PublicResource,
   WeeklyPlan,
@@ -76,76 +76,88 @@ export const mockExamTargets: ExamTarget[] = [
   },
 ];
 
-// ==================== 考情证据卡 ====================
+// ==================== 考情证据（字段级结构化证据） ====================
+//
+// 种子数据模拟“真实后端中已完成人工审核”的状态：
+// 只有 official 条目带 reviewerName/reviewedAt；
+// 用户新提交公告提取出的结论永远不会自动变成 official。
 
-export const mockEvidenceCards: EvidenceCard[] = [
+const ET001_SCOPE = "浙江省杭州市 · 2026年上半年统招 · 初中语文";
+const ET001_URL = "https://edu.hangzhou.gov.cn/art/2026/9/1/art_1228920387_58925199.html";
+
+export const mockEvidenceItems: EvidenceItem[] = [
   {
-    id: "ec-001",
+    id: "ev-seed-001",
     examTargetId: "et-001",
-    title: "笔试科目",
-    content: "《教育综合知识》+《学科专业知识（初中语文）》，满分各100分。",
-    category: "subjects",
-    level: "official",
-    source: "杭州市教育局官网",
-    sourceUrl: "https://edu.hangzhou.gov.cn/art/2026/9/1/art_1228920387_58925199.html",
-    lastVerifiedAt: "2026-09-28T10:30:00Z",
+    field: "subjects",
+    value: "《教育综合知识》、《学科专业知识（初中语文）》",
+    reviewStatus: "official",
+    sourceName: "杭州市教育局官网",
+    sourceType: "announcement_url",
+    sourceUrl: ET001_URL,
+    sourceExcerpt: "笔试科目为《教育综合知识》和《学科专业知识（初中语文）》。",
+    scope: ET001_SCOPE,
+    updatedAt: "2026-09-28T10:30:00Z",
+    reviewerName: "考情审核员（模拟）",
+    reviewedAt: "2026-09-28T10:30:00Z",
+    version: 1,
   },
   {
-    id: "ec-002",
+    id: "ev-seed-002",
     examTargetId: "et-001",
-    title: "报名时间",
-    content: "预计2026年11月1日—11月7日，具体以公告为准。",
-    category: "schedule",
-    level: "pending",
-    source: "往年经验",
-    lastVerifiedAt: "2026-09-25T08:00:00Z",
-    notes: "待2026年公告确认",
+    field: "exam_scope",
+    value:
+      "现代汉语基础知识；古代汉语（实词、虚词、句式）；文学常识与作品分析；语文课程标准与教学设计；写作与案例分析",
+    reviewStatus: "official",
+    sourceName: "杭州市教育局2026年考试大纲",
+    sourceType: "announcement_url",
+    sourceUrl: ET001_URL,
+    sourceExcerpt: "学科专业知识考查现代汉语、古代汉语、文学常识、课程标准与教学设计等内容。",
+    scope: ET001_SCOPE,
+    updatedAt: "2026-09-28T14:00:00Z",
+    reviewerName: "考情审核员（模拟）",
+    reviewedAt: "2026-09-28T14:00:00Z",
+    version: 1,
   },
   {
-    id: "ec-003",
+    id: "ev-seed-003",
     examTargetId: "et-001",
-    title: "笔试时间",
-    content: "预计2026年12月中旬，具体日期待确认。",
-    category: "schedule",
-    level: "pending",
-    source: "往年规律推测",
-    lastVerifiedAt: "2026-09-25T08:00:00Z",
+    field: "qualification",
+    value: "本科及以上学历；具有相应学段教师资格证；年龄35周岁以下",
+    reviewStatus: "official",
+    sourceName: "杭州市教育局官网",
+    sourceType: "announcement_url",
+    sourceUrl: ET001_URL,
+    sourceExcerpt: "报考人员须本科及以上学历，具有相应学段教师资格证，年龄35周岁以下。",
+    scope: ET001_SCOPE,
+    updatedAt: "2026-09-28T10:30:00Z",
+    reviewerName: "考情审核员（模拟）",
+    reviewedAt: "2026-09-28T10:30:00Z",
+    version: 1,
   },
   {
-    id: "ec-004",
+    id: "ev-seed-004",
     examTargetId: "et-001",
-    title: "学科专业知识范围",
-    content:
-      "1. 现代汉语基础知识\n2. 古代汉语（实词、虚词、句式）\n3. 文学常识与作品分析\n4. 语文课程标准与教学设计\n5. 写作与案例分析",
-    category: "exam_scope",
-    level: "official",
-    source: "杭州市教育局2026年考试大纲",
-    sourceUrl: "https://edu.hangzhou.gov.cn/art/2026/9/1/art_1228920387_58925199.html",
-    lastVerifiedAt: "2026-09-28T14:00:00Z",
-  },
-  {
-    id: "ec-005",
-    examTargetId: "et-001",
-    title: "报考条件",
-    content: "本科及以上学历，具有相应学段教师资格证，年龄35周岁以下。",
-    category: "qualification",
-    level: "official",
-    source: "杭州市教育局官网",
-    sourceUrl: "https://edu.hangzhou.gov.cn/art/2026/9/1/art_1228920387_58925199.html",
-    lastVerifiedAt: "2026-09-28T10:30:00Z",
-  },
-  {
-    id: "ec-006",
-    examTargetId: "et-001",
-    title: "面试形式",
-    content: "结构化面试 + 试讲，部分地区可能有答辩环节。",
-    category: "other",
-    level: "historical",
-    source: "2025年上岸考生经验",
-    lastVerifiedAt: "2026-09-26T09:00:00Z",
-    notes: "具体以当年公告为准",
+    field: "registration_time",
+    value: "往年多在11月初（如2025年为11月1日—11月7日），2026年待公告确认",
+    reviewStatus: "historical",
+    sourceName: "2025年杭州市招聘公告",
+    sourceType: "historical",
+    sourceExcerpt: "2025年报名时间为11月1日9时—11月7日16时。",
+    scope: ET001_SCOPE,
+    updatedAt: "2026-09-25T08:00:00Z",
+    version: 1,
   },
 ];
+
+/** 提交公告表单“填入示例公告”按钮使用的示例文本（含时间/科目/分值/资格条件） */
+export const SAMPLE_ANNOUNCEMENT_TEXT = `杭州市教育局2026年上半年公开招聘中小学教师公告
+一、招聘岗位：面向社会公开招聘初中语文教师12名。
+二、报名时间：2026年11月1日9时—11月7日16时，通过网上报名系统注册报名。
+三、笔试时间：笔试定于2026年12月13日举行，具体时间和地点以准考证为准。
+四、笔试科目：《教育综合知识》和《学科专业知识（初中语文）》，两科满分各100分，总分200分。
+五、报考条件：本科及以上学历；须持有初中及以上语文教师资格证；年龄35周岁以下（1990年11月以后出生）；杭州市户籍优先。
+六、考试范围：学科专业知识考查现代汉语、古代汉语、文学常识、语文课程标准与教学设计、写作。`;
 
 // ==================== 用户资料 ====================
 
@@ -695,7 +707,9 @@ export const STORAGE_KEYS = {
   SESSION: "kb_session",
   USER: "kb_user",
   EXAM_TARGETS: "kb_exam_targets",
-  EVIDENCE_CARDS: "kb_evidence_cards",
+  EVIDENCE_ITEMS: "kb_evidence_items",
+  EXTRACTION_JOBS: "kb_extraction_jobs",
+  CORRECTIONS: "kb_corrections",
   MATERIALS: "kb_materials",
   PLANS: "kb_plans",
   SETTINGS: "kb_settings",

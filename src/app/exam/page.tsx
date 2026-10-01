@@ -1,34 +1,43 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge, EvidenceBadge } from "@/components/ui/Badge";
-import { EvidenceCardItem } from "@/components/ui/EvidenceCardItem";
+import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Modal, ConfirmModal } from "@/components/ui/Modal";
 import { Tabs, TabPanel } from "@/components/ui/Tabs";
+import { Input, Textarea } from "@/components/ui/Input";
 import { TargetForm } from "@/components/targets/TargetForm";
 import { ClarificationPanel } from "@/components/targets/ClarificationPanel";
+import { EvidenceProfile } from "@/components/evidence/EvidenceProfile";
+import { AnnouncementSubmitForm } from "@/components/evidence/AnnouncementSubmitForm";
+import { ExtractionJobPanel } from "@/components/evidence/ExtractionJobPanel";
 import { examTargetService, evidenceService } from "@/lib/services";
 import { canEnterVerification } from "@/lib/targets/domain";
 import { useExamTargets } from "@/lib/targets/useCurrentExamTarget";
+import { useEvidence } from "@/lib/evidence/useEvidence";
 import {
-  ExamTarget,
-  ExamTargetInput,
+  AnnouncementSourceInput,
+  Correction,
+  EVIDENCE_TYPE_LABELS,
   EDUCATION_LEVEL_LABELS,
   EXAM_TYPE_LABELS,
   EXAM_STAGE_LABELS,
+  EvidenceItem,
+  EvidenceType,
+  ExamTarget,
+  ExamTargetInput,
   SUBJECT_LABELS,
   TARGET_LIFECYCLE_LABELS,
   TARGET_STATUS_LABELS,
 } from "@/types";
 
 const tabs = [
-  { id: "info", label: "考试信息" },
-  { id: "evidence", label: "证据卡" },
-  { id: "pending", label: "待确认" },
+  { id: "profile", label: "考情画像" },
+  { id: "submit", label: "提交公告" },
+  { id: "pending", label: "待确认与纠错" },
 ];
 
 function displayValue(value: string | undefined): string {
@@ -38,7 +47,7 @@ function displayValue(value: string | undefined): string {
 export default function ExamPage() {
   // 订阅式读取：切换/编辑/归档/任务勾选后自动刷新
   const { targets: allTargets, current: currentExam } = useExamTargets();
-  const [activeTab, setActiveTab] = useState("info");
+  const [activeTab, setActiveTab] = useState("profile");
   const [showHistory, setShowHistory] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [editingTarget, setEditingTarget] = useState<ExamTarget | null>(null);
@@ -46,20 +55,25 @@ export default function ExamPage() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [archivingTarget, setArchivingTarget] = useState<ExamTarget | null>(null);
 
-  // 纠错弹窗（原有功能）
-  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false);
-  const [correctionField, setCorrectionField] = useState("");
-  const [correctionValue, setCorrectionValue] = useState("");
+  // 纠错弹窗
+  const [correcting, setCorrecting] = useState<{
+    field: string;
+    fieldLabel: string;
+    currentValue: string;
+  } | null>(null);
+  const [correctionSuggested, setCorrectionSuggested] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionSourceUrl, setCorrectionSourceUrl] = useState("");
+  const [correctionError, setCorrectionError] = useState<string | null>(null);
+  const [lastCorrectionAt, setLastCorrectionAt] = useState<string | null>(null);
 
   const historyTargets = allTargets.filter((t) => t.id !== currentExam?.id);
+  const evidence = useEvidence(currentExam);
+  const busy = evidence.latestJob?.status === "processing";
 
-  const evidenceCards = useMemo(() => {
-    if (!currentExam) return [];
-    return evidenceService.getByExamTargetId(currentExam.id);
-  }, [currentExam]);
-  const confirmedCards = evidenceCards.filter((e) => e.level === "official");
-  const pendingCards = evidenceCards.filter((e) => e.level === "pending");
+  const pendingRows = evidence.rows.filter(
+    (r) => r.reviewStatus === "unconfirmed" || r.hasConflict
+  );
 
   const runAction = (fn: () => void) => {
     setActionError(null);
@@ -84,11 +98,55 @@ export default function ExamPage() {
     }
   };
 
-  const handleSubmitCorrection = () => {
-    setIsCorrectionModalOpen(false);
-    setCorrectionField("");
-    setCorrectionValue("");
+  /** 提交公告来源（失败由表单展示，进行中/成功由任务面板展示） */
+  const handleSubmitAnnouncement = async (input: AnnouncementSourceInput) => {
+    if (!currentExam) return;
+    await evidenceService.startExtraction(currentExam.id, input);
+  };
+
+  const handleRetryJob = async (jobId: string) => {
+    setActionError(null);
+    try {
+      await evidenceService.retryJob(jobId);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "重新提取失败，请重试");
+    }
+  };
+
+  const openCorrection = (item?: EvidenceItem) => {
+    if (!item) {
+      setCorrecting({ field: "", fieldLabel: "", currentValue: "" });
+    } else {
+      setCorrecting({
+        field: item.field,
+        fieldLabel: EVIDENCE_TYPE_LABELS[item.field as EvidenceType] ?? "",
+        currentValue: item.value,
+      });
+    }
+    setCorrectionSuggested("");
     setCorrectionReason("");
+    setCorrectionSourceUrl("");
+    setCorrectionError(null);
+  };
+
+  const handleSubmitCorrection = () => {
+    if (!currentExam || !correcting) return;
+    setCorrectionError(null);
+    try {
+      evidenceService.submitCorrection({
+        targetId: currentExam.id,
+        field: correcting.field,
+        fieldLabel: correcting.fieldLabel,
+        currentValue: correcting.currentValue || "（缺失字段）",
+        suggestedValue: correctionSuggested,
+        reason: correctionReason,
+        sourceUrl: correctionSourceUrl,
+      });
+      setCorrecting(null);
+      setLastCorrectionAt(new Date().toLocaleString("zh-CN", { hour12: false }));
+    } catch (e) {
+      setCorrectionError(e instanceof Error ? e.message : "提交失败，请重试");
+    }
   };
 
   // ========== 首次进入：没有任何目标 ==========
@@ -132,6 +190,18 @@ export default function ExamPage() {
           ⚠️ {actionError}
         </div>
       )}
+      {lastCorrectionAt && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700 flex items-center justify-between gap-3">
+          <span>✅ 纠错已提交（{lastCorrectionAt}），可在“待确认与纠错”中查看处理状态。</span>
+          <button
+            type="button"
+            className="text-emerald-600 hover:text-emerald-800 text-xs shrink-0"
+            onClick={() => setLastCorrectionAt(null)}
+          >
+            知道了
+          </button>
+        </div>
+      )}
 
       {/* 顶部操作 */}
       <div className="flex items-center justify-between">
@@ -169,7 +239,6 @@ export default function ExamPage() {
                 {TARGET_LIFECYCLE_LABELS[currentExam.status]}
               </Badge>
               <Badge variant="muted">{TARGET_STATUS_LABELS[currentExam.targetStatus]}</Badge>
-              {isReady && <EvidenceBadge level="official" />}
             </span>
           }
         />
@@ -203,22 +272,6 @@ export default function ExamPage() {
           <InfoItem label="目标状态" value={TARGET_STATUS_LABELS[currentExam.targetStatus]} />
         </div>
 
-        {currentExam.announcementUrl && (
-          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-            <a
-              href={currentExam.announcementUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-blue-600 hover:underline flex items-center gap-1"
-            >
-              查看官方公告
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-              </svg>
-            </a>
-          </div>
-        )}
-
         <div className="mt-4 flex flex-wrap gap-3">
           <Button variant="outline" size="sm" onClick={() => setEditingTarget(currentExam)}>
             编辑目标
@@ -227,7 +280,7 @@ export default function ExamPage() {
             归档目标
           </Button>
           {isReady && (
-            <Button size="sm" onClick={() => setActiveTab("pending")}>
+            <Button size="sm" onClick={() => setActiveTab("profile")}>
               进入考情核验
             </Button>
           )}
@@ -242,77 +295,113 @@ export default function ExamPage() {
         />
       )}
 
-      {/* 已确认：考情核验区（证据卡/待确认/纠错，沿用原有功能） */}
+      {/* 已确认：公告提交与考情证据 */}
       {isReady && (
-        <>
-          <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab}>
-            <TabPanel id="info" activeTab={activeTab}>
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-medium text-slate-700 mb-3">
-                    已确认信息（{confirmedCards.length}条）
-                  </h3>
-                  {confirmedCards.length > 0 ? (
-                    <div className="space-y-3">
-                      {confirmedCards.map((card) => (
-                        <EvidenceCardItem key={card.id} card={card} />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState
-                      title="暂无已确认信息"
-                      description="目标已确认，考情核验将在后续流程中填充官方证据"
-                    />
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-sm font-medium text-slate-700 mb-3">
-                    待确认信息（{pendingCards.length}条）
-                  </h3>
-                  {pendingCards.length > 0 ? (
-                    <div className="space-y-3">
-                      {pendingCards.map((card) => (
-                        <EvidenceCardItem key={card.id} card={card} />
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyState title="暂无待确认信息" description="所有考情均已确认" />
-                  )}
-                </div>
-              </div>
-            </TabPanel>
+        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab}>
+          <TabPanel id="profile" activeTab={activeTab}>
+            <EvidenceProfile
+              rows={evidence.rows}
+              counts={evidence.counts}
+              onCorrect={(item) => openCorrection(item)}
+            />
+          </TabPanel>
 
-            <TabPanel id="evidence" activeTab={activeTab}>
-              <div className="space-y-3">
-                {evidenceCards.length > 0 ? (
-                  evidenceCards.map((card) => <EvidenceCardItem key={card.id} card={card} />)
+          <TabPanel id="submit" activeTab={activeTab}>
+            <div className="space-y-4">
+              <AnnouncementSubmitForm
+                target={currentExam}
+                busy={busy}
+                onSubmit={handleSubmitAnnouncement}
+              />
+              <ExtractionJobPanel
+                job={evidence.latestJob}
+                history={evidence.jobs.slice(1)}
+                busy={busy}
+                onRetry={handleRetryJob}
+              />
+              <Card className="bg-slate-50/60">
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  说明：当前为无后端演示环境，文本提取使用浏览器本地规则识别；链接来源不会真实访问网页，
+                  结果按目标信息模拟生成并标注“模拟提取”。提取结论只会是“AI已提取”或“待审核”，
+                  “官方确认”仅来自人工审核（本版本不提供审核入口，种子数据中的官方结论为预置示例）。
+                </p>
+              </Card>
+            </div>
+          </TabPanel>
+
+          <TabPanel id="pending" activeTab={activeTab}>
+            <div className="space-y-4">
+              <Card>
+                <CardHeader
+                  title={`待确认字段（${pendingRows.length}）`}
+                  description="没有来源、来源冲突或尚未提取到的字段统一显示为待确认"
+                  action={
+                    <Button size="sm" onClick={() => setActiveTab("submit")}>
+                      去提交公告
+                    </Button>
+                  }
+                />
+                {pendingRows.length > 0 ? (
+                  <ul className="space-y-2">
+                    {pendingRows.map((row) => (
+                      <li
+                        key={row.field}
+                        className={`rounded-lg border px-3 py-2 ${
+                          row.hasConflict ? "border-red-200 bg-red-50/50" : "border-slate-200"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-800">
+                              {EVIDENCE_TYPE_LABELS[row.field]}
+                              {row.hasConflict && (
+                                <span className="ml-2 text-xs text-red-600">来源冲突</span>
+                              )}
+                            </p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {row.value ? row.value : "尚未从任何来源提取到该信息"}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openCorrection(row)}
+                          >
+                            提交纠错
+                          </Button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
-                  <EmptyState title="暂无证据卡" description="考情核验后会在这里展示证据" />
+                  <p className="text-sm text-slate-500">暂无待确认字段。</p>
                 )}
-              </div>
-            </TabPanel>
+              </Card>
 
-            <TabPanel id="pending" activeTab={activeTab}>
-              <div className="space-y-3">
-                <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-800">
-                  考情核验：逐条核对下方信息的来源与可信度。公告解析与人工审核将在后续版本提供。
-                </div>
-                {pendingCards.length > 0 ? (
-                  pendingCards.map((card) => <EvidenceCardItem key={card.id} card={card} />)
+              <Card>
+                <CardHeader
+                  title="我的纠错"
+                  description="纠错提交后进入人工处理队列（演示环境仅持久化为“待处理”）"
+                  action={
+                    <Button size="sm" variant="outline" onClick={() => openCorrection()}>
+                      新增纠错
+                    </Button>
+                  }
+                />
+                {evidence.corrections.length > 0 ? (
+                  <ul className="space-y-2">
+                    {evidence.corrections.map((c) => (
+                      <CorrectionRecord key={c.id} correction={c} />
+                    ))}
+                  </ul>
                 ) : (
-                  <EmptyState title="没有待确认信息" description="所有考情均已通过审核" />
+                  <p className="text-sm text-slate-500">还没有提交过纠错。</p>
                 )}
-              </div>
-            </TabPanel>
-          </Tabs>
-
-          <Card>
-            <CardHeader title="发现信息有误？" description="如果你对考情信息有疑问，可以提交纠错" />
-            <Button variant="outline" onClick={() => setIsCorrectionModalOpen(true)}>
-              提交纠错
-            </Button>
-          </Card>
-        </>
+              </Card>
+            </div>
+          </TabPanel>
+        </Tabs>
       )}
 
       {/* 编辑弹窗 */}
@@ -321,47 +410,79 @@ export default function ExamPage() {
 
       {/* 纠错弹窗 */}
       <Modal
-        isOpen={isCorrectionModalOpen}
-        onClose={() => setIsCorrectionModalOpen(false)}
-        title="提交纠错"
+        isOpen={!!correcting}
+        onClose={() => setCorrecting(null)}
+        title="提交考情纠错"
         footer={
           <>
-            <Button variant="outline" onClick={() => setIsCorrectionModalOpen(false)}>
+            <Button variant="outline" onClick={() => setCorrecting(null)}>
               取消
             </Button>
-            <Button onClick={handleSubmitCorrection}>提交</Button>
+            <Button onClick={handleSubmitCorrection}>提交纠错</Button>
           </>
         }
       >
         <div className="space-y-4">
+          {correctionError && (
+            <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              ⚠️ {correctionError}
+            </div>
+          )}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">字段</label>
-            <input
-              type="text"
-              value={correctionField}
-              onChange={(e) => setCorrectionField(e.target.value)}
-              className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="例如：笔试科目"
-            />
+            <label className="block text-sm font-medium text-slate-700 mb-1">纠错字段</label>
+            {correcting?.field ? (
+              <input
+                value={correcting.fieldLabel}
+                disabled
+                className="w-full h-10 px-3 rounded-lg border border-slate-200 bg-slate-50 text-sm text-slate-600"
+              />
+            ) : (
+              <select
+                value={correcting?.field ?? ""}
+                onChange={(e) =>
+                  setCorrecting((prev) =>
+                    prev ? { ...prev, field: e.target.value, fieldLabel: EVIDENCE_TYPE_LABELS[e.target.value as EvidenceType] ?? e.target.value } : prev
+                  )
+                }
+                className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm"
+              >
+                <option value="" disabled>
+                  请选择字段
+                </option>
+                {Object.entries(EVIDENCE_TYPE_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">正确内容</label>
-            <textarea
-              value={correctionValue}
-              onChange={(e) => setCorrectionValue(e.target.value)}
-              className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="请提供你认为正确的信息"
-            />
+            <label className="block text-sm font-medium text-slate-700 mb-1">当前内容</label>
+            <p className="min-h-[40px] rounded-lg bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-500">
+              {correcting?.currentValue || "（该字段缺失，当前为待确认）"}
+            </p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">纠错原因</label>
-            <textarea
-              value={correctionReason}
-              onChange={(e) => setCorrectionReason(e.target.value)}
-              className="w-full min-h-[80px] px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="请说明你的信息来源"
-            />
-          </div>
+          <Textarea
+            label="你认为正确的内容"
+            className="min-h-[72px]"
+            value={correctionSuggested}
+            onChange={(e) => setCorrectionSuggested(e.target.value)}
+            placeholder="请填写正确信息"
+          />
+          <Textarea
+            label="纠错原因或信息来源"
+            className="min-h-[72px]"
+            value={correctionReason}
+            onChange={(e) => setCorrectionReason(e.target.value)}
+            placeholder="例如：已对照官网最新公告，附链接"
+          />
+          <Input
+            label="佐证链接（选填）"
+            placeholder="https://..."
+            value={correctionSourceUrl}
+            onChange={(e) => setCorrectionSourceUrl(e.target.value)}
+          />
         </div>
       </Modal>
     </div>
@@ -418,6 +539,38 @@ function InfoItem({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-slate-500">{label}</p>
       <p className="text-sm font-medium text-slate-900 mt-0.5">{value}</p>
     </div>
+  );
+}
+
+// ==================== 纠错记录 ====================
+
+function CorrectionRecord({ correction }: { correction: Correction }) {
+  return (
+    <li className="rounded-lg border border-slate-200 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-slate-800">
+          {correction.fieldLabel || correction.field}
+        </p>
+        <Badge variant="warning">待处理</Badge>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        建议：{correction.suggestedValue}
+      </p>
+      <p className="mt-0.5 text-xs text-slate-400">原因：{correction.reason}</p>
+      {correction.sourceUrl && (
+        <a
+          href={correction.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-1 inline-block text-xs text-blue-600 hover:underline"
+        >
+          查看佐证链接 ↗
+        </a>
+      )}
+      <p className="mt-0.5 text-[11px] text-slate-400">
+        提交于 {new Date(correction.createdAt).toLocaleString("zh-CN", { hour12: false })}
+      </p>
+    </li>
   );
 }
 

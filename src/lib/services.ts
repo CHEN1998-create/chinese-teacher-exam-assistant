@@ -3,7 +3,6 @@ import {
   ExamTargetInput,
   ClarificationResult,
   ClarificationTask,
-  EvidenceCard,
   UserMaterial,
   PublicResource,
   WeeklyPlan,
@@ -16,7 +15,6 @@ import {
 } from "@/types";
 import {
   mockExamTargets,
-  mockEvidenceCards,
   mockUserMaterials,
   mockPublicResources,
   mockWeeklyPlan,
@@ -357,27 +355,9 @@ export const examTargetService = {
   },
 };
 
-// ==================== 证据卡服务 ====================
-
-export const evidenceService = {
-  getByExamTargetId(examTargetId: string): EvidenceCard[] {
-    return loadFromStorage(STORAGE_KEYS.EVIDENCE_CARDS, mockEvidenceCards).filter(
-      (e) => e.examTargetId === examTargetId
-    );
-  },
-
-  getByLevel(examTargetId: string, level: string): EvidenceCard[] {
-    return this.getByExamTargetId(examTargetId).filter((e) => e.level === level);
-  },
-
-  getConfirmed(examTargetId: string): EvidenceCard[] {
-    return this.getByLevel(examTargetId, "official");
-  },
-
-  getPending(examTargetId: string): EvidenceCard[] {
-    return this.getByLevel(examTargetId, "pending");
-  },
-};
+// 考情证据服务（公告提取 / 字段证据 / 纠错）已独立到 lib/evidence，
+// 这里转出保持 `import { evidenceService } from "@/lib/services"` 的用法稳定。
+export { evidenceService } from "./evidence/evidenceService";
 
 // ==================== 用户资料服务 ====================
 

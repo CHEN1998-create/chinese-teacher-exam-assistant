@@ -288,10 +288,10 @@ export function TargetForm({
                 placeholder="粘贴官方公告网页链接"
                 value={announcementUrl}
                 onChange={(e) => setAnnouncementUrl(e.target.value)}
-                hint="也可以上传公告截图或 PDF（本次仅保存链接）"
+                hint="目标确认后，可在「我的考试 → 提交公告」粘贴公告正文进行字段提取，或使用文件入口（当前为占位）"
               />
               <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center">
-                <p className="text-sm text-slate-500">📎 公告文件上传（PDF / 图片）将在后续版本开放</p>
+                <p className="text-sm text-slate-500">📎 公告文件上传（PDF / 图片）为占位能力，请在目标确认后于「我的考试 → 提交公告」查看</p>
               </div>
             </>
           )}

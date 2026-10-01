@@ -4,7 +4,6 @@ export type ExamStatus = "draft" | "confirmed" | "archived";
 export type ExamStage = "preparation" | "registration" | "written_exam" | "interview" | "completed";
 export type ExamType = "public_school" | "private_school" | "public_institution" | "special_teacher" | "other";
 export type EducationLevel = "primary" | "middle" | "high";
-export type EvidenceLevel = "official" | "historical" | "personal" | "pending";
 export type MaterialStatus = "in_use" | "partial_use" | "paused" | "replaced";
 export type ResourceType = "official" | "self_made" | "open" | "third_party";
 export type TaskStatus = "pending" | "in_progress" | "completed" | "partial" | "abandoned";
@@ -169,42 +168,117 @@ export interface ExamTargetFormData {
   announcementUrl?: string;
 }
 
-// ==================== 证据与考情 ====================
+// ==================== 公告提取与考情证据 ====================
 
-export interface Evidence {
+/** 结构化考试画像字段 */
+export type EvidenceType =
+  | "region" // 地区或招聘单位
+  | "recruit_type" // 招聘类型
+  | "year_batch" // 年份或批次
+  | "education_level" // 学段
+  | "exam_stage" // 考试阶段
+  | "registration_time" // 报名时间（高影响）
+  | "exam_time" // 考试时间（高影响）
+  | "subjects" // 考试科目（高影响）
+  | "score" // 分值（高影响）
+  | "qualification" // 资格条件（高影响）
+  | "exam_scope"; // 考试范围
+
+/**
+ * 审核状态。关键规则：
+ * - AI 提取结论只能是 ai_extracted（AI已提取）或 pending_review（待审核）；
+ * - official（官方确认）只能来自人工审核，本模块没有任何自动置为 official 的入口；
+ * - 没有来源 / 来源冲突 / 字段缺失统一显示 unconfirmed（待确认）。
+ */
+export type ReviewStatus =
+  | "ai_extracted"
+  | "pending_review"
+  | "official"
+  | "historical"
+  | "personal"
+  | "unconfirmed";
+
+/** 公告来源类型 */
+export type EvidenceSourceType =
+  | "announcement_url"
+  | "announcement_text"
+  | "announcement_file"
+  | "historical"
+  | "personal"
+  | "seed";
+
+/** 提取流程状态：未提交 / 正在提取 / 提取成功 / 提取失败 / 待人工审核 */
+export type ExtractionJobStatus =
+  | "idle"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "pending_review";
+
+/** 单条考情结论（字段级证据） */
+export interface EvidenceItem {
   id: string;
   examTargetId: string;
-  field: string;
+  /** 结论对应的画像字段 */
+  field: EvidenceType;
+  /** 结论值；缺失时为空串，画像显示“待确认” */
   value: string;
-  source: string;
+  reviewStatus: ReviewStatus;
+  /** 证据标签 / 来源名称，如“杭州市教育局官网” */
+  sourceName: string;
+  sourceType: EvidenceSourceType;
   sourceUrl?: string;
-  level: EvidenceLevel;
-  verifiedBy?: string;
-  verifiedAt?: string;
+  /** 原始来源摘录（公告原文片段） */
+  sourceExcerpt?: string;
+  /** 适用范围，例如“浙江省杭州市 · 2026年上半年统招 · 初中语文” */
+  scope: string;
+  updatedAt: string;
+  /** 官方确认时的审核信息（仅人工审核后存在） */
+  reviewerName?: string;
+  reviewedAt?: string;
+  /** 多个来源结论不一致 */
+  hasConflict?: boolean;
+  /** 产出该结论的提取任务 id */
+  jobId?: string;
   version: number;
+}
+
+/** 用户提交的公告来源 */
+export interface AnnouncementSourceInput {
+  sourceType: "announcement_url" | "announcement_text" | "announcement_file";
+  url?: string;
+  text?: string;
+  fileName?: string;
+  fileSize?: number;
+}
+
+/** 公告提取任务（异步流程） */
+export interface ExtractionJob {
+  id: string;
+  examTargetId: string;
+  userId: string;
+  sourceType: AnnouncementSourceInput["sourceType"];
+  /** 来源简述：链接 / 文件名 / 文本摘要 */
+  sourceLabel: string;
+  sourceUrl?: string;
+  /** 粘贴文本全文（重试时复用；仅本地演示存储） */
+  sourceText?: string;
+  fileName?: string;
+  fileSize?: number;
+  status: ExtractionJobStatus;
+  /** 0-100 */
+  progress: number;
+  /** 当前阶段文案，如“正在识别考试科目与分值” */
+  stage?: string;
+  /** 失败原因（status=failed 时） */
+  failReason?: string;
+  /** 提取到的字段数 */
+  extractedCount?: number;
+  /** 其中待人工审核的高影响字段数 */
+  pendingReviewCount?: number;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface EvidenceCard {
-  id: string;
-  examTargetId: string;
-  title: string;
-  content: string;
-  category: "exam_scope" | "subjects" | "qualification" | "schedule" | "other";
-  level: EvidenceLevel;
-  source: string;
-  sourceUrl?: string;
-  lastVerifiedAt: string;
-  notes?: string;
-}
-
-export interface ExamInfoItem {
-  field: string;
-  label: string;
-  value?: string;
-  evidence?: Evidence;
-  isPending: boolean;
+  finishedAt?: string;
 }
 
 // ==================== 用户资料 ====================
@@ -387,9 +461,13 @@ export interface Correction {
   userId: string;
   examTargetId: string;
   field: string;
+  /** 字段中文名，便于审核队列展示 */
+  fieldLabel?: string;
   currentValue: string;
   suggestedValue: string;
   reason: string;
+  /** 用户提供的佐证链接 */
+  sourceUrl?: string;
   status: "pending" | "accepted" | "rejected";
   createdAt: string;
 }
@@ -467,11 +545,45 @@ export const TARGET_LIFECYCLE_LABELS: Record<ExamStatus, string> = {
   archived: "已归档",
 };
 
-export const EVIDENCE_LEVEL_LABELS: Record<EvidenceLevel, string> = {
+/** 画像字段中文名 */
+export const EVIDENCE_TYPE_LABELS: Record<EvidenceType, string> = {
+  region: "地区/招聘单位",
+  recruit_type: "招聘类型",
+  year_batch: "年份/批次",
+  education_level: "学段",
+  exam_stage: "考试阶段",
+  registration_time: "报名时间",
+  exam_time: "考试时间",
+  subjects: "考试科目",
+  score: "分值",
+  qualification: "资格条件",
+  exam_scope: "考试范围",
+};
+
+export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
+  ai_extracted: "AI已提取",
+  pending_review: "待审核",
   official: "官方确认",
   historical: "历史经验",
   personal: "个人经验",
-  pending: "待确认",
+  unconfirmed: "待确认",
+};
+
+export const EXTRACTION_JOB_STATUS_LABELS: Record<ExtractionJobStatus, string> = {
+  idle: "未提交",
+  processing: "正在提取",
+  succeeded: "提取成功",
+  failed: "提取失败",
+  pending_review: "待人工审核",
+};
+
+export const EVIDENCE_SOURCE_TYPE_LABELS: Record<EvidenceSourceType, string> = {
+  announcement_url: "公告链接",
+  announcement_text: "粘贴文本",
+  announcement_file: "公告文件",
+  historical: "历史经验",
+  personal: "个人经验",
+  seed: "预置数据",
 };
 
 export const MATERIAL_STATUS_LABELS: Record<MaterialStatus, string> = {

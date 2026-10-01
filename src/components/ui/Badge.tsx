@@ -1,6 +1,16 @@
 import { cn } from "@/lib/utils";
-import { EvidenceLevel, TaskStatus, MaterialStatus } from "@/types";
-import { EVIDENCE_LEVEL_LABELS, TASK_STATUS_LABELS, MATERIAL_STATUS_LABELS } from "@/types";
+import {
+  ExtractionJobStatus,
+  ReviewStatus,
+  TaskStatus,
+  MaterialStatus,
+} from "@/types";
+import {
+  EXTRACTION_JOB_STATUS_LABELS,
+  REVIEW_STATUS_LABELS,
+  TASK_STATUS_LABELS,
+  MATERIAL_STATUS_LABELS,
+} from "@/types";
 
 interface BadgeProps {
   variant?: "default" | "primary" | "success" | "warning" | "danger" | "info" | "muted";
@@ -32,17 +42,35 @@ export function Badge({ variant = "default", children, className }: BadgeProps) 
   );
 }
 
-// 证据等级标签
-export function EvidenceBadge({ level }: { level: EvidenceLevel }) {
-  const variantMap: Record<EvidenceLevel, BadgeProps["variant"]> = {
+// 考情结论审核状态标签（状态不仅靠颜色，文字直接写明）
+export function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
+  const variantMap: Record<ReviewStatus, BadgeProps["variant"]> = {
     official: "success",
+    ai_extracted: "primary",
+    pending_review: "warning",
     historical: "info",
     personal: "muted",
-    pending: "warning",
+    unconfirmed: "muted",
   };
   return (
-    <Badge variant={variantMap[level]}>
-      {EVIDENCE_LEVEL_LABELS[level]}
+    <Badge variant={variantMap[status]}>
+      {REVIEW_STATUS_LABELS[status]}
+    </Badge>
+  );
+}
+
+// 公告提取任务状态标签
+export function ExtractionJobBadge({ status }: { status: ExtractionJobStatus }) {
+  const variantMap: Record<ExtractionJobStatus, BadgeProps["variant"]> = {
+    idle: "muted",
+    processing: "primary",
+    succeeded: "success",
+    failed: "danger",
+    pending_review: "warning",
+  };
+  return (
+    <Badge variant={variantMap[status]}>
+      {EXTRACTION_JOB_STATUS_LABELS[status]}
     </Badge>
   );
 }
