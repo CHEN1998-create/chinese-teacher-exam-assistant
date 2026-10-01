@@ -143,6 +143,7 @@ export default function MaterialsPage() {
         {/* ==================== 诊断结果 ==================== */}
         <TabPanel id="diagnosis" activeTab={activeTab}>
           <DiagnosisPanel
+            target={target}
             targetId={target.id}
             inventoryStatus={baseline?.inventoryStatus ?? "none"}
             materials={materials}

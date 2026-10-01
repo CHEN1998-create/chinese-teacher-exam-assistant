@@ -27,13 +27,14 @@ npm run dev
 | `/login` | 登录 | 演示账号登录（Demo 认证，非真实鉴权） |
 | `/onboarding` | 目标澄清 | 四种目标状态入口、创建目标（确认/草稿）、填写目标考试信息（需登录） |
 | `/exam` | 我的考试 | 当前主目标卡、澄清任务、历史目标切换/编辑/归档/重新启用、公告提交（链接/文本/文件占位）、考情画像（11 字段证据卡）、待确认与纠错（需登录） |
-| `/materials` | 资料与基线 | 资料状态三入口、私有资料 CRUD、能力基线自评、规则层诊断（继续/部分/暂缓/缺口）、公共资源只读（需登录） |
+| `/materials` | 资料与基线 | 资料状态三入口、私有资料 CRUD、能力基线自评、规则层诊断（继续/部分/暂缓/缺口）、缺口公共资源匹配（每缺口最多 3 个）、公共资源只读浏览（需登录） |
 | `/plan` | 本周计划 | 查看7天计划、每日任务、调整说明；目标未澄清时显示门禁提示（需登录） |
 | `/today` | 今天与复盘 | 查看今日任务、提交执行反馈；目标未澄清时显示门禁提示（需登录） |
 | `/settings` | 设置与数据 | 账号信息、修改学段/每日时间/通知偏好、退出登录（需登录） |
 | `/admin` | 运营后台概览 | 后台模块入口与队列计数，仅工作人员角色可访问 |
 | `/admin/exams` | 考情与证据管理 | 跨用户查看全部目标的证据状态统计，跳转审核（需工作人员角色） |
 | `/admin/reviews` | 考情审核队列 | 五队列审核 AI 提取结论、处理来源冲突、查看历史版本与操作留痕（需工作人员角色） |
+| `/admin/resources` | 公共资源管理 | 资源新增/编辑/停用/复核、来源与权利状态维护、待复核与已失效队列、查看/加计划统计（资源审核员与管理员可写，其他工作人员只读） |
 
 ## 账号与会话（当前为 Demo 实现，非真实认证）
 
@@ -332,7 +333,7 @@ localStorage 新增键：`kb_review_logs`（审核留痕，只追加不覆盖）
 1. **我的资料**：资料状态三入口（`UsageStatus`：`none` 还没有资料 / `single` 已有一套 / `multiple` 多套不知如何取舍），状态可手选，新增或删除资料后按数量自动同步；支持新增、编辑、删除私有资料。
 2. **能力基线**：语文学科 8 模块 + 教综 5 模块 1-5 分自评、最近练习成绩（文本+正确率%）、明显薄弱项手选、每日可用分钟数与每周可用小时数。
 3. **诊断结果**：快照式诊断，需手动点击"生成诊断/重新计算"；逐资料给出总体结论、逐模块结论、原因与相关章节、冲突取舍、缺少模块、薄弱模块；无资料时展示最小资料类别清单。
-4. **公共资源**：已审核公共资源**只读**列表，与私有资料分开存储；本模块不做匹配、排行或购买。
+4. **公共资源**：正常且合规公共资源的**只读浏览**列表（与缺口匹配同一道合规闸门），与私有资料分开存储；不做排行或购买。缺口的自动匹配在"诊断结果"标签中展示（见下一章）。
 
 ### 资料字段（`MaterialItem`）
 
@@ -386,7 +387,76 @@ localStorage 新增键：`kb_materials`（私有资料，按账号隔离）、`k
 6. 考情横幅：杭州目标因高影响字段未全部官方确认，诊断页与资料页可见"诊断结果可能不完整"；
 7. 私有/公共隔离：新增的私有资料不出现在「公共资源」；公共资源列表只读，无购买、排行、加计划入口；扫描件保存后资料卡出现红色来源警示。
 
-本次明确**不包含**：资料购买、完整 PDF 内容解析、课程推荐排行、公共资源与目标的自动匹配（下一模块实现）。
+本次明确**不包含**：资料购买、完整 PDF 内容解析、课程推荐排行。公共资源与缺口的自动匹配已在下一章实现。
+
+## 公共资源索引与资料缺口匹配
+
+当用户没有资料或现有资料不适用时，为资料诊断识别出的**每个关键缺口**提供最多 3 个来源清楚、适用范围明确的公共资源；没有合规资源时明确显示"暂无已核验资源"与查找建议。
+
+> **非生产说明**：公共资源索引、查看/加入计划记录均保存在浏览器 localStorage（公共资源为全局共享一份，行为记录按账号隔离）；链接有效性、权利状态均为演示数据，真实环境须由服务端定时巡检与鉴权。
+
+### 资源字段（`ResourceItem`，`src/types/index.ts`）
+
+名称、资源类型（`ResourceType`：官方发布/平台自制/开放使用/第三方公开）、来源名称、原始来源链接、权利状态（`RightsStatus`：官方文件/平台自制/已授权/开放授权/第三方公开·仅索引/权利状态不明）、适用地区、年份、适用学段、招聘类型、对应考试模块（`mod_*`）、推荐理由、建议章节、预计使用时间（分钟）、最近复核时间、失效时间（可选）、链接是否可访问、生命周期状态（`ResourceStatus`：正常/已停用/已失效/待复核）、复核人。类型 `PublicResource` 保留为 `ResourceItem` 的 @deprecated 别名，旧数据经 `normalizeResource()` 归一化（旧 license/中文模块名自动映射）。
+
+### 匹配使用哪些字段、按什么顺序过滤
+
+规则唯一真值来源：`src/lib/resources/domain.ts`（纯函数），五层流水线 `matchGapWithTrace()` 会逐层记录丢弃原因（candidateCount/blocked/outOfScope/matches）：
+
+1. **模块候选**：资源的 `modules` 覆盖缺口模块 key；
+2. **合规闸门** `checkRecommendable()`：状态必须正常；权利状态不能为"不明"；来源名称/原始链接/对应模块/推荐理由/适用地区/适用学段任一缺失即不强推；链接标记失效、已过 `expiresAt`、最近复核超过 180 天（`REVIEW_STALE_DAYS`）同样不强推；
+3. **适用范围** `scopeMatches()`：地区（全国通用；省/市按包含关系）、学段、招聘类型、年份（沿用资料诊断的 `yearFit()`，过期年份淘汰）全部匹配；
+4. **排序**：先按权利层级——官方公告/大纲/样题/说明(1) > 平台自制(2) > 已授权/开放使用(3) > 第三方公开原始链接(4)；同层级再按地区贴合度（城市 30/省 20/全国 10）、年份适用 +5、复核新近度 +5 排序。**打分只用于同缺口确定性排序，不做商业排行、不参考平台热度或合作**；
+5. **截断**：每个缺口最多 3 条（`MAX_MATCHES_PER_GAP`）。
+
+缺口来源：优先用资料诊断快照的 `missingModules`；尚未诊断（如无资料）时用 `requiredModuleKeys(readiness)` 兜底（教综三模块仅在官方考情确认含教综科目时进入）。
+
+### 用户端（`/materials` → 诊断结果）
+
+每个缺口一张卡（`src/components/resources/GapResourcePanel.tsx`）：资源名称与顺位、权利层级与权利状态 Badge、推荐理由（含来源性质说明）、适用范围摘要、建议章节、预计分钟数、最近复核日期；外链资源提供"查看来源（来源名称）↗"（新标签打开原始链接，点击即写一条查看记录），站内自制资源显示不可点击的站内标识；"加入本周计划"生成一条 `pending_arrangement`（待安排）的 `ResourcePlanLink`，同目标+资源+模块幂等不重复，可"移出计划"；无匹配时显示"暂无已核验资源"空态与 `gapSearchAdvice()` 的查找建议（真题/地方政策模块有专门建议）。"公共资源"Tab 的浏览列表走同一闸门（`listBrowseable()`）。
+
+### 后台（`/admin/resources`）
+
+- 五个队列（由事实自动派生 `classifyQueue()`，不是手工状态）：全部 / 正常 / **待复核**（权利不明、状态待复核或超 180 天未复核）/ **已失效**（链接失效或过失效时间）/ **已停用**（手动停用优先级最高）；Tab 带计数；
+- 新增、编辑（全字段表单 `ResourceFormModal.tsx`，前端校验与闸门必填项一致）、停用（二次确认）、重新启用、标记已复核（刷新复核时间/复核人并恢复正常）；每张卡显示"不强推原因"与使用统计（查看次数、加入计划次数，来自记录数据汇总）；
+- **停用后立即不再产生新推荐**（既有待安排记录保留，不静默删除）；
+- 权限双重：后台整体 `RequireRole(STAFF_ROLES)`；写操作仅 `resource_reviewer`/`admin`，UI 隐藏写按钮且 service 层 `ensureResourceAdmin()` 二次校验（`exam_reviewer` 只读）。
+
+### 记录数据与存储
+
+- `ResourceViewRecord`（id/userId/resourceId/viewedAt）：每次点击"查看来源"追加，存 `kb_resource_views`；
+- `ResourcePlanLink`（id/userId/resourceId/examTargetId/module/status/estimatedMinutes/createdAt/updatedAt）：加入本周计划的待安排任务数据，状态机 `pending_arrangement → arranged → in_use → used`，可 `dismissed`，存 `kb_resource_plan_links`，按账号隔离；
+- 公共资源存 `kb_public_resources`（全局，与用户私有资料 `kb_materials` 物理分开；**没有任何代码路径会把用户私有上传自动加入公共资源库**）；
+- 用户端/后台写同一份存储，通过 `src/lib/resources/events.ts` 共享事件即时同步。
+
+### 文件结构
+
+```
+src/lib/resources/
+├── domain.ts           # 纯规则层：权利层级/旧数据归一化/合规闸门/范围匹配/打分排序/队列分类/查找建议
+├── resourceService.ts  # 浏览/匹配/查看与加计划记录/后台 CRUD（写操作角色校验）/队列与统计
+├── events.ts           # 资源存储共享事件
+└── useResources.ts     # useGapMatches / useMyResourceLinks / useBrowseableResources / useAdminResources
+src/components/resources/
+└── GapResourcePanel.tsx    # 缺口匹配卡（资源卡 + 加入计划 + 空态建议）
+src/components/admin/
+└── ResourceFormModal.tsx   # 新增/编辑全字段表单
+src/app/admin/resources/
+└── page.tsx                # 五队列 + 停用/启用/复核 + 只读权限
+```
+
+### 四组匹配案例（杭州·初中·2026 主目标，种子共 13 条）
+
+| 缺口 | 预期结果 | 被过滤/特殊资源 |
+| ---- | ---- | ---- |
+| 课程标准 | 1 条：教育部 2022 课标（官方） | — |
+| 真题 | 2 条：浙江省笔试说明（官方，第 1）+ 第三方题型整理（仅索引，第 2） | pr-201 网盘扫描合集：权利不明 + 链接失效 → 进已失效队列，不推荐 |
+| 教育学 | 2 条：平台自制精讲（第 1）→ 高校开放课程（开放授权，第 2） | — |
+| 心理学 | 0 条："暂无已核验资源" + 查找建议 | 候选分别为：权利不明押题（待复核）、已授权但已停用讲义（已停用，后台启用后才出现）、2023 旧版过期资料（已失效） |
+
+另有教育法规缺口 1 条官方条文；"教学设计开放资料"超 180 天未复核进待复核队列。停用联动：后台启用 pr-301 后学生端心理学缺口立即出现 1 条；停用后恢复空态（已走查验证）。
+
+本次明确**不包含**：资源付费、网盘下载、第三方全文复制、用户私有资料自动入库、真实链接巡检与生产级鉴权。
 
 ## 目录结构
 
@@ -403,6 +473,7 @@ src/
 │   ├── admin/              # 运营后台（角色保护）
 │   │   ├── exams/          # 考情与证据管理
 │   │   ├── reviews/        # 考情审核队列与详情
+│   │   ├── resources/      # 公共资源管理（五队列/停用/复核）
 │   │   ├── layout.tsx      # 后台布局 + 子导航 + RequireRole
 │   │   └── page.tsx        # 后台概览
 │   ├── layout.tsx          # 全局布局（挂载 AuthProvider）
@@ -436,7 +507,10 @@ src/
 │   ├── admin/              # 考情审核后台组件
 │   │   ├── ReviewQueue.tsx  # 五队列标签 + 结论卡片
 │   │   ├── ReviewDetail.tsx # 详情/动作表单（必填原因）/历史版本
-│   │   └── AdminExamList.tsx# 目标证据状态总览
+│   │   ├── AdminExamList.tsx# 目标证据状态总览
+│   │   └── ResourceFormModal.tsx # 公共资源新增/编辑表单
+│   ├── resources/          # 公共资源匹配组件
+│   │   └── GapResourcePanel.tsx  # 缺口匹配卡 + 加入计划 + 空态建议
 │   ├── materials/          # 资料与能力基线组件
 │   │   ├── InventoryStatusPicker.tsx # 资料状态三入口
 │   │   ├── MaterialForm.tsx          # 资料新增/编辑弹窗
@@ -468,6 +542,11 @@ src/
 │   │   ├── domain.ts       # 模块目录/考情就绪/范围匹配/诊断/冲突/签名（纯函数，唯一规则层）
 │   │   ├── materialService.ts # 私有资料 CRUD/基线/诊断快照与播种
 │   │   └── useMaterials.ts
+│   ├── resources/          # 公共资源索引与缺口匹配（本地 Mock，非生产）
+│   │   ├── domain.ts       # 权利层级/合规闸门/范围匹配/打分排序/队列分类（纯函数，唯一规则层）
+│   │   ├── resourceService.ts # 浏览/匹配/查看与加计划记录/后台 CRUD 与角色校验
+│   │   ├── events.ts       # 资源存储共享事件
+│   │   └── useResources.ts
 │   ├── mock-data.ts        # Mock数据
 │   ├── services.ts         # 数据服务层（当前用户从会话读取）
 │   ├── storage.ts          # 本地存储工具（含严格写入 saveToStorageStrict）
@@ -484,7 +563,7 @@ src/
 - 目标考试
 - 考情证据种子（`mockEvidenceItems`：3 条官方确认 + 1 条历史经验 + 5 条审核演示用待审核/AI提取结论，含来源冲突对与临期报名时间）与示例公告文本（`SAMPLE_ANNOUNCEMENT_TEXT`）
 - 用户私有资料（`mockMaterials`，按账号+目标隔离）与能力基线（`mockAbilityBaselines`），含三组案例：无资料（温州演示目标）、一套适用（杭州当前目标）、多套冲突（宁波演示目标）；首次进入 `/materials` 时由规则层播种初始诊断快照
-- 公共资源（`mockPublicResources`，存储键已修正为独立的 `kb_public_resources`）
+- 公共资源（`mockResources`：13 条 `ResourceItem` 种子，覆盖官方/自制/开放/授权/第三方/权利不明、坏链、停用、过期、超期未复核等案例，存独立的 `kb_public_resources`；查看与加计划记录分别存 `kb_resource_views`、`kb_resource_plan_links`）
 - 周计划与每日任务
 - 用户设置
 
@@ -527,12 +606,12 @@ export const examTargetService = {
 - **目标考试数据**: 目标的创建/切换/归档/澄清任务均为本地 Mock + localStorage 持久化，非真实接口（service 已独立封装，页面不含数据逻辑）
 - **公告提取与考情证据**: 已有完整的提交→异步提取（进度/失败/重试/待审核）→字段画像→纠错演示链路，但**没有真实 AI/后端**：链接来源不抓取网页（按目标模拟并明确标注“模拟提取”），文本来源为浏览器本地正则/关键词规则识别，文件上传仅占位。替换点 `evidenceService.setExtractor()`，详见上方“公告提交与考情证据”章节
 - **考情审核后台**: 已有五队列/详情对照/五动作/必填原因/留痕与版本/字段级权限的完整交互，但**没有真实后端**：权限与留痕均为前端 + localStorage 实现，非生产级安全审计；详见上方“考情审核后台”章节
-- **资料诊断**: `/materials` 已实现本地确定性规则诊断（规则层 `src/lib/materials/domain.ts`）：资料状态三入口、私有资料 CRUD、能力基线、逐模块继续/部分/暂缓结论、冲突取舍、缺口与最小资料类别、签名过时提示；但**不是 AI、不联网**，内置资料为虚构 Mock，不含购买、PDF 解析、排行与公共资源自动匹配（下一模块）
+- **资料诊断**: `/materials` 已实现本地确定性规则诊断（规则层 `src/lib/materials/domain.ts`）：资料状态三入口、私有资料 CRUD、能力基线、逐模块继续/部分/暂缓结论、冲突取舍、缺口与最小资料类别、签名过时提示；但**不是 AI、不联网**，内置资料为虚构 Mock，不含购买与 PDF 解析；缺口公共资源匹配见“公共资源索引与资料缺口匹配”章节
 - **计划自动生成**: 7天计划为固定Mock数据；且**仅在目标满足门禁后展示**，未澄清时显示“请先完成目标澄清”
 - **智能重排**: 第4天重排和第7天复盘为静态展示
-- **资源匹配**: 推荐资源基于固定规则，非AI计算
+- **资源匹配**: 缺口资源匹配基于确定性规则（五层流水线：模块→合规闸门→适用范围→权利层级排序→最多 3 条），非 AI 计算，不做商业排行；链接有效性与权利状态为演示种子，无真实巡检
 - **登录鉴权**: 已有登录/会话/角色与路由保护，但是 **Demo 模拟实现**（本地校验 + localStorage），不是真实安全认证
-- **管理后台**: 考情审核已上线（本地 Mock）；资源索引、纠错与治理等模块仍为占位
+- **管理后台**: 考情审核与公共资源索引已上线（本地 Mock）；纠错与治理等模块仍为占位
 
 ## 模块变更记录
 
@@ -544,6 +623,7 @@ export const examTargetService = {
 | 2026-10-02 | 公告提交与考情证据 | 新增 `EvidenceType`（11 字段）/`ReviewStatus`（6 状态）/`EvidenceItem`/`ExtractionJob`/`ExtractionJobStatus` 类型与 `src/lib/evidence/`（domain 纯函数、可替换 `EvidenceExtractor` + Mock 提取、evidenceService、useEvidence）及 `src/components/evidence/` 三个组件；`/exam` 改造为考情画像/提交公告/待确认与纠错三标签；三入口（链接模拟/文本本地规则/文件占位）、五状态任务（进度/失败原因/重试/刷新中断判定）、高影响字段强制待审核、AI 结论永不自动官方确认、来源冲突对照、纠错持久化、证据按目标+账号隔离；official 仅种子数据。不含真实 AI/抓取/文件解析/人工审核/资格判断/上岸概率 |
 | 2026-10-03 | 资料与能力基线 | 新增 `UsageStatus`/`MaterialSourceType`/`MaterialItem`/`AbilityBaseline`/`MaterialDiagnosis(Snapshot)`/`MaterialConflictGroup` 等类型与标签常量；新增 `src/lib/materials/`（domain 纯规则层：15 个考试模块、章节关键词预填、考情就绪与必需模块、地区/学段/年份匹配、逐模块诊断、多套确定性取舍、8 小时时间约束、薄弱项并集、djb2 签名；materialService：私有资料 CRUD/基线/快照播种与 recompute；useMaterials 订阅 hook）与 `src/components/materials/` 六个组件；`/materials` 重写为四个标签（我的资料/能力基线/诊断结果/公共资源），考情未确认横幅、过时重算提示、无资料最小类别清单；resourceService 存储键修正为独立 `kb_public_resources`；mock-data 新增 2 个演示目标与三组案例资料/基线及 `kb_ability_baselines`/`kb_material_diagnoses` 键；导航更名"资料与基线"。不含购买、PDF 解析、排行与公共资源匹配 |
 | 2026-09-30 | 考情审核后台 | 新增 `ReviewLog`/`ReviewActionType`/`ReviewQueueKey` 类型与队列/动作/原因预置文案，`EvidenceItem` 增加 `reviewerFlaggedConflict`；新增 `src/lib/evidence/events.ts` 共享事件（用户端与审核后台写同一份证据存储并互相同步）；新增 `src/lib/admin/`（domain 纯函数：字段级权限/五队列分类/高风险排序/45 天临期判定；adminReviewService：队列、详情、目标分组、留痕查询、submitReview 双重鉴权+必填原因+已发布修改才升版本+不可变留痕；useAdminReviews hooks）与 `src/components/admin/` 三个组件；新增 `/admin/exams`、`/admin/reviews` 页面与后台子导航，后台概览改为真实入口；画像冲突口径修正（驳回/待确认不参与主结论，历史/个人仅备选，支持手动冲突标记）；mock-data 增加 5 条审核演示种子与 `kb_review_logs` 键。本地 Mock 非生产；不含真实后端鉴权、大范围撤回与纠错处理流 |
+| 2026-10-01 | 公共资源索引与资料缺口匹配 | 新增 `ResourceItem`/`RightsStatus`/`ResourceStatus`/`ResourceMatch`/`ResourcePlanLink`/`ResourceViewRecord`/`ResourceQueueKey` 类型与标签（旧 `PublicResource` 保留为别名）；新增 `src/lib/resources/`（domain 纯规则层：权利层级、合规闸门、范围匹配、打分排序、180 天复核周期、队列分类、旧数据归一化；resourceService：浏览/匹配/查看与加入计划记录/后台 CRUD 双重角色校验/队列统计；events；useResources hooks）与 `src/components/resources/GapResourcePanel.tsx`；诊断结果页按缺口展示最多 3 个资源（理由/范围/权利/查看来源/加入本周计划/空态查找建议），公共资源浏览列表改走同一闸门；新增 `/admin/resources`（五队列计数、新增/编辑/停用/启用/标记复核、不强推原因与使用统计，resource_reviewer/admin 可写、exam_reviewer 只读）与 `ResourceFormModal`，后台导航与概览卡上线；mock 资源重写为 13 条 `mockResources`（四组匹配案例 + 坏链/停用/权利不明/过期/超期未复核），新增 `kb_resource_views`、`kb_resource_plan_links` 存储键；私有资料与公共资源物理隔离、无私有上传自动入库路径。不含付费、网盘下载、第三方全文复制 |
 
 ## 构建与部署
 

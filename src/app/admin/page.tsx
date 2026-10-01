@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useCurrentUser } from "@/lib/auth";
 import { USER_ROLE_LABELS } from "@/types";
 import { useReviewQueue } from "@/lib/admin/useAdminReviews";
+import { useAdminResources } from "@/lib/resources/useResources";
 
 interface AdminModule {
   title: string;
@@ -18,6 +19,7 @@ interface AdminModule {
 export default function AdminHomePage() {
   const { role } = useCurrentUser();
   const { counts } = useReviewQueue("pending");
+  const { queues } = useAdminResources();
 
   const modules: AdminModule[] = [
     {
@@ -37,9 +39,9 @@ export default function AdminHomePage() {
     {
       title: "资源索引",
       path: "/admin/resources",
-      desc: "维护来源、版权、适用范围和失效状态",
-      available: false,
-      roles: ["管理员", "资源审核员"],
+      desc: `正常 ${queues.active.length} · 待复核 ${queues.pending_review.length} · 已失效 ${queues.expired.length} · 已停用 ${queues.inactive.length}`,
+      available: true,
+      roles: ["管理员", "资源审核员（可写）", "考情审核员（只读）"],
     },
     {
       title: "纠错与治理",
@@ -63,8 +65,8 @@ export default function AdminHomePage() {
       {/* 演示提示 */}
       <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
         <p className="text-sm text-amber-800">
-          考情审核模块已上线（本地 Mock，非生产实现）：审核动作、留痕与版本存储在浏览器
-          localStorage；资源索引、纠错治理等能力将在后续模块提供。
+          考情审核与公共资源索引模块已上线（本地 Mock，非生产实现）：审核动作、资源维护、查看/加入计划记录均存储在浏览器
+          localStorage；纠错治理等能力将在后续模块提供。
         </p>
       </div>
 

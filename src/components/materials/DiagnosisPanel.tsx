@@ -17,8 +17,10 @@ import {
   EvidenceReadiness,
   MIN_MATERIAL_CATEGORIES,
   moduleLabel,
+  requiredModuleKeys,
 } from "@/lib/materials/domain";
-import { MaterialItem } from "@/types";
+import { ExamTarget, MaterialItem } from "@/types";
+import { GapResourcePanel } from "@/components/resources/GapResourcePanel";
 
 const RECOMMENDATION_VARIANT: Record<MaterialRecommendation, "success" | "warning" | "danger"> = {
   continue: "success",
@@ -27,6 +29,7 @@ const RECOMMENDATION_VARIANT: Record<MaterialRecommendation, "success" | "warnin
 };
 
 interface DiagnosisPanelProps {
+  target: ExamTarget | null;
   targetId: string;
   inventoryStatus: UsageStatus;
   materials: MaterialItem[];
@@ -36,6 +39,7 @@ interface DiagnosisPanelProps {
 }
 
 export function DiagnosisPanel({
+  target,
   targetId,
   inventoryStatus,
   materials,
@@ -94,6 +98,9 @@ export function DiagnosisPanel({
         <p className="px-1 text-xs text-slate-400">
           这里只给出资料类别，不提供购买链接，也不按平台热度或商业合作做推荐。
         </p>
+        {target && readiness && (
+          <GapResourcePanel target={target} modules={requiredModuleKeys(readiness)} />
+        )}
       </div>
     );
   }
@@ -171,6 +178,9 @@ export function DiagnosisPanel({
           )}
         </Card>
       </div>
+
+      {/* 资料缺口 → 公共资源匹配（每缺口最多 3 个；无合规资源显示空态与查找建议） */}
+      {target && <GapResourcePanel target={target} modules={snapshot.missingModules} />}
 
       {/* 冲突取舍 */}
       {snapshot.conflictGroups.length > 0 && (

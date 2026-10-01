@@ -3,7 +3,6 @@ import {
   ExamTargetInput,
   ClarificationResult,
   ClarificationTask,
-  PublicResource,
   WeeklyPlan,
   DailyPlan,
   PlanTask,
@@ -13,7 +12,6 @@ import {
 } from "@/types";
 import {
   mockExamTargets,
-  mockPublicResources,
   mockWeeklyPlan,
   mockDailyPlans,
   mockUserSettings,
@@ -359,27 +357,10 @@ export { evidenceService } from "./evidence/evidenceService";
 // 资料与能力基线服务已独立到 lib/materials（私有资料 CRUD / 基线 / 诊断快照）。
 export { materialService } from "./materials/materialService";
 
-// ==================== 公共资源服务（只读，公共资源与用户私有资料分开存储） ====================
-
-export const resourceService = {
-  getAll(): PublicResource[] {
-    return loadFromStorage(STORAGE_KEYS.RESOURCES, mockPublicResources);
-  },
-
-  getRecommended(limit: number = 3): PublicResource[] {
-    return this.getAll()
-      .filter((r) => r.isVerified && r.isActive)
-      .slice(0, limit);
-  },
-
-  getByModule(module: string): PublicResource[] {
-    return this.getAll().filter((r) => r.modules.includes(module));
-  },
-
-  getById(id: string): PublicResource | null {
-    return this.getAll().find((r) => r.id === id) || null;
-  },
-};
+// 公共资源服务已独立到 lib/resources（索引 / 缺口匹配 / 查看与加入计划记录 / 后台维护）。
+// 公共资源与用户私有资料物理分开存储，私有上传不会自动进入公共资源库。
+export { resourceService } from "./resources/resourceService";
+export type { ResourceItemInput, ResourceQueues } from "./resources/resourceService";
 
 // ==================== 计划服务 ====================
 

@@ -505,35 +505,125 @@ export interface MaterialDiagnosisSnapshot {
   diagnosedAt: string;
 }
 
-// ==================== 公共资源 ====================
+// ==================== 公共资源索引 ====================
 
-export interface PublicResource {
+/**
+ * 权利状态（资源被推荐前必须明确）：
+ * - official 官方公告/大纲/样题/说明（政府或招考部门发布）
+ * - self_made 平台自制内容
+ * - licensed 已获授权内容
+ * - open 明确开放使用的内容
+ * - third_party 第三方公开资源：仅索引原始链接与必要摘要，不复制全文
+ * - unknown 权利状态不明：不能强推荐
+ */
+export type RightsStatus = "official" | "self_made" | "licensed" | "open" | "third_party" | "unknown";
+
+/**
+ * 资源生命周期状态：
+ * - active 正常；inactive 已停用（不再产生新推荐）；
+ * - expired 已失效（过了失效时间或链接已失效）；pending_review 待复核。
+ */
+export type ResourceStatus = "active" | "inactive" | "expired" | "pending_review";
+
+export interface ResourceItem {
   id: string;
+  /** 名称 */
   title: string;
-  description: string;
-  type: ResourceType;
-  source: string;
+  /** 简介说明（必要摘要，第三方资源不复制全文） */
+  description?: string;
+  /** 资源类型（官方/自制/开放/第三方） */
+  resourceType: ResourceType;
+  /** 原始来源名称 */
+  sourceName: string;
+  /** 原始来源链接 */
   sourceUrl: string;
-  license: "free" | "paid" | "open" | "restricted" | "unknown";
+  /** 权利状态 */
+  rightsStatus: RightsStatus;
+  /** 适用地区，如 ["全国"] / ["浙江省"] / ["浙江省","杭州市"] */
   applicableRegions: string[];
-  applicableTypes: ExamType[];
+  /** 适用年份；缺省表示长期有效（如课程标准） */
+  year?: number;
+  /** 适用学段 */
   applicableLevels: EducationLevel[];
+  /** 适用招聘类型 */
+  applicableTypes: ExamType[];
+  /** 对应考试模块 key（mod_*，与资料诊断同一模块目录） */
   modules: string[];
-  isVerified: boolean;
-  verifiedBy?: string;
-  verifiedAt?: string;
-  isActive: boolean;
+  /** 推荐理由（后台维护，向用户明示） */
+  recommendReason: string;
+  /** 建议章节/用法 */
+  suggestedChapters: string[];
+  /** 预计使用时间（分钟） */
+  estimatedMinutes: number;
+  /** 最近复核时间 */
+  lastReviewedAt: string;
+  /** 失效时间；缺省表示长期有效 */
+  expiresAt?: string;
+  /** 链接最近检查时间 */
+  linkCheckedAt?: string;
+  /** 链接是否可访问 */
+  linkAlive: boolean;
+  /** 生命周期状态 */
+  status: ResourceStatus;
+  /** 复核人 */
+  reviewedBy?: string;
   createdAt: string;
   updatedAt: string;
 }
 
+/** @deprecated 旧名，保留一个版本周期用于兼容；新代码请用 ResourceItem */
+export type PublicResource = ResourceItem;
+
+/** 单个缺口的一条匹配结果（最多 3 条，排序即优先级） */
 export interface ResourceMatch {
-  resource: PublicResource;
+  resource: ResourceItem;
+  /** 对应的缺口模块 key */
+  module: string;
+  /** 1=最高优先级（官方）→4（第三方公开索引） */
+  tier: number;
+  /** 1-3 名 */
+  rank: number;
+  /** 打分（仅用于同缺口下确定性排序，不做商业排行） */
   matchScore: number;
+  /** 面向用户的推荐理由（含来源层级与适用范围） */
   matchReason: string;
-  suggestedChapters?: string[];
-  estimatedTime?: number;
+  /** 适用范围摘要（地区/年份/学段/招聘类型） */
+  scopeSummary: string;
 }
+
+/** 资源加入计划后的状态：待安排 → 已安排 → 使用中 → 已使用；可放弃 */
+export type ResourceLinkStatus =
+  | "pending_arrangement"
+  | "arranged"
+  | "in_use"
+  | "used"
+  | "dismissed";
+
+/** “加入本周计划”生成的待安排任务数据（不与每日任务混用） */
+export interface ResourcePlanLink {
+  id: string;
+  userId: string;
+  resourceId: string;
+  examTargetId: string;
+  /** 缺口模块 key */
+  module: string;
+  status: ResourceLinkStatus;
+  estimatedMinutes: number;
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 资源查看记录（点击查看来源时写入） */
+export interface ResourceViewRecord {
+  id: string;
+  userId: string;
+  resourceId: string;
+  viewedAt: string;
+}
+
+/** 后台资源队列 key */
+export type ResourceQueueKey = "all" | "active" | "pending_review" | "expired" | "inactive";
 
 // ==================== 计划与任务 ====================
 
@@ -839,6 +929,41 @@ export const SELF_ASSESSMENT_LEVEL_LABELS: Record<SelfAssessmentLevel, string> =
   3: "一般",
   4: "较扎实",
   5: "很扎实",
+};
+
+/** 资源类型文案（与 ResourceType 对应） */
+export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
+  official: "官方发布",
+  self_made: "平台自制",
+  open: "开放使用",
+  third_party: "第三方公开",
+};
+
+/** 权利状态文案 */
+export const RIGHTS_STATUS_LABELS: Record<RightsStatus, string> = {
+  official: "官方文件",
+  self_made: "平台自制",
+  licensed: "已授权",
+  open: "开放授权",
+  third_party: "第三方公开·仅索引",
+  unknown: "权利状态不明",
+};
+
+/** 资源生命周期状态文案 */
+export const RESOURCE_STATUS_LABELS: Record<ResourceStatus, string> = {
+  active: "正常",
+  inactive: "已停用",
+  expired: "已失效",
+  pending_review: "待复核",
+};
+
+/** 资源加入计划后的状态文案 */
+export const RESOURCE_LINK_STATUS_LABELS: Record<ResourceLinkStatus, string> = {
+  pending_arrangement: "待安排",
+  arranged: "已排入计划",
+  in_use: "使用中",
+  used: "已使用",
+  dismissed: "已放弃",
 };
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {

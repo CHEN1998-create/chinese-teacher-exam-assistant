@@ -12,6 +12,7 @@ const ADMIN_NAV = [
   { href: "/admin", label: "后台概览", exact: true },
   { href: "/admin/exams", label: "考情管理", exact: false },
   { href: "/admin/reviews", label: "审核队列", exact: false },
+  { href: "/admin/resources", label: "资源管理", exact: false },
 ];
 
 function AdminChrome({ children }: { children: React.ReactNode }) {
