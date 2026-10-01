@@ -369,6 +369,19 @@ export { feedbackService, DuplicateFeedbackError, nextStepHint } from "./plans/f
 // 重排生成新版本（草稿→确认），历史版本只追加不覆盖；周复盘仅聚合真实反馈。
 export { replanService } from "./plans/replanService";
 
+// 治理模块（lib/governance）：用户纠错与后台处理、错误结论撤回留痕、
+// 站内通知与偏好、隐私数据类别与删除申请。当前为本地 Mock（localStorage），
+// 无真实推送与服务端删除任务，替换为真实后端时保持这些方法签名。
+export { correctionService } from "./governance/correctionService";
+export type {
+  SubmitCorrectionInput,
+  AdminCorrectionView,
+  ProcessCorrectionInput,
+} from "./governance/correctionService";
+export { notificationService } from "./governance/notificationService";
+export type { PushNotificationInput } from "./governance/notificationService";
+export { privacyService } from "./governance/privacyService";
+
 // ==================== 统计服务 ====================
 
 export const statsService = {

@@ -1,4 +1,5 @@
 import {
+  Correction,
   ExamTarget,
   EvidenceItem,
   MaterialItem,
@@ -774,6 +775,108 @@ export const mockResources: ResourceItem[] = [
   },
 ];
 
+// ==================== 纠错治理 ====================
+//
+// 纠错种子（u-001 提交）：
+// - cor-seed-001：针对分值冲突结论的新纠错（已提交，等待后台处理）
+// - cor-seed-002：资格条件纠错，审核员已要求补充（待补充，用户可继续举证）
+// 旧 localStorage 中没有 kb_corrections 数据时才会播种；在设置页清除数据后可见。
+
+const correctionSeedNow = "2026-10-01T09:20:00Z";
+
+export const mockCorrections: Correction[] = [
+  {
+    id: "cor-seed-001",
+    userId: "u-001",
+    targetType: "evidence",
+    examTargetId: "et-001",
+    evidenceItemId: "ev-seed-103",
+    field: "score",
+    fieldLabel: "分值",
+    subject: "分值",
+    currentValue: "两科满分各100分，总分200分",
+    description:
+      "我在杭州市教育局官网看到的2026年新版公告里，学科专业知识满分是150分，和画像里的100分不一致，请核对。",
+    suggestedValue: "《学科专业知识》单科满分150分，两科总分300分",
+    sources: [
+      {
+        id: "cor-src-seed-001",
+        url: ET001_URL,
+        note: "杭州市教育局2026年招聘公告附件1笔试安排",
+        createdAt: correctionSeedNow,
+      },
+    ],
+    status: "submitted",
+    timeline: [
+      {
+        id: "cor-tl-seed-001",
+        at: correctionSeedNow,
+        actorId: "u-001",
+        actorName: "备考学员",
+        actorRole: "user",
+        action: "submit",
+      },
+    ],
+    createdAt: correctionSeedNow,
+    updatedAt: correctionSeedNow,
+  },
+  {
+    id: "cor-seed-002",
+    userId: "u-001",
+    targetType: "evidence",
+    examTargetId: "et-001",
+    evidenceItemId: "ev-seed-003",
+    field: "qualification",
+    fieldLabel: "资格条件",
+    subject: "资格条件",
+    currentValue: "本科及以上学历；具有相应学段教师资格证；年龄35周岁以下",
+    description: "公告里好像还写了杭州户籍优先，不确定是否影响资格条件，想请审核员确认。",
+    suggestedValue: "补充“杭州市户籍优先”相关表述",
+    sources: [
+      {
+        id: "cor-src-seed-002",
+        url: ET001_URL,
+        note: "公告第五条报考条件",
+        createdAt: "2026-09-30T12:00:00Z",
+      },
+    ],
+    status: "need_info",
+    resultNote: "请补充公告原文中关于户籍要求的完整表述或截图链接，目前提供的链接中未能定位到该条款。",
+    handlerId: "u-002",
+    handlerName: "考情审核员",
+    handledAt: "2026-10-01T10:00:00Z",
+    timeline: [
+      {
+        id: "cor-tl-seed-002-1",
+        at: "2026-09-30T12:00:00Z",
+        actorId: "u-001",
+        actorName: "备考学员",
+        actorRole: "user",
+        action: "submit",
+      },
+      {
+        id: "cor-tl-seed-002-2",
+        at: "2026-10-01T09:40:00Z",
+        actorId: "u-002",
+        actorName: "考情审核员",
+        actorRole: "exam_reviewer",
+        action: "start_processing",
+      },
+      {
+        id: "cor-tl-seed-002-3",
+        at: "2026-10-01T10:00:00Z",
+        actorId: "u-002",
+        actorName: "考情审核员",
+        actorRole: "exam_reviewer",
+        action: "request_info",
+        note: "请补充公告原文中关于户籍要求的完整表述或截图链接，目前提供的链接中未能定位到该条款。",
+      },
+    ],
+    createdAt: "2026-09-30T12:00:00Z",
+    updatedAt: "2026-10-01T10:00:00Z",
+  },
+];
+
 // ==================== 本周计划 ====================
 // ==================== 用户设置 ====================
 
@@ -810,5 +913,10 @@ export const STORAGE_KEYS = {
   TASK_FEEDBACKS: "kb_task_feedbacks",
   PLAN_ADJUSTMENTS: "kb_plan_adjustments",
   WEEKLY_REVIEWS: "kb_weekly_reviews",
+  // —— 治理模块：通知偏好 / 站内通知 / 数据删除申请 / 结论撤回留痕 ——
+  NOTIFICATION_PREFS: "kb_notification_prefs",
+  NOTIFICATIONS: "kb_notifications",
+  DELETION_REQUESTS: "kb_deletion_requests",
+  RETRACTION_LOGS: "kb_retraction_logs",
   SETTINGS: "kb_settings",
 } as const;

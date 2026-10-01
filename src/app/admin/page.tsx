@@ -7,6 +7,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { USER_ROLE_LABELS } from "@/types";
 import { useReviewQueue } from "@/lib/admin/useAdminReviews";
 import { useAdminResources } from "@/lib/resources/useResources";
+import { useAdminCorrections } from "@/lib/governance/useGovernance";
 
 interface AdminModule {
   title: string;
@@ -20,6 +21,7 @@ export default function AdminHomePage() {
   const { role } = useCurrentUser();
   const { counts } = useReviewQueue("pending");
   const { queues } = useAdminResources();
+  const { counts: correctionCounts } = useAdminCorrections("open");
 
   const modules: AdminModule[] = [
     {
@@ -46,9 +48,9 @@ export default function AdminHomePage() {
     {
       title: "纠错与治理",
       path: "/admin/feedback",
-      desc: "处理纠错、查看修改和大范围撤回记录",
-      available: false,
-      roles: ["管理员"],
+      desc: `待处理纠错 ${correctionCounts.open} · 采纳/驳回/要求补充 · 错误结论撤回与影响范围留痕`,
+      available: true,
+      roles: ["考情审核员（可写）", "资源审核员（只读）", "管理员"],
     },
   ];
 
@@ -65,8 +67,8 @@ export default function AdminHomePage() {
       {/* 演示提示 */}
       <div className="p-4 rounded-xl bg-amber-50 border border-amber-200">
         <p className="text-sm text-amber-800">
-          考情审核与公共资源索引模块已上线（本地 Mock，非生产实现）：审核动作、资源维护、查看/加入计划记录均存储在浏览器
-          localStorage；纠错治理等能力将在后续模块提供。
+          考情审核、纠错治理与公共资源索引模块均已上线（本地 Mock，非生产实现）：审核动作、纠错处理、结论撤回、资源维护、
+          查看/加入计划记录均存储在浏览器 localStorage；撤回与审核记录只追加、不物理删除。
         </p>
       </div>
 

@@ -289,4 +289,62 @@ export const planService = {
     }
     return null;
   },
+
+  /**
+   * 治理模块（错误结论撤回）跨用户调用：
+   * 将指定目标下所有“执行中”计划的任务标记为“待重新确认”。
+   * 不删除、不重排任务，只打标记并返回受影响计划/任务/用户，供撤回留痕与通知使用。
+   */
+  flagEvidenceChange(
+    targetIds: string[],
+    meta: { field: string; reason: string; retractionAt: string }
+  ): {
+    planIds: string[];
+    taskIds: string[];
+    plansByUser: Record<string, string[]>;
+    meta: { field: string; reason: string; retractionAt: string };
+  } {
+    const targetSet = new Set(targetIds);
+    const affectedPlans = loadWeeklyPlans().filter(
+      (p) => p.status === "active" && targetSet.has(p.examTargetId)
+    );
+    const planIds = new Set(affectedPlans.map((p) => p.id));
+    const plansByUser: Record<string, string[]> = {};
+    for (const p of affectedPlans) {
+      (plansByUser[p.userId] ??= []).push(p.id);
+    }
+
+    const taskIds: string[] = [];
+    const now = new Date().toISOString();
+    const allDaily = loadDailyPlans();
+    let changed = false;
+    for (let i = 0; i < allDaily.length; i++) {
+      if (!planIds.has(allDaily[i].weeklyPlanId)) continue;
+      const day = allDaily[i];
+      const tasks = day.tasks.map((t) => {
+        if (t.needsConfirmation) return t;
+        changed = true;
+        taskIds.push(t.id);
+        return { ...t, needsConfirmation: true as const, updatedAt: now };
+      });
+      allDaily[i] = { ...day, tasks, updatedAt: now };
+    }
+
+    if (changed) {
+      persistDailyPlans(allDaily);
+      // meta 保留在计划备注维度（Mock：写入 adjustmentNote 便于追溯）
+      const allWeekly = loadWeeklyPlans();
+      for (let i = 0; i < allWeekly.length; i++) {
+        if (planIds.has(allWeekly[i].id)) {
+          allWeekly[i] = {
+            ...allWeekly[i],
+            updatedAt: now,
+          };
+        }
+      }
+      persistWeeklyPlans(allWeekly);
+      notifyChanged();
+    }
+    return { planIds: [...planIds], taskIds, plansByUser, meta };
+  },
 };

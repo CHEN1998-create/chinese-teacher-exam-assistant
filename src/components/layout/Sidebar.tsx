@@ -8,6 +8,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { useCurrentExamTarget } from "@/lib/targets/useCurrentExamTarget";
 import { canGeneratePlan } from "@/lib/targets/domain";
 import { Badge } from "@/components/ui/Badge";
+import { NotificationCenter } from "@/components/governance/NotificationCenter";
 
 const navItems = [
   { href: "/exam", label: "我的考试", icon: "📋" },
@@ -116,6 +117,7 @@ export function Sidebar() {
                 {role ? USER_ROLE_LABELS[role] : ""}
               </p>
             </div>
+            <NotificationCenter />
             <button
               onClick={logout}
               title="退出登录"

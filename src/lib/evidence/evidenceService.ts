@@ -35,6 +35,7 @@ import {
   getEvidenceStoreVersion,
   subscribeEvidence,
 } from "./events";
+import { correctionService } from "@/lib/governance/correctionService";
 
 let extractor: EvidenceExtractor = mockEvidenceExtractor;
 
@@ -75,9 +76,6 @@ function loadJobs(): ExtractionJob[] {
   );
 }
 
-function loadCorrections(): Correction[] {
-  return loadFromStorage<Correction[]>(STORAGE_KEYS.CORRECTIONS, []);
-}
 
 function sourceLabelOf(input: AnnouncementSourceInput): string {
   if (input.sourceType === "announcement_url") return input.url?.trim() ?? "公告链接";
@@ -240,15 +238,15 @@ export const evidenceService = {
   },
 
   // ==================== 纠错 ====================
+  //
+  // 纠错的单一数据源已迁移到 governance/correctionService（含状态机、时间线、
+  // 后台处理与撤回）。这里保留同名方法作为适配层，供旧调用方平滑过渡。
 
   getCorrections(targetId: string): Correction[] {
-    const userId = currentUserId();
-    return loadCorrections()
-      .filter((c) => c.examTargetId === targetId && c.userId === userId)
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return correctionService.listForTarget(targetId);
   },
 
-  /** 提交纠错；真实环境会进入人工审核队列，Mock 仅持久化为“待处理” */
+  /** @deprecated 请使用 correctionService.submit；本方法仅做旧字段适配 */
   submitCorrection(input: {
     targetId: string;
     field: string;
@@ -258,29 +256,21 @@ export const evidenceService = {
     reason: string;
     sourceUrl?: string;
   }): Correction {
-    const suggested = input.suggestedValue.trim();
-    const reason = input.reason.trim();
-    if (!suggested) throw new Error("请填写你认为正确的内容");
-    if (!reason) throw new Error("请填写纠错原因或信息来源");
-
-    const correction: Correction = {
-      id: `cor-${Date.now()}`,
-      userId: currentUserId(),
+    return correctionService.submit({
+      targetType: "evidence",
       examTargetId: input.targetId,
       field: input.field,
       fieldLabel: input.fieldLabel,
       currentValue: input.currentValue,
-      suggestedValue: suggested,
-      reason,
-      sourceUrl: input.sourceUrl?.trim() || undefined,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-    const all = loadCorrections();
-    all.push(correction);
-    saveToStorageStrict(STORAGE_KEYS.CORRECTIONS, all);
-    notifyChanged();
-    return correction;
+      description: input.reason,
+      suggestedValue: input.suggestedValue,
+      sources: [
+        {
+          url: input.sourceUrl?.trim() || undefined,
+          note: input.sourceUrl?.trim() ? undefined : input.reason,
+        },
+      ],
+    });
   },
 
   /** 高影响字段判定出口（UI 用，真值仍在 domain） */

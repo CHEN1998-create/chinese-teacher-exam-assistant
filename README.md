@@ -197,7 +197,7 @@ src/components/targets/
 
 ### 纠错
 
-弹窗中字段自动带入当前行（也可在“待确认与纠错”里对任意字段新增）；“正确内容”和“纠错原因”必填（空值红色校验拦截），佐证链接选填。提交后持久化为 `pending` 待处理并出现在“我的纠错”列表，**纠错不会自动修改证据**（本版本没有处理队列，仅持久化）。
+弹窗中字段自动带入当前行（也可在“待确认与纠错”里对任意字段新增）；问题描述必填、至少一条补充来源。提交后出现在“我的纠错”列表并可跟踪状态（已提交/处理中/待补充/已采纳/未采纳）；后台处理、错误结论撤回等治理能力见后文“纠错、通知、隐私与数据删除治理”章节。
 
 ### 按目标隔离
 
@@ -226,7 +226,7 @@ localStorage 键：`kb_evidence_items`、`kb_extraction_jobs`、`kb_corrections`
 
 人工审核能力已由“考情审核后台”模块提供（见下一节）：审核通过写入 `reviewStatus: "official"` + `reviewerName` + `reviewedAt`，画像即显示官方确认；驳回/标记后用户端显示待确认，用户端代码无需感知审核动作。
 
-本次明确**不包含**：真实 AI 解析、网页抓取、文件 OCR/解析、纠错处理流、真实资格判断、上岸概率、高影响事实自动确认、全国公告自动抓取、大范围错误撤回（后续治理模块）。
+本次明确**不包含**：真实 AI 解析、网页抓取、文件 OCR/解析、真实资格判断、上岸概率、高影响事实自动确认、全国公告自动抓取（纠错处理与错误结论撤回已由治理模块提供，见后文）。
 
 ### 如何验证各状态
 
@@ -643,6 +643,77 @@ src/components/ui/
 
 AI 驱动的重排建议（当前为确定性规则）、跨周计划衔接、任务反馈驱动的自动重排（需用户主动触发或按信号提示手动生成）、大范围撤回与计划回滚（历史版本仅可查看对比）。
 
+## 纠错、通知、隐私与数据删除治理（当前为本地 Mock，非生产实现）
+
+让用户能够纠正错误信息、控制非必要通知、了解数据用途并申请删除个人数据；让后台能够处理纠错并撤回错误结论。**所有通知为本地站内 Mock（无真实推送/短信/邮件），删除为浏览器本地数据处理（无真实删除服务），UI 中均明确标注“Mock”。**
+
+### 用户纠错
+
+- 入口：`/exam` 每条证据卡的“提交纠错”（自动带入字段/当前值/证据 id）与“待确认与纠错”标签的新增纠错；
+- 纠错内容：对象（考情结论字段/其他问题）、问题描述（必填）、建议值（选填）、补充来源（至少一条，链接+备注可多条）、提交时间；
+- 状态：已提交 `submitted` → 处理中 `processing` → 已采纳 `accepted` / 未采纳 `rejected`；审核员也可“要求补充”`need_info`，用户在“我的纠错”内联补充后回到已提交；
+- “我的纠错”展示状态徽章、处理结果说明与完整处理时间线；旧版纠错数据自动归一化（旧 `pending/accepted/rejected` + `reason/sourceUrl` 兼容读取）。
+
+### 后台处理（`/admin/feedback`，STAFF 角色可进入）
+
+- **纠错队列**：按 全部/已提交/待补充/处理中/已采纳/未采纳 分栏（含待处理计数）；采纳时可选“同步更新关联考情结论为最终值”（走“修改后通过”审核并写 ReviewLog）；驳回原因与补充要求必填；处理结果自动给提交人发站内通知；
+- 角色鉴权双重：路由层 `<RequireRole roles={STAFF_ROLES}>` 拦截非员工；service 层 `assertCanView`（exam_reviewer/resource_reviewer/admin 只读）、`assertCanAct`（仅 exam_reviewer/admin 可写），resource_reviewer 界面只读；
+- **错误结论撤回**：在 `/admin/reviews` 审核详情中对非待确认结论发起；先预览影响范围（受影响目标/用户/执行中计划/待确认任务/同值结论数），撤回原因与给用户的变化说明均必填；
+  - 撤回按“同字段同值（去空白）”找出全部非待确认证据，逐条写 reject ReviewLog（原因预置“错误结论撤回（治理操作）”）并置为待确认，**原值与留痕保留、不物理删除**；
+  - 高影响字段（报名时间/考试时间/科目/分值/资格条件）才把执行中计划的关联任务全部置 `needsConfirmation=true` 并补发“计划需要重新确认”通知；低影响字段只通知；
+  - 受影响用户收到“重要考情变化”通知（变化说明 + 下一步建议），`/exam`、`/plan`、`/today` 顶部横幅展示；
+  - 撤回记录 `RetractionRecord`（撤回值、原因、操作人、时间、完整影响范围、实际送达用户）只追加保存，在 `/admin/feedback` 的“结论撤回留痕”查看。
+
+### 通知（站内 Mock，无真实推送）
+
+四类：⏰ 每日学习提醒（每自然日最多一次，通知中心可手动模拟当日提醒）、📢 重要考情变化（仅在撤回等真实变化时发送，无变化不发送）、📝 纠错处理结果、🔁 计划需要重新确认。
+
+- 设置页 `/settings` 通知偏好：四类独立开关 + 总开关“关闭所有非必要通知”（总开关只抑制学习提醒/考情变化，纠错结果与计划重新确认为必要通知）+ 每日提醒时间；偏好即时落库即时生效（读取时即套用闸门，关闭后列表立即不出现对应通知）；
+- 通知中心铃铛（桌面侧边栏 + 移动顶栏）显示未读数，支持单条已读、全部已读；
+- 文案不使用排名、断签、惩罚类语言。
+
+### 隐私与个人数据删除
+
+- 设置页展示数据用途、保存范围与 13 类数据清单（实时计数），按处理方式分三组：
+  - **可删除（私有）**：账号设置、目标、提取任务、资料、基线、诊断、计划/日计划/反馈/重排与周复盘、资源浏览与加计划记录、站内通知等 8 类；
+  - **保留（公共）**：公共证据、公共资源——影响所有用户，个人删除不触碰；
+  - **保留（审计）**：纠错记录（匿名化保留）、审核与撤回留痕、删除申请记录——满足审计需要，不随个人删除而物理删除；
+- 删除流程四状态：待确认（展示将删除/匿名化/保留的范围快照）→ 处理中（800ms Mock 延迟）→ 完成（展示各类实际处理条数）/ 失败（可重试）；待确认状态可取消；
+- 完成后私有数据被移除，纠错记录的 `userId` 匿名化为 `anonymized:<申请id>`；删除完成后由用户手动点“完成并退出登录”；公共证据、资源、审核/撤回留痕、删除申请本身均保留。
+
+### 类型与文件结构
+
+核心类型（`src/types/index.ts`）：`Correction`、`NotificationPreference`、`NotificationItem`、`DataDeletionRequest`，以及 `RetractionRecord`/`RetractionImpactScope` 与配套中文文案常量。
+
+```
+src/lib/governance/
+├── domain.ts             # 纯规则层：队列分类/计数、旧数据归一化、通知闸门与每日一次、撤回影响范围分析、数据类别元数据
+├── events.ts             # 治理数据变更事件（独立于证据事件）
+├── correctionService.ts  # 纠错提交/补充/我的查询；后台队列/采纳/驳回/要求补充；撤回预览与执行（角色鉴权）
+├── notificationService.ts# 偏好、通知读写（读取套闸门）、已读、每日学习提醒频控
+├── privacyService.ts     # 数据类别+计数、删除申请四状态、私有/公共/审计分离的执行
+└── useGovernance.ts      # useSyncExternalStore 系列 hooks
+src/components/governance/  # CorrectionFormModal/MyCorrections/NotificationCenter/ChangeNoticeBanner
+                            # NotificationPreferencePanel/DataPrivacyPanel
+src/components/admin/       # CorrectionQueuePanel/RetractionLogList/RetractConclusionPanel
+src/app/admin/feedback/     # 纠错队列 + 撤回留痕两个标签
+```
+
+localStorage 键：`kb_corrections`、`kb_notification_prefs`、`kb_notifications`、`kb_deletion_requests`、`kb_retraction_logs`。种子含 2 条演示纠错（u-001：一条已提交、一条待补充）。
+
+### 如何验证（对照验收标准）
+
+1. `student@demo.app` 在 `/exam` 提交纠错 → “我的纠错”出现“已提交”，可查看状态；
+2. 换 `exam@demo.app`（考情审核员）在 `/admin/feedback` 认领→要求补充→学生补充→采纳（勾选同步更新证据）→学生收到“纠错处理结果”通知；
+3. 在 `/admin/reviews` 对“分值”结论撤回：预览显示影响范围，确认后学生端 `/exam` 横幅出现变化说明、证据变待确认，`/plan`、`/today` 相关任务显示“待重新确认”，`/admin/feedback` 撤回留痕可查原因/操作人/影响范围；
+4. `/settings` 关闭“学习提醒/考情变化”后铃铛与横幅立即不再出现（即时生效）；重新开启后恢复；
+5. `/settings` 发起数据删除：确认→处理中→完成（显示条数），完成后退出登录；用审核员账号确认公共证据与审核留痕仍在；
+6. 用普通学生账号直接访问 `/admin/feedback` 被路由守卫拦截，且“我的纠错”只显示自己的记录。
+
+### 本次不实现
+
+真实推送通道（短信/邮件/服务端 push）、真实数据删除服务与合规时限 SLA、撤回的跨设备实时广播（当前依赖页面事件与刷新）、删除申请的人工审核工作流。
+
 ## 目录结构
 
 ```
@@ -761,6 +832,7 @@ src/
 - 公共资源（`mockResources`：13 条 `ResourceItem` 种子，覆盖官方/自制/开放/授权/第三方/权利不明、坏链、停用、过期、超期未复核等案例，存独立的 `kb_public_resources`；查看与加计划记录分别存 `kb_resource_views`、`kb_resource_plan_links`）
 - 周计划与每日任务
 - 用户设置
+- 治理演示数据（`mockCorrections`：2 条纠错种子；通知/偏好/删除申请/撤回留痕首次使用时自动初始化）
 
 数据通过 `src/lib/storage.ts` 进行 localStorage 持久化，刷新页面后数据不会丢失。
 
@@ -806,7 +878,8 @@ export const examTargetService = {
 - **智能重排**: 第4天重排和第7天复盘为静态展示
 - **资源匹配**: 缺口资源匹配基于确定性规则（五层流水线：模块→合规闸门→适用范围→权利层级排序→最多 3 条），非 AI 计算，不做商业排行；链接有效性与权利状态为演示种子，无真实巡检
 - **登录鉴权**: 已有登录/会话/角色与路由保护，但是 **Demo 模拟实现**（本地校验 + localStorage），不是真实安全认证
-- **管理后台**: 考情审核与公共资源索引已上线（本地 Mock）；纠错与治理等模块仍为占位
+- **纠错与治理**: `/admin/feedback` 纠错处理、错误结论撤回（影响范围识别/留痕/用户通知/计划待确认）、四类站内通知与偏好开关、隐私数据类别与删除申请四状态均为本地 Mock + localStorage；无真实消息推送与数据删除服务，审核/撤回/删除记录只追加不物理删除；详见“纠错、通知、隐私与数据删除治理”章节
+- **管理后台**: 考情审核、纠错与治理、公共资源索引均已上线（本地 Mock，非生产级安全审计）
 
 ## 模块变更记录
 
@@ -821,6 +894,7 @@ export const examTargetService = {
 | 2026-10-01 | 公共资源索引与资料缺口匹配 | 新增 `ResourceItem`/`RightsStatus`/`ResourceStatus`/`ResourceMatch`/`ResourcePlanLink`/`ResourceViewRecord`/`ResourceQueueKey` 类型与标签（旧 `PublicResource` 保留为别名）；新增 `src/lib/resources/`（domain 纯规则层：权利层级、合规闸门、范围匹配、打分排序、180 天复核周期、队列分类、旧数据归一化；resourceService：浏览/匹配/查看与加入计划记录/后台 CRUD 双重角色校验/队列统计；events；useResources hooks）与 `src/components/resources/GapResourcePanel.tsx`；诊断结果页按缺口展示最多 3 个资源（理由/范围/权利/查看来源/加入本周计划/空态查找建议），公共资源浏览列表改走同一闸门；新增 `/admin/resources`（五队列计数、新增/编辑/停用/启用/标记复核、不强推原因与使用统计，resource_reviewer/admin 可写、exam_reviewer 只读）与 `ResourceFormModal`，后台导航与概览卡上线；mock 资源重写为 13 条 `mockResources`（四组匹配案例 + 坏链/停用/权利不明/过期/超期未复核），新增 `kb_resource_views`、`kb_resource_plan_links` 存储键；私有资料与公共资源物理隔离、无私有上传自动入库路径。不含付费、网盘下载、第三方全文复制 |
 | 2026-10-01 | 7 天计划与任务生成 | 新增 `PlanStatus`/`TaskPriority`/`TaskSourceType` 类型，`WeeklyPlan` 增加 `generationReason`，`DailyPlan` 增加 `availableMinutes`，`PlanTask` 增加 `sourceType`/`chapterTitle`/`resourceId`/`arrangementReason`/`reviewAction`/`priority`；新增 `src/lib/plans/`（domain 纯函数 PlanEngine：就绪检查、任务来源收集、优先级排序、每天≤3 项/总时长≤可用时间/每天≥1 项最低任务的时间分配；planService：草稿生成/确认执行/重新生成/调整每日时间/版本历史；usePlans 订阅 hook）与 `src/components/plans/DailyPlanCard.tsx`；`/plan` 重写为缺失信息提示→生成草稿→七天概览→展开任务（含安排原因/完成标准/复盘动作/优先级）→确认→版本历史→调整时间；`/today` 改为读取已确认计划（status=active）的当日任务；移除旧版 `mockWeeklyPlan`/`mockDailyPlans`，新增 `kb_daily_plans` 存储键。不含任务反馈驱动的自动重排、第 4 天自适应重排、跨周计划衔接 |
 | 2026-10-01 | 今日任务与执行反馈 | 新增 `CompletionStatus`/`ErrorCategory`（旧 `ErrorType` 保留别名）/`IncompleteReason`/`TaskFeedbackInput` 类型与完成状态/未完成原因/错因中文标签（错因七项：知识点不会/题目理解错误/答题结构不清/时间不够/粗心/资料或任务不适合/其他）；`TaskFeedback` 扩展为关联用户+计划版本（weeklyPlanId/weeklyVersion）+日计划+日期+任务，新增 `updatedAt`；新增 `src/lib/plans/feedbackService.ts`（独立 `kb_task_feedbacks` 存储、一任务一反馈重复提交抛 `DuplicateFeedbackError`、修改保留 createdAt 刷 updatedAt、同步任务状态但不删除不顺延、listByTask/DailyPlan/WeeklyPlan/Date 查询出口）与 `useToday.ts`（跨午夜 30s/visibility/focus 自动切天）；重写 `FeedbackForm` 为一分钟点选式表单（完成三态/±15 用时/条件原因/错因多选/二次练习/选填说明/修改模式/保存失败内联重试）；新增 `TodayTaskItem`/`FeedbackSummary` 组件，`/today` 重写为只读 active 计划、核心+补充分组、最低任务标记、待反馈计数、提交后状态化下一步提示；planService 移除旧 submitTaskFeedback，归一化兼容旧版内嵌反馈。不含自动重排与任务顺延 |
+| 2026-10-01 | 纠错、通知、隐私与数据删除治理 | 新增 `Correction`（五状态+来源+时间线+旧数据归一化）/`NotificationPreference`/`NotificationItem`（四类+必要/非必要）/`DataDeletionRequest`（四状态+范围快照）/`RetractionRecord` 类型与文案常量；新增 `src/lib/governance/`（domain 纯规则层：队列/通知闸门与每日一次/撤回影响范围分析/13 类数据元数据；events；correctionService 用户提交补充与后台采纳/驳回/要求补充双重角色鉴权、撤回预览与执行〔同值结论批量置待确认+ReviewLog 只追加+高影响字段联动计划 needsConfirmation+用户通知+撤回留痕〕；notificationService 偏好即时生效；privacyService 私有删除/公共与审计保留/纠错匿名化）；新增用户端组件（纠错弹窗/我的纠错/通知中心铃铛/变化横幅/通知偏好面板/隐私与删除面板）与 `/admin/feedback`（纠错队列+撤回留痕）、审核详情撤回入口；`/exam`、`/settings`、`/plan`、`/today`、导航铃铛、后台导航与概览接入；新增 `kb_notification_prefs`/`kb_notifications`/`kb_deletion_requests`/`kb_retraction_logs` 存储键与 2 条纠错种子。本地站内 Mock，无真实推送与删除服务；不含真实消息通道、删除 SLA 与人工审批流 |
 | 2026-10-01 | 动态计划重排与第 7 天周复盘 | 新增 `ReplanTrigger`/`TaskAdjustmentAction`/`TaskAdjustment`/`ReplanRef`/`WeeklyReview(Stat/AdjustmentOutcome)` 类型与中文标签，`PlanTask` 增加 `needsConfirmation`；新增 `src/lib/plans/replanEngine.ts`（独立 ReplanEngine 纯函数：七类触发信号检测、上下文推导〔错因频次/资料不适合/诊断暂停/考情变更〕、五动作确定性决策、容量贪心分配〔优先级减半/最低任务保底/顺延≥2 次或末日才放弃/欠账分散〕、基础巩固替换、待重新确认标记）与 `replanService.ts`（跨版本族反馈收集、重排草稿生成/确认/放弃只追加不覆盖历史、调整记录查询、第 7 天周复盘：仅聚合真实反馈、未反馈任务单独计数、调整效果评估、确定性下周建议）；新增 `ReplanPanel`（信号展示/草稿前后对比/确认与放弃/本版本调整记录）与 `WeeklyReviewCard` 组件，`/plan` 接入重排面板与周复盘区块，`TaskCard` 支持待重新确认徽章；新增 `kb_plan_adjustments`/`kb_weekly_reviews` 存储键。三案例验证：时间减少（60 分钟容量约束+欠账分散）、连续未完成（同错因≥2 次替换为基础巩固）、资料不适合（replace 3/postpone 3/abandon 2）。无 AI 时为确定性规则；不含 AI 建议、跨周衔接、自动重排与计划回滚 |
 
 ## 构建与部署

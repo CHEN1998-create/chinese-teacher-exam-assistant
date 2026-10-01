@@ -919,20 +919,245 @@ export interface Review {
   createdAt: string;
 }
 
+// ==================== 用户纠错 ====================
+
+/**
+ * 纠错对象类型（跨层契约，存储值/UI 共用，勿随意改名）：
+ * - evidence：针对某条考情结论（证据字段）纠错
+ * - other：针对资料、资源、计划等其他信息的纠错（文字描述对象）
+ */
+export type CorrectionTargetType = "evidence" | "other";
+
+/**
+ * 纠错处理状态：
+ * - submitted 已提交：等待审核员处理
+ * - processing 处理中：审核员已认领
+ * - need_info 待补充：审核员要求补充材料，用户补充后回到已提交
+ * - accepted 已采纳 / rejected 未采纳：终态
+ */
+export type CorrectionStatus =
+  | "submitted"
+  | "processing"
+  | "need_info"
+  | "accepted"
+  | "rejected";
+
+/** 纠错时间线动作（只追加，保留完整处理轨迹） */
+export type CorrectionTimelineAction =
+  | "submit"
+  | "start_processing"
+  | "request_info"
+  | "supplement"
+  | "accept"
+  | "reject";
+
+/** 纠错补充来源：链接或文字说明均可 */
+export interface CorrectionSource {
+  id: string;
+  url?: string;
+  note?: string;
+  createdAt: string;
+}
+
+/** 纠错处理时间线条目 */
+export interface CorrectionTimelineEntry {
+  id: string;
+  at: string;
+  actorId: string;
+  actorName: string;
+  /** 动作用户角色；提交/补充来自用户本人，其余来自后台角色 */
+  actorRole: UserRole | "user";
+  action: CorrectionTimelineAction;
+  note?: string;
+}
+
+/**
+ * 用户纠错。
+ * 必须包含：纠错对象（对象类型 + 目标 + 字段/主题）、问题描述、补充来源、提交时间。
+ * 用户只能读到自己的纠错；后台跨用户读取队列。
+ * 用户删除账号后本记录做匿名化保留（审计需要），不物理删除。
+ */
 export interface Correction {
   id: string;
   userId: string;
+  targetType: CorrectionTargetType;
   examTargetId: string;
+  /** 关联的具体证据条目；对缺失字段或其他对象纠错时可空 */
+  evidenceItemId?: string;
+  /** 画像字段 key（EvidenceType）；other 类型时为空串 */
   field: string;
   /** 字段中文名，便于审核队列展示 */
   fieldLabel?: string;
+  /** 纠错对象摘要（字段名/对象名称，后台队列展示用） */
+  subject: string;
+  /** 提交时该对象的当前内容（缺失时为空串） */
   currentValue: string;
+  /** 问题描述（必填） */
+  description: string;
+  /** 用户认为正确的内容（选填，例如“信息缺失需补充”时可空） */
   suggestedValue: string;
-  reason: string;
-  /** 用户提供的佐证链接 */
-  sourceUrl?: string;
-  status: "pending" | "accepted" | "rejected";
+  /** 补充来源（链接/文字，可多条） */
+  sources: CorrectionSource[];
+  status: CorrectionStatus;
+  /** 终态处理结果说明（采纳/驳回/待补充时给用户的回复） */
+  resultNote?: string;
+  /** 采纳时是否同步更新了关联证据（人工审核留痕在 kb_review_logs） */
+  appliedToEvidence?: boolean;
+  handlerId?: string;
+  handlerName?: string;
+  handledAt?: string;
+  timeline: CorrectionTimelineEntry[];
   createdAt: string;
+  updatedAt: string;
+  /** 账号删除后匿名化：内容保留用于审计，userId 已不可识别 */
+  anonymized?: boolean;
+
+  /** @deprecated 旧版字段，新代码使用 description / sources，保留仅供旧数据归一化 */
+  reason?: string;
+  /** @deprecated 旧版字段，新代码使用 sources，保留仅供旧数据归一化 */
+  sourceUrl?: string;
+}
+
+// ==================== 通知 ====================
+
+/**
+ * 通知类型：
+ * - study_reminder 每日学习提醒（非必要，默认每天最多一条）
+ * - exam_change 重要考情变化（非必要，没有重要变化不产生）
+ * - correction_result 纠错处理结果（功能性通知）
+ * - plan_reconfirm 计划需要重新确认（功能性通知）
+ */
+export type NotificationType =
+  | "study_reminder"
+  | "exam_change"
+  | "correction_result"
+  | "plan_reconfirm";
+
+/** 重要程度：仅用于展示层级；Mock 阶段没有真实推送 */
+export type NotificationSeverity = "info" | "important";
+
+export interface NotificationItem {
+  id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  /** 通知正文：变化说明 / 提醒内容，不使用排名、断签、惩罚类语言 */
+  body: string;
+  severity: NotificationSeverity;
+  /** 下一步动作建议（撤回等场景必填） */
+  nextSteps?: string[];
+  related?: {
+    correctionId?: string;
+    examTargetId?: string;
+    weeklyPlanId?: string;
+    retractionId?: string;
+    /** 点击通知跳转的页面 */
+    href?: string;
+  };
+  readAt?: string | null;
+  createdAt: string;
+}
+
+/**
+ * 用户通知偏好（按用户持久化，修改即时生效）。
+ * nonEssentialOff 为总开关：关闭后学习提醒与考情变化不再产生/展示，
+ * 功能性通知（纠错结果、计划重新确认）不受影响。
+ */
+export interface NotificationPreference {
+  userId: string;
+  studyReminder: boolean;
+  examChange: boolean;
+  correctionResult: boolean;
+  planReconfirm: boolean;
+  /** 关闭所有非必要通知（学习提醒、考情变化） */
+  nonEssentialOff: boolean;
+  /** 每日学习提醒时间 HH:mm */
+  reminderTime: string;
+  updatedAt: string;
+}
+
+// ==================== 错误结论撤回（治理留痕） ====================
+
+/** 撤回影响范围：受影响目标、用户、执行中计划、待重新确认任务、被撤回的证据条目 */
+export interface RetractionImpactScope {
+  targetIds: string[];
+  userIds: string[];
+  planIds: string[];
+  taskIds: string[];
+  evidenceItemIds: string[];
+}
+
+/**
+ * 错误结论撤回记录（只追加，不物理删除，审计所需）。
+ * 保存撤回原因、操作人、时间、影响范围，以及给受影响用户的变化说明和下一步动作。
+ */
+export interface RetractionRecord {
+  id: string;
+  evidenceItemId: string;
+  examTargetId: string;
+  field: EvidenceType;
+  fieldLabel: string;
+  /** 被撤回的错误结论值（原值保留留痕，证据状态置为待确认） */
+  withdrawnValue: string;
+  reason: string;
+  operatorId: string;
+  operatorName: string;
+  operatorRole: UserRole;
+  createdAt: string;
+  impact: RetractionImpactScope;
+  /** 给受影响用户的清楚变化说明 */
+  userNotice: string;
+  /** 下一步动作建议 */
+  nextSteps: string[];
+  /** 实际生成了通知的用户 id（受偏好抑制未送达的不计入） */
+  notifiedUserIds: string[];
+}
+
+// ==================== 个人数据删除 ====================
+
+/**
+ * 删除申请状态（跨层契约，存储值/UI 共用，勿随意改名）：
+ * - pending 已申请待确认 / processing 处理中 / completed 完成 / failed 失败（可重试）
+ */
+export type DataDeletionStatus = "pending" | "processing" | "completed" | "failed";
+
+/** 单个数据类别在删除时的处理方式：直接删除 / 公共数据保留 / 审计留痕匿名化保留 */
+export type DataDeletionHandling = "delete" | "retain_public" | "retain_audit";
+
+/** 删除范围快照：申请时各类别的数量与处理方式，随申请留档 */
+export interface DataDeletionScopeItem {
+  /** 类别 key */
+  key: string;
+  /** 类别中文名 */
+  label: string;
+  handling: DataDeletionHandling;
+  /** 申请时该类别涉及的记录数 */
+  count: number;
+}
+
+/**
+ * 个人数据删除申请。
+ * 申请本身保留作为处理凭证（审计需要），完成后 userLabel 匿名化；
+ * 公共证据、公共资源与审核/撤回留痕不随申请物理删除。
+ */
+export interface DataDeletionRequest {
+  id: string;
+  userId: string;
+  /** 提交时账号展示名快照；完成后匿名化为“已注销用户” */
+  userLabel: string;
+  status: DataDeletionStatus;
+  /** 删除范围快照（确认页展示） */
+  scope: DataDeletionScopeItem[];
+  /** 失败原因（status=failed 时） */
+  failReason?: string;
+  createdAt: string;
+  updatedAt: string;
+  confirmedAt?: string;
+  processedAt?: string;
+  /** 实际删除的私有记录条数 */
+  deletedCount?: number;
+  /** 匿名化保留的审计记录条数 */
+  anonymizedCount?: number;
 }
 
 // ==================== UI 状态 ====================
@@ -1224,4 +1449,54 @@ export const REPLAN_TRIGGER_LABELS: Record<ReplanTriggerType, string> = {
   material_unsuitable: "资料不适合",
   midweek_day4: "第4天中期重排",
   evidence_change: "考情或目标变化",
+};
+
+// ==================== 治理模块文案 ====================
+
+/** 纠错状态文案 */
+export const CORRECTION_STATUS_LABELS: Record<CorrectionStatus, string> = {
+  submitted: "已提交",
+  processing: "处理中",
+  need_info: "待补充",
+  accepted: "已采纳",
+  rejected: "未采纳",
+};
+
+/** 纠错时间线动作文案 */
+export const CORRECTION_TIMELINE_ACTION_LABELS: Record<CorrectionTimelineAction, string> = {
+  submit: "提交纠错",
+  start_processing: "审核员开始处理",
+  request_info: "要求补充材料",
+  supplement: "用户补充材料",
+  accept: "采纳",
+  reject: "驳回",
+};
+
+/** 通知类型文案 */
+export const NOTIFICATION_TYPE_LABELS: Record<NotificationType, string> = {
+  study_reminder: "学习提醒",
+  exam_change: "考情变化",
+  correction_result: "纠错结果",
+  plan_reconfirm: "计划重新确认",
+};
+
+/** 非必要通知类型（可被“关闭所有非必要通知”总开关抑制） */
+export const NON_ESSENTIAL_NOTIFICATION_TYPES: NotificationType[] = [
+  "study_reminder",
+  "exam_change",
+];
+
+/** 数据删除申请状态文案 */
+export const DATA_DELETION_STATUS_LABELS: Record<DataDeletionStatus, string> = {
+  pending: "待确认",
+  processing: "处理中",
+  completed: "已完成",
+  failed: "处理失败",
+};
+
+/** 删除范围处理方式文案 */
+export const DATA_DELETION_HANDLING_LABELS: Record<DataDeletionHandling, string> = {
+  delete: "将删除",
+  retain_public: "公共数据保留",
+  retain_audit: "审计留痕匿名保留",
 };

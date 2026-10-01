@@ -10,6 +10,7 @@ import { LoadingPage } from "@/components/ui/Loading";
 import { DailyPlanCard } from "@/components/plans/DailyPlanCard";
 import { ReplanPanel } from "@/components/plans/ReplanPanel";
 import { WeeklyReviewCard } from "@/components/plans/WeeklyReviewCard";
+import { ChangeNoticeBanner } from "@/components/governance/ChangeNoticeBanner";
 import { planService, replanService, examTargetService } from "@/lib/services";
 import { usePlans } from "@/lib/plans/usePlans";
 import { todayString } from "@/lib/plans/useToday";
@@ -170,6 +171,7 @@ export default function PlanPage() {
   // 已有计划：展示概览 + 每日任务
   return (
     <div className="space-y-6">
+      <ChangeNoticeBanner types={["exam_change", "plan_reconfirm"]} />
       {error && (
         <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm">{error}</div>
       )}

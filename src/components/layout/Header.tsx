@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { EDUCATION_LEVEL_LABELS } from "@/types";
 import { useCurrentExamTarget } from "@/lib/targets/useCurrentExamTarget";
+import { NotificationCenter } from "@/components/governance/NotificationCenter";
 
 const pageTitles: Record<string, string> = {
   "/onboarding": "目标澄清",
@@ -45,11 +46,12 @@ export function Header() {
           )}
           <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
         </div>
-        {summary && pathname !== "/onboarding" && (
-          <div className="flex items-center gap-2 text-xs text-slate-500">
-            <span className="truncate max-w-[140px]">{summary}</span>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {summary && pathname !== "/onboarding" && (
+            <span className="truncate max-w-[140px] text-xs text-slate-500">{summary}</span>
+          )}
+          <NotificationCenter />
+        </div>
       </div>
     </header>
   );

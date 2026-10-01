@@ -20,6 +20,7 @@ import { adminReviewService } from "@/lib/admin/adminReviewService";
 import { canReviewField } from "@/lib/admin/domain";
 import { isHighImpact } from "@/lib/evidence/domain";
 import { useReviewDetail } from "@/lib/admin/useAdminReviews";
+import { RetractConclusionPanel } from "@/components/admin/RetractConclusionPanel";
 import { useCurrentUser } from "@/lib/auth";
 
 const ACTIONS: ReviewActionType[] = [
@@ -338,6 +339,14 @@ export function ReviewDetail({ itemId, onClose }: ReviewDetailProps) {
           </div>
         )}
       </Card>
+
+      {/* 错误结论撤回（治理）：未处于待确认状态的结论才可撤回 */}
+      {item.reviewStatus !== "unconfirmed" && (
+        <RetractConclusionPanel
+          evidenceItemId={item.id}
+          canAct={role === "exam_reviewer" || role === "admin"}
+        />
+      )}
 
       {/* 历史版本 / 审核留痕 */}
       <Card>

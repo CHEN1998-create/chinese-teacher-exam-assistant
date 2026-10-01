@@ -10,6 +10,7 @@ import { useTodayString } from "@/lib/plans/useToday";
 import { canGeneratePlan } from "@/lib/targets/domain";
 import { CompletionStatus } from "@/types";
 import { TodayTaskItem } from "@/components/plans/TodayTaskItem";
+import { ChangeNoticeBanner } from "@/components/governance/ChangeNoticeBanner";
 import { formatDateWithWeekday, formatTime, getGreeting } from "@/lib/utils";
 
 export default function TodayPage() {
@@ -91,6 +92,7 @@ export default function TodayPage() {
 
   return (
     <div className="space-y-6">
+      <ChangeNoticeBanner types={["plan_reconfirm", "exam_change"]} />
       {/* 概览 */}
       <div>
         <h2 className="text-xl font-bold text-slate-900">
