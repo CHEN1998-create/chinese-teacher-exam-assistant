@@ -20,7 +20,7 @@ export function MaterialCard({ material }: MaterialCardProps) {
             </p>
           )}
         </div>
-        <MaterialStatusBadge status={material.status} />
+        {material.status && <MaterialStatusBadge status={material.status} />}
       </div>
 
       <div className="mt-3">

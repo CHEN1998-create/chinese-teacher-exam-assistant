@@ -336,24 +336,27 @@ export interface ReviewLog {
   reviewedAt: string;
 }
 
-// ==================== 用户资料 ====================
+// ==================== 资料与能力基线 ====================
 
-export interface UserMaterial {
-  id: string;
-  userId: string;
-  examTargetId: string;
-  name: string;
-  author?: string;
-  publisher?: string;
-  year?: number;
-  chapters: Chapter[];
-  currentChapterId?: string;
-  progress: number; // 0-100
-  status: MaterialStatus;
-  diagnosis?: MaterialDiagnosis;
-  createdAt: string;
-  updatedAt: string;
-}
+/**
+ * 资料状态入口（跨层契约，存储值/UI 共用，勿随意改名）：
+ * - none：还没有资料
+ * - single：已有一套资料
+ * - multiple：有多套资料，不知道如何取舍
+ */
+export type UsageStatus = "none" | "single" | "multiple";
+
+/** 资料来源类型；unknown_scan 为来源不明的完整扫描件（疑似盗版），不能进入公共资源 */
+export type MaterialSourceType =
+  | "published" // 正版教材/公开出版物
+  | "institution" // 培训机构内部资料
+  | "self_notes" // 个人笔记/自编资料
+  | "open_web" // 公开免费网络资料
+  | "unknown_scan" // 来源不明的完整扫描件
+  | "other";
+
+/** 资料诊断结论（模块级与资料整体共用） */
+export type MaterialRecommendation = "continue" | "partial" | "pause";
 
 export interface Chapter {
   id: string;
@@ -364,14 +367,141 @@ export interface Chapter {
   completedAt?: string;
 }
 
+/** 用户私有备考资料（与公共资源 PublicResource 严格分开） */
+export interface MaterialItem {
+  id: string;
+  userId: string;
+  examTargetId: string;
+  name: string;
+  sourceType: MaterialSourceType;
+  author?: string;
+  publisher?: string;
+  /** 适用地区文本，如“全国”“浙江省”“杭州市” */
+  applicableRegion: string;
+  year?: number;
+  /** 适用学段；unknown 表示未标注 */
+  applicableLevel?: EducationLevel | "unknown";
+  /** 用户确认覆盖的考试模块 key（来自模块目录，可手动修改） */
+  coversModules: string[];
+  /** 目录或章节（允许手动维护，不依赖 PDF 解析） */
+  chapters: Chapter[];
+  /** 用户是否已核对目录（识别不确定时可手动修改章节） */
+  catalogConfirmed: boolean;
+  /** 学习进度 0-100 */
+  progress: number;
+  /** 用户备注 */
+  note?: string;
+  createdAt: string;
+  updatedAt: string;
+
+  /** @deprecated 旧版资料状态，保留仅为兼容旧数据与 MaterialCard */
+  status?: MaterialStatus;
+  /** @deprecated 旧版内嵌诊断；新诊断持久化在 MaterialDiagnosisSnapshot 中 */
+  diagnosis?: MaterialDiagnosis;
+}
+
+/** @deprecated 旧名称，新代码统一使用 MaterialItem */
+export type UserMaterial = MaterialItem;
+
+/** 模块自评等级：1 很薄弱 → 5 很扎实 */
+export type SelfAssessmentLevel = 1 | 2 | 3 | 4 | 5;
+
+export interface ModuleSelfAssessment {
+  /** 模块目录 key */
+  module: string;
+  level: SelfAssessmentLevel;
+  note?: string;
+}
+
+/** 最近练习成绩 */
+export interface PracticeScore {
+  id: string;
+  /** 模块目录 key */
+  module: string;
+  /** 原始成绩描述，如“72/100”“85分” */
+  scoreText: string;
+  /** 百分制折算值（0-100），用于薄弱项规则，可空 */
+  scorePercent?: number;
+  /** 考试日期 YYYY-MM-DD */
+  takenAt?: string;
+  note?: string;
+}
+
+/** 能力基线：每个用户 + 每个目标考试一份 */
+export interface AbilityBaseline {
+  id: string;
+  userId: string;
+  examTargetId: string;
+  /** 资料状态入口三选一 */
+  inventoryStatus: UsageStatus;
+  /** 语文学科模块自评 */
+  chineseAssessments: ModuleSelfAssessment[];
+  /** 教综或其他考试模块自评 */
+  generalAssessments: ModuleSelfAssessment[];
+  recentScores: PracticeScore[];
+  /** 明显薄弱项（模块 key 或用户自填文本） */
+  weakModules: string[];
+  /** 每日可用时间（分钟） */
+  dailyAvailableMinutes: number;
+  /** 每周可用时间（小时） */
+  weeklyAvailableHours: number;
+  updatedAt: string;
+}
+
+/** 单份资料 × 单个考试模块的诊断结论 */
+export interface MaterialDiagnosisItem {
+  module: string;
+  moduleLabel: string;
+  recommendation: MaterialRecommendation;
+  reason: string;
+  relatedChapterTitles: string[];
+}
+
+/** 单份资料的诊断结果 */
 export interface MaterialDiagnosis {
   id: string;
   materialId: string;
-  recommendation: "continue" | "partial" | "pause" | "replace";
+  examTargetId: string;
+  recommendation: MaterialRecommendation;
   reason: string;
-  suggestedChapters?: string[];
+  /** 逐考试模块的结论与原因 */
+  items: MaterialDiagnosisItem[];
+  /** partial 时建议使用的章节标题 */
+  suggestedChapterTitles: string[];
+  coversModules: string[];
+  /** 该资料未覆盖但考试需要的模块 key */
   missingModules: string[];
-  alternativeResources?: string[];
+  /** 风险提示（来源不明扫描件、地区/年份不符等） */
+  warnings: string[];
+  diagnosedAt: string;
+}
+
+/** 多套资料覆盖同一模块时的取舍说明 */
+export interface MaterialConflictGroup {
+  module: string;
+  moduleLabel: string;
+  /** 建议保留的资料 id */
+  keepMaterialId: string;
+  /** 建议本周暂缓的资料及原因 */
+  paused: { materialId: string; reason: string }[];
+  advice: string;
+}
+
+/** 每个目标一份的诊断快照（含输入签名，用于“切换/变更后提示重新计算”） */
+export interface MaterialDiagnosisSnapshot {
+  examTargetId: string;
+  /** 生成快照时的输入签名 */
+  signature: string;
+  /** 高影响考情是否已全部官方确认 */
+  evidenceComplete: boolean;
+  /** 诊断时仍未官方确认的高影响字段 */
+  pendingEvidenceFields: EvidenceType[];
+  materialDiagnoses: MaterialDiagnosis[];
+  /** 全部资料合并后仍缺少的模块 key */
+  missingModules: string[];
+  conflictGroups: MaterialConflictGroup[];
+  /** 规则计算出的薄弱模块 key */
+  weakModules: string[];
   diagnosedAt: string;
 }
 
@@ -676,6 +806,39 @@ export const MATERIAL_STATUS_LABELS: Record<MaterialStatus, string> = {
   partial_use: "部分使用",
   paused: "本周暂缓",
   replaced: "已更换",
+};
+
+/** 资料状态入口文案 */
+export const USAGE_STATUS_LABELS: Record<UsageStatus, string> = {
+  none: "还没有资料",
+  single: "已有一套资料",
+  multiple: "有多套资料，不知道如何取舍",
+};
+
+/** 资料来源类型文案 */
+export const MATERIAL_SOURCE_TYPE_LABELS: Record<MaterialSourceType, string> = {
+  published: "正版教材/公开出版物",
+  institution: "培训机构内部资料",
+  self_notes: "个人笔记/自编资料",
+  open_web: "公开免费网络资料",
+  unknown_scan: "来源不明的完整扫描件",
+  other: "其他",
+};
+
+/** 资料诊断结论文案 */
+export const MATERIAL_RECOMMENDATION_LABELS: Record<MaterialRecommendation, string> = {
+  continue: "继续使用",
+  partial: "只使用部分章节",
+  pause: "本周暂不使用",
+};
+
+/** 模块自评等级文案：1 很薄弱 → 5 很扎实 */
+export const SELF_ASSESSMENT_LEVEL_LABELS: Record<SelfAssessmentLevel, string> = {
+  1: "很薄弱",
+  2: "较薄弱",
+  3: "一般",
+  4: "较扎实",
+  5: "很扎实",
 };
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {

@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 
 const navItems = [
   { href: "/exam", label: "我的考试", icon: "📋" },
-  { href: "/materials", label: "资料与资源", icon: "📚" },
+  { href: "/materials", label: "资料与基线", icon: "📚" },
   { href: "/plan", label: "本周计划", icon: "📅" },
   { href: "/today", label: "今天", icon: "✅" },
   { href: "/settings", label: "设置", icon: "⚙️" },

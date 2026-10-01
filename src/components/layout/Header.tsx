@@ -7,7 +7,7 @@ import { useCurrentExamTarget } from "@/lib/targets/useCurrentExamTarget";
 const pageTitles: Record<string, string> = {
   "/onboarding": "目标澄清",
   "/exam": "我的考试",
-  "/materials": "资料与资源",
+  "/materials": "资料与基线",
   "/plan": "本周计划",
   "/today": "今天与复盘",
   "/settings": "设置与数据",

@@ -3,7 +3,6 @@ import {
   ExamTargetInput,
   ClarificationResult,
   ClarificationTask,
-  UserMaterial,
   PublicResource,
   WeeklyPlan,
   DailyPlan,
@@ -11,11 +10,9 @@ import {
   TaskFeedback,
   User,
   UserSettings,
-  MaterialStatus,
 } from "@/types";
 import {
   mockExamTargets,
-  mockUserMaterials,
   mockPublicResources,
   mockWeeklyPlan,
   mockDailyPlans,
@@ -359,64 +356,14 @@ export const examTargetService = {
 // 这里转出保持 `import { evidenceService } from "@/lib/services"` 的用法稳定。
 export { evidenceService } from "./evidence/evidenceService";
 
-// ==================== 用户资料服务 ====================
+// 资料与能力基线服务已独立到 lib/materials（私有资料 CRUD / 基线 / 诊断快照）。
+export { materialService } from "./materials/materialService";
 
-export const materialService = {
-  getAll(): UserMaterial[] {
-    return loadFromStorage(STORAGE_KEYS.MATERIALS, mockUserMaterials);
-  },
-
-  getByExamTargetId(examTargetId: string): UserMaterial[] {
-    return this.getAll().filter((m) => m.examTargetId === examTargetId);
-  },
-
-  getById(id: string): UserMaterial | null {
-    return this.getAll().find((m) => m.id === id) || null;
-  },
-
-  create(data: Omit<UserMaterial, "id" | "userId" | "createdAt" | "updatedAt">): UserMaterial {
-    const materials = this.getAll();
-    const newMaterial: UserMaterial = {
-      ...data,
-      id: `um-${Date.now()}`,
-      userId: userService.getUser()?.id ?? "anonymous",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    materials.push(newMaterial);
-    saveToStorage(STORAGE_KEYS.MATERIALS, materials);
-    return newMaterial;
-  },
-
-  updateStatus(id: string, status: MaterialStatus): UserMaterial | null {
-    const materials = this.getAll();
-    const index = materials.findIndex((m) => m.id === id);
-    if (index === -1) return null;
-    materials[index] = { ...materials[index], status, updatedAt: new Date().toISOString() };
-    saveToStorage(STORAGE_KEYS.MATERIALS, materials);
-    return materials[index];
-  },
-
-  updateProgress(id: string, progress: number, currentChapterId?: string): UserMaterial | null {
-    const materials = this.getAll();
-    const index = materials.findIndex((m) => m.id === id);
-    if (index === -1) return null;
-    materials[index] = {
-      ...materials[index],
-      progress,
-      currentChapterId: currentChapterId || materials[index].currentChapterId,
-      updatedAt: new Date().toISOString(),
-    };
-    saveToStorage(STORAGE_KEYS.MATERIALS, materials);
-    return materials[index];
-  },
-};
-
-// ==================== 公共资源服务 ====================
+// ==================== 公共资源服务（只读，公共资源与用户私有资料分开存储） ====================
 
 export const resourceService = {
   getAll(): PublicResource[] {
-    return loadFromStorage(STORAGE_KEYS.EXAM_TARGETS, mockPublicResources);
+    return loadFromStorage(STORAGE_KEYS.RESOURCES, mockPublicResources);
   },
 
   getRecommended(limit: number = 3): PublicResource[] {
