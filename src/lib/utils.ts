@@ -10,6 +10,16 @@ export function formatDate(dateString: string): string {
   return `${date.getMonth() + 1}月${date.getDate()}日`;
 }
 
+/** 完整日期时间（审核留痕使用），例如 2026/10/01 14:30 */
+export function formatDateTime(dateString: string): string {
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}/${pad(date.getMonth() + 1)}/${pad(date.getDate())} ${pad(
+    date.getHours()
+  )}:${pad(date.getMinutes())}`;
+}
+
 export function formatDateWithWeekday(dateString: string): string {
   const date = new Date(dateString);
   const weekdays = ["日", "一", "二", "三", "四", "五", "六"];

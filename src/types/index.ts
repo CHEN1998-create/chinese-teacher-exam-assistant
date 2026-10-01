@@ -236,8 +236,10 @@ export interface EvidenceItem {
   /** 官方确认时的审核信息（仅人工审核后存在） */
   reviewerName?: string;
   reviewedAt?: string;
-  /** 多个来源结论不一致 */
+  /** 多个来源结论不一致（由画像层根据当前事实结论计算） */
   hasConflict?: boolean;
+  /** 审核员手动标记“来源冲突”（即使只有单一来源也保留该标记，驳回后清除） */
+  reviewerFlaggedConflict?: boolean;
   /** 产出该结论的提取任务 id */
   jobId?: string;
   version: number;
@@ -279,6 +281,59 @@ export interface ExtractionJob {
   createdAt: string;
   updatedAt: string;
   finishedAt?: string;
+}
+
+// ==================== 考情审核后台 ====================
+
+/**
+ * 审核动作（跨层契约，存储值/UI/留痕共用，勿随意改名）：
+ * - approve：通过（值不变，置为官方确认）
+ * - approve_with_edit：修改后通过（校正值后置为官方确认，已发布结论须升版本）
+ * - reject：驳回（结论不成立，用户端显示待确认，原值保留留痕）
+ * - mark_unconfirmed：标记待确认（保留结论但暂不确认）
+ * - mark_conflict：标记来源冲突（不静默覆盖，用户端显示待确认/冲突）
+ */
+export type ReviewActionType =
+  | "approve"
+  | "approve_with_edit"
+  | "reject"
+  | "mark_unconfirmed"
+  | "mark_conflict";
+
+/** 审核队列视图 */
+export type ReviewQueueKey =
+  | "pending" // 待审核
+  | "high_risk" // 高风险优先
+  | "conflict" // 来源冲突
+  | "expiring" // 即将过期
+  | "completed"; // 已完成
+
+/**
+ * 审核留痕记录：每次审核动作不可变地追加一条。
+ * 保存审核人、审核时间、动作、原因、修改前后内容与状态、版本号。
+ */
+export interface ReviewLog {
+  id: string;
+  evidenceItemId: string;
+  examTargetId: string;
+  field: EvidenceType;
+  action: ReviewActionType;
+  /** 审核前的值（修改后通过时与 afterValue 不同） */
+  beforeValue: string;
+  /** 审核后的值 */
+  afterValue: string;
+  beforeStatus: ReviewStatus;
+  afterStatus: ReviewStatus;
+  /** 操作后该结论的版本号 */
+  version: number;
+  /** 必填原因（预置原因 + 补充说明） */
+  reason: string;
+  /** 预置原因（便于后续统计） */
+  reasonPreset?: string;
+  reviewerId: string;
+  reviewerName: string;
+  reviewerRole: UserRole;
+  reviewedAt: string;
 }
 
 // ==================== 用户资料 ====================
@@ -584,6 +639,36 @@ export const EVIDENCE_SOURCE_TYPE_LABELS: Record<EvidenceSourceType, string> = {
   historical: "历史经验",
   personal: "个人经验",
   seed: "预置数据",
+};
+
+/** 审核队列文案 */
+export const REVIEW_QUEUE_LABELS: Record<ReviewQueueKey, string> = {
+  pending: "待审核",
+  high_risk: "高风险优先",
+  conflict: "来源冲突",
+  expiring: "即将过期",
+  completed: "已完成",
+};
+
+/** 审核动作文案 */
+export const REVIEW_ACTION_LABELS: Record<ReviewActionType, string> = {
+  approve: "通过",
+  approve_with_edit: "修改后通过",
+  reject: "驳回",
+  mark_unconfirmed: "标记待确认",
+  mark_conflict: "标记来源冲突",
+};
+
+/**
+ * 各审核动作的必填预置原因（操作时必须选择一项，可再补充说明）。
+ * 不允许“无原因”的审核动作。
+ */
+export const REVIEW_REASON_PRESETS: Record<ReviewActionType, string[]> = {
+  approve: ["与公告原文一致", "来源为官方渠道（教育局/人社局官网）", "与历年公告及现有信息一致"],
+  approve_with_edit: ["AI 识别有误，已按公告原文校正", "公告信息有遗漏，已补充完整", "格式/表述不规范，已规范化"],
+  reject: ["公告原文中没有该信息", "来源不可靠，无法证实", "与官方公告结论矛盾", "属于猜测或推断，不是公告事实"],
+  mark_unconfirmed: ["新公告尚未发布，暂无权威来源", "公告信息不完整，待后续补充公告", "多个来源暂无法核实，先保留待确认"],
+  mark_conflict: ["不同来源给出的结论不一致", "新旧公告表述冲突", "来源转载矛盾，需向发布单位核实"],
 };
 
 export const MATERIAL_STATUS_LABELS: Record<MaterialStatus, string> = {

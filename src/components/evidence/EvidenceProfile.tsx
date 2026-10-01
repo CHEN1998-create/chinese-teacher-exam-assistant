@@ -133,7 +133,11 @@ function EvidenceRow({ row, onCorrect }: { row: ProfileRow; onCorrect: (item: Ev
               missing ? "text-slate-400" : "text-slate-900"
             }`}
           >
-            {missing ? "待确认：尚未从任何来源提取到该信息" : row.value}
+            {missing
+              ? row.hasConflict
+                ? "待确认：该字段存在来源冲突，等待人工核实"
+                : "待确认：尚未从任何来源提取到该信息"
+              : row.value}
           </p>
         </div>
         <ReviewStatusBadge status={missing ? "unconfirmed" : row.reviewStatus} />

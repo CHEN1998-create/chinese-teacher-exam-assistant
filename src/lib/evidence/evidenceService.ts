@@ -30,17 +30,19 @@ import {
   mergeExtractedItems,
 } from "./domain";
 import { EvidenceExtractor, mockEvidenceExtractor } from "./extractor";
+import {
+  emitEvidenceChanged,
+  getEvidenceStoreVersion,
+  subscribeEvidence,
+} from "./events";
 
 let extractor: EvidenceExtractor = mockEvidenceExtractor;
 
-const listeners = new Set<() => void>();
-let storeVersion = 0;
 /** 正在运行的提取任务（仅内存，刷新后视为中断失败） */
 const runningJobs = new Set<string>();
 
 function notifyChanged(): void {
-  storeVersion += 1;
-  listeners.forEach((fn) => fn());
+  emitEvidenceChanged();
 }
 
 function currentUserId(): string {
@@ -85,14 +87,11 @@ function sourceLabelOf(input: AnnouncementSourceInput): string {
 
 export const evidenceService = {
   subscribe(listener: () => void): () => void {
-    listeners.add(listener);
-    return () => {
-      listeners.delete(listener);
-    };
+    return subscribeEvidence(listener);
   },
 
   getVersion(): number {
-    return storeVersion;
+    return getEvidenceStoreVersion();
   },
 
   /** 替换提取器（接入真实 AI/后端时使用） */

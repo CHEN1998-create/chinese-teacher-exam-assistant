@@ -1,13 +1,22 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { RequireRole } from "@/components/auth/RequireAuth";
 import { useCurrentUser } from "@/lib/auth";
 import { STAFF_ROLES, USER_ROLE_LABELS } from "@/types";
 import { Badge } from "@/components/ui/Badge";
+import { cn } from "@/lib/utils";
+
+const ADMIN_NAV = [
+  { href: "/admin", label: "后台概览", exact: true },
+  { href: "/admin/exams", label: "考情管理", exact: false },
+  { href: "/admin/reviews", label: "审核队列", exact: false },
+];
 
 function AdminChrome({ children }: { children: React.ReactNode }) {
   const { user, role, logout } = useCurrentUser();
+  const pathname = usePathname();
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -44,6 +53,30 @@ function AdminChrome({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </div>
+        {/* 后台子导航 */}
+        <nav className="bg-slate-800">
+          <div className="max-w-6xl mx-auto px-4 flex gap-1">
+            {ADMIN_NAV.map((item) => {
+              const active = item.exact
+                ? pathname === item.href
+                : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "px-4 py-2.5 text-sm transition-colors border-b-2",
+                    active
+                      ? "text-white border-white font-medium"
+                      : "text-slate-400 border-transparent hover:text-slate-200"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
       </header>
 
       <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>

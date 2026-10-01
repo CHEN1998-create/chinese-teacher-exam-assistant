@@ -123,10 +123,23 @@ export interface ProfileRow extends EvidenceItem {
 }
 
 /**
+ * 当前事实结论的状态：官方确认 / 待审核 / AI已提取。
+ * historical（历史经验）与 personal（个人经验）是参考信息，不参与“来源冲突”判定；
+ * unconfirmed（驳回/待确认）已退出事实结论，不参与主结论选取。
+ */
+const FACT_CLAIM_STATUSES: ReviewStatus[] = ["official", "pending_review", "ai_extracted"];
+
+/** 结论是否仍参与画像展示（被审核员标记冲突的项即使为 unconfirmed 仍需展示冲突） */
+function isActiveForProfile(item: EvidenceItem): boolean {
+  return item.reviewStatus !== "unconfirmed" || item.reviewerFlaggedConflict === true;
+}
+
+/**
  * 由持久化证据生成 11 个画像字段行：
- * - 每个字段取可信度最高的一条作为主结论；
- * - 同字段存在不同来源的不同结论 → 主结论标记 hasConflict，其他结论进 alternatives；
- * - 没有任何结论的字段生成“待确认”占位。
+ * - 每个字段取可信度最高的一条“有效结论”作为主结论（驳回/待确认项已退出）；
+ * - 当前事实结论之间存在不同来源的不同值，或被审核员手动标记 → hasConflict；
+ * - 历史/个人经验作为备选结论展示，但不打“来源冲突”红标；
+ * - 没有任何有效结论的字段生成“待确认”占位。
  */
 export function buildProfileRows(target: ExamTarget, items: EvidenceItem[]): ProfileRow[] {
   const byField = new Map<EvidenceType, EvidenceItem[]>();
@@ -137,21 +150,28 @@ export function buildProfileRows(target: ExamTarget, items: EvidenceItem[]): Pro
   }
 
   return PROFILE_FIELD_ORDER.map((field) => {
-    const list = byField.get(field) ?? [];
-    if (list.length === 0) {
+    const all = byField.get(field) ?? [];
+    const active = all.filter(isActiveForProfile);
+    if (active.length === 0) {
       return { ...placeholderItem(target, field), alternatives: [] };
     }
 
-    const sorted = [...list].sort((a, b) => STATUS_PRIORITY[b.reviewStatus] - STATUS_PRIORITY[a.reviewStatus]);
+    const sorted = [...active].sort((a, b) => STATUS_PRIORITY[b.reviewStatus] - STATUS_PRIORITY[a.reviewStatus]);
     const canonical = { ...sorted[0] };
     const alternatives = sorted.slice(1);
 
-    // 不同来源给出不同结论值 → 来源冲突，主结论显示待确认式冲突标记
-    const distinctValues = new Set(
-      list.filter((i) => i.value.trim()).map((i) => i.value.trim())
+    // 冲突只在“当前事实结论”之间计算：不同来源 + 不同结论值；
+    // 或审核员已手动标记来源冲突（单来源也保留标记，直到冲突被处理）
+    const claims = active.filter(
+      (i) => FACT_CLAIM_STATUSES.includes(i.reviewStatus) || i.reviewerFlaggedConflict === true
     );
-    const distinctSources = new Set(list.map((i) => i.sourceName));
-    canonical.hasConflict = distinctValues.size > 1 && distinctSources.size > 1;
+    const distinctValues = new Set(
+      claims.filter((i) => i.value.trim()).map((i) => i.value.trim())
+    );
+    const distinctSources = new Set(claims.map((i) => i.sourceName));
+    canonical.hasConflict =
+      (distinctValues.size > 1 && distinctSources.size > 1) ||
+      claims.some((i) => i.reviewerFlaggedConflict === true);
 
     return { ...canonical, alternatives };
   });
