@@ -2,62 +2,111 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
 import { Switch } from "@/components/ui/Switch";
 import { ConfirmModal } from "@/components/ui/Modal";
 import { userService } from "@/lib/services";
-import { EducationLevel, EDUCATION_LEVEL_LABELS } from "@/types";
+import { useCurrentUser } from "@/lib/auth";
+import {
+  EducationLevel,
+  EDUCATION_LEVEL_LABELS,
+  STAFF_ROLES,
+  USER_ROLE_LABELS,
+  NotificationSettings,
+} from "@/types";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const [, setIsDeleting] = useState(false);
+  const { user, role, hasRole, logout, updateProfile } = useCurrentUser();
 
-  const settings = userService.getSettings();
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedTip, setSavedTip] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
   const [formData, setFormData] = useState({
-    educationLevel: settings.educationLevel || ("middle" as EducationLevel),
-    dailyAvailableTime: settings.dailyAvailableTime,
-    studyReminderTime: settings.studyReminderTime || "08:00",
+    educationLevel: user?.educationLevel ?? ("middle" as EducationLevel),
+    dailyAvailableTime: user?.dailyAvailableTime ?? 180,
+    studyReminderTime: user?.studyReminderTime ?? "08:00",
   });
 
-  const [notifications, setNotifications] = useState(settings.notifications);
+  const [notifications, setNotifications] = useState<NotificationSettings>(
+    user?.notificationSettings ?? {
+      studyReminder: true,
+      examUpdate: true,
+      resourceUpdate: true,
+      weeklyReport: true,
+    }
+  );
 
   const handleSave = async () => {
-    setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 500));
-    userService.updateSettings({
+    setIsSaving(true);
+    // 模拟保存延迟
+    await new Promise((r) => setTimeout(r, 300));
+    updateProfile({
       educationLevel: formData.educationLevel,
       dailyAvailableTime: formData.dailyAvailableTime,
       studyReminderTime: formData.studyReminderTime,
-      notifications,
-    });
-    userService.updateUser({
-      educationLevel: formData.educationLevel,
-      dailyAvailableTime: formData.dailyAvailableTime,
       notificationSettings: notifications,
     });
-    setIsLoading(false);
+    setIsSaving(false);
+    setSavedTip(true);
+    setTimeout(() => setSavedTip(false), 2000);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    router.replace("/login");
   };
 
   const handleDeleteData = async () => {
-    setIsDeleting(true);
-    await new Promise((r) => setTimeout(r, 500));
+    // 清除全部本地业务数据（含演示会话），然后回到登录页
     userService.deleteAllData();
-    setIsDeleting(false);
+    await logout();
     setIsDeleteModalOpen(false);
-    router.push("/onboarding");
+    router.replace("/login");
   };
+
+  if (!user || !role) return null;
 
   return (
     <div className="space-y-6">
+      {/* 账号信息 */}
+      <Card>
+        <CardHeader title="账号信息" description="当前登录会话与角色" />
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+            <span className="text-xl">👤</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="font-medium text-slate-900">{user.name}</p>
+              <Badge variant="primary">{USER_ROLE_LABELS[role]}</Badge>
+            </div>
+            <p className="text-sm text-slate-500 mt-0.5">用户ID：{user.id}</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button variant="outline" size="sm" onClick={handleLogout}>
+            退出登录
+          </Button>
+          {hasRole(STAFF_ROLES) && (
+            <Link href="/admin">
+              <Button variant="outline" size="sm">
+                进入运营后台
+              </Button>
+            </Link>
+          )}
+        </div>
+      </Card>
+
       {/* 基本信息 */}
       <Card>
         <CardHeader
-          title="基本信息"
+          title="学习资料设置"
           description="设置你的学段和每日可用学习时间"
         />
         <div className="space-y-4">
@@ -100,10 +149,7 @@ export default function SettingsPage() {
 
       {/* 通知设置 */}
       <Card>
-        <CardHeader
-          title="通知设置"
-          description="管理你希望接收的提醒"
-        />
+        <CardHeader title="通知设置" description="管理你希望接收的提醒" />
         <div className="space-y-4">
           <Switch
             label="学习提醒"
@@ -154,25 +200,41 @@ export default function SettingsPage() {
 
       {/* 数据管理 */}
       <Card>
-        <CardHeader title="数据管理" description="查看或删除你的个人数据" />
+        <CardHeader title="数据管理" description="查看或删除你的本地数据" />
         <div className="space-y-3">
-          <Button variant="outline" className="w-full justify-start">
-            查看我的数据（下载 JSON）
+          <Button
+            variant="outline"
+            className="w-full justify-start"
+            onClick={() => {
+              const data = localStorage.getItem("kb_session");
+              if (data) {
+                const blob = new Blob([data], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "my-session.json";
+                a.click();
+                URL.revokeObjectURL(url);
+              }
+            }}
+          >
+            查看我的会话数据（下载 JSON）
           </Button>
           <Button
             variant="danger"
             className="w-full justify-start"
             onClick={() => setIsDeleteModalOpen(true)}
           >
-            删除所有个人数据
+            删除所有个人数据并退出
           </Button>
         </div>
       </Card>
 
       {/* 保存按钮 */}
-      <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={isLoading}>
-          {isLoading ? "保存中..." : "保存设置"}
+      <div className="flex items-center justify-end gap-3">
+        {savedTip && <span className="text-sm text-emerald-600">已保存</span>}
+        <Button onClick={handleSave} disabled={isSaving}>
+          {isSaving ? "保存中..." : "保存设置"}
         </Button>
       </div>
 
@@ -182,7 +244,7 @@ export default function SettingsPage() {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteData}
         title="删除所有个人数据"
-        description="此操作将永久删除你的所有数据，包括目标考试、资料记录、学习计划和反馈。删除后无法恢复，确定要继续吗？"
+        description="此操作将永久删除本地保存的全部数据，包括目标考试、资料记录、学习计划、反馈和登录会话。删除后需要重新登录，确定要继续吗？"
         confirmLabel="确认删除"
         cancelLabel="取消"
         variant="danger"

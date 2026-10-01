@@ -15,8 +15,10 @@ export const mockUser: User = {
   id: "u-001",
   name: "备考学员",
   avatar: undefined,
+  role: "user",
   educationLevel: "middle",
   dailyAvailableTime: 180,
+  studyReminderTime: "08:00",
   notificationSettings: {
     studyReminder: true,
     examUpdate: true,
@@ -666,6 +668,7 @@ export const mockUserSettings: UserSettings = {
 // ==================== 本地存储键名 ====================
 
 export const STORAGE_KEYS = {
+  SESSION: "kb_session",
   USER: "kb_user",
   EXAM_TARGETS: "kb_exam_targets",
   EVIDENCE_CARDS: "kb_evidence_cards",

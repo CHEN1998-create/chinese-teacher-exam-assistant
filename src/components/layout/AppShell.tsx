@@ -5,22 +5,38 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
+import { RequireAuth } from "@/components/auth/RequireAuth";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isOnboarding = pathname === "/onboarding";
 
-  if (isOnboarding) {
-    return <div className="min-h-screen bg-slate-50">{children}</div>;
+  // 登录页：完全独立，无导航、无守卫
+  if (pathname === "/login") {
+    return <>{children}</>;
   }
 
+  // 运营后台：不使用用户端导航，守卫与后台框架由 /admin 布局负责
+  if (pathname.startsWith("/admin")) {
+    return <>{children}</>;
+  }
+
+  // 目标澄清页：无导航外壳，但仍需登录
+  if (pathname === "/onboarding") {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <RequireAuth>{children}</RequireAuth>
+      </div>
+    );
+  }
+
+  // 用户端常规页面
   return (
     <div className="min-h-screen bg-slate-50">
       <Sidebar />
       <Header />
       <main className="md:pl-64 pb-16 md:pb-0">
         <div className="max-w-4xl mx-auto px-4 py-6 md:px-8">
-          {children}
+          <RequireAuth>{children}</RequireAuth>
         </div>
       </main>
       <BottomNav />

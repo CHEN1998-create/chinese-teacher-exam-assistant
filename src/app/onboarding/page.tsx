@@ -76,7 +76,7 @@ export default function OnboardingPage() {
     await new Promise((r) => setTimeout(r, 500));
 
     if (targetStatus === "announcement" || targetStatus === "region") {
-      examTargetService.create({
+      const created = examTargetService.create({
         name: `${formData.region} ${EDUCATION_LEVEL_LABELS[formData.educationLevel as EducationLevel]} ${EXAM_TYPE_LABELS[formData.examType as ExamType]}`,
         region: formData.region!,
         regionCode: "330100",
@@ -88,6 +88,8 @@ export default function OnboardingPage() {
         isCurrent: true,
         announcementUrl: formData.announcementUrl,
       });
+      // 同步到当前登录会话用户
+      examTargetService.setCurrent(created.id);
     }
 
     router.push("/exam");

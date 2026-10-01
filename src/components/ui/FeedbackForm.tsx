@@ -5,6 +5,7 @@ import { TaskFeedback, ErrorType, ERROR_TYPE_LABELS } from "@/types";
 import { Card } from "./Card";
 import { Button } from "./Button";
 import { cn } from "@/lib/utils";
+import { useCurrentUser } from "@/lib/auth";
 
 interface FeedbackFormProps {
   taskId: string;
@@ -38,6 +39,7 @@ const incompleteReasons = [
 ];
 
 export function FeedbackForm({ taskId, taskTitle, onSubmit, onCancel }: FeedbackFormProps) {
+  const { user } = useCurrentUser();
   const [status, setStatus] = useState<"completed" | "partial" | "not_completed">("completed");
   const [actualTime, setActualTime] = useState<number>(60);
   const [incompleteReason, setIncompleteReason] = useState<string>("");
@@ -54,7 +56,7 @@ export function FeedbackForm({ taskId, taskTitle, onSubmit, onCancel }: Feedback
   const handleSubmit = () => {
     onSubmit({
       taskId,
-      userId: "u-001",
+      userId: user?.id ?? "anonymous",
       status,
       actualTime,
       incompleteReason: status !== "completed" ? (incompleteReason as TaskFeedback["incompleteReason"]) : undefined,

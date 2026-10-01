@@ -17,8 +17,10 @@ export interface User {
   id: string;
   name: string;
   avatar?: string;
+  role: UserRole;
   educationLevel?: EducationLevel;
   dailyAvailableTime: number; // 每日可用时间（分钟）
+  studyReminderTime?: string; // 每日学习提醒时间，例如 "08:00"
   notificationSettings: NotificationSettings;
   currentExamTargetId?: string;
   createdAt: string;
@@ -315,6 +317,16 @@ export interface PaginatedResponse<T> {
 }
 
 // ==================== 常量映射 ====================
+
+export const USER_ROLE_LABELS: Record<UserRole, string> = {
+  user: "备考用户",
+  exam_reviewer: "考情审核员",
+  resource_reviewer: "资源审核员",
+  admin: "管理员",
+};
+
+/** 可以进入运营后台的角色 */
+export const STAFF_ROLES: UserRole[] = ["exam_reviewer", "resource_reviewer", "admin"];
 
 export const EDUCATION_LEVEL_LABELS: Record<EducationLevel, string> = {
   primary: "小学",

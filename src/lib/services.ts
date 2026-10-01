@@ -12,7 +12,6 @@ import {
   MaterialStatus,
 } from "@/types";
 import {
-  mockUser,
   mockExamTargets,
   mockEvidenceCards,
   mockUserMaterials,
@@ -23,32 +22,57 @@ import {
   STORAGE_KEYS,
 } from "./mock-data";
 import { loadFromStorage, saveToStorage, clearAllStorage } from "./storage";
+import { authService } from "./auth";
 
 // ==================== 用户服务 ====================
+//
+// 用户身份的唯一来源是登录会话（AuthService）。
+// 页面组件应通过 useCurrentUser() 获取当前用户；
+// 非组件代码（其他 service）使用本模块的方法间接读取会话。
 
 export const userService = {
-  getUser(): User {
-    return loadFromStorage(STORAGE_KEYS.USER, mockUser);
+  /** 当前登录用户；未登录时返回 null */
+  getUser(): User | null {
+    return authService.getSession()?.user ?? null;
   },
 
-  updateUser(updates: Partial<User>): User {
-    const user = this.getUser();
-    const updated = { ...user, ...updates, updatedAt: new Date().toISOString() };
-    saveToStorage(STORAGE_KEYS.USER, updated);
-    return updated;
+  /** 更新当前会话中的用户资料（如当前目标考试） */
+  updateUser(updates: Partial<User>): User | null {
+    if (!this.getUser()) return null;
+    return authService.updateProfile(updates).user;
   },
 
+  /** 从会话用户派生设置，未登录时回退到本地演示设置 */
   getSettings(): UserSettings {
-    return loadFromStorage(STORAGE_KEYS.SETTINGS, mockUserSettings);
+    const fallback = loadFromStorage(STORAGE_KEYS.SETTINGS, mockUserSettings);
+    const user = this.getUser();
+    if (!user) return fallback;
+    return {
+      educationLevel: user.educationLevel,
+      dailyAvailableTime: user.dailyAvailableTime,
+      studyReminderTime: user.studyReminderTime ?? fallback.studyReminderTime,
+      notifications: user.notificationSettings,
+    };
   },
 
+  /** 写入设置并同步到当前会话用户 */
   updateSettings(updates: Partial<UserSettings>): UserSettings {
-    const settings = this.getSettings();
-    const updated = { ...settings, ...updates };
-    saveToStorage(STORAGE_KEYS.SETTINGS, updated);
-    return updated;
+    const settings = { ...this.getSettings(), ...updates };
+    const user = this.getUser();
+    if (user) {
+      authService.updateProfile({
+        educationLevel: settings.educationLevel,
+        dailyAvailableTime: settings.dailyAvailableTime,
+        studyReminderTime: settings.studyReminderTime,
+        notificationSettings: settings.notifications,
+      });
+    } else {
+      saveToStorage(STORAGE_KEYS.SETTINGS, settings);
+    }
+    return settings;
   },
 
+  /** 删除全部本地业务数据（含演示会话） */
   deleteAllData(): void {
     clearAllStorage();
   },
@@ -63,7 +87,7 @@ export const examTargetService = {
 
   getCurrent(): ExamTarget | null {
     const targets = this.getAll();
-    const currentId = loadFromStorage(STORAGE_KEYS.USER, mockUser).currentExamTargetId;
+    const currentId = userService.getUser()?.currentExamTargetId;
     return targets.find((t) => t.id === currentId) || targets.find((t) => t.isCurrent) || null;
   },
 
@@ -76,7 +100,7 @@ export const examTargetService = {
     const newTarget: ExamTarget = {
       ...data,
       id: `et-${Date.now()}`,
-      userId: userService.getUser().id,
+      userId: userService.getUser()?.id ?? "anonymous",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -146,7 +170,7 @@ export const materialService = {
     const newMaterial: UserMaterial = {
       ...data,
       id: `um-${Date.now()}`,
-      userId: userService.getUser().id,
+      userId: userService.getUser()?.id ?? "anonymous",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
