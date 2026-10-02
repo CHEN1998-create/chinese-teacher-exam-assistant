@@ -28,6 +28,8 @@ export default function PlanPage() {
   const targetId = currentExam?.id ?? null;
   const { currentPlan, dailyPlans, versions } = usePlans(targetId);
   const [todayStr] = useState<string>(() => todayString());
+  // 执行中版本：重排面板以它为基准（currentPlan 可能是待确认的草稿）
+  const activePlan = versions.find((v) => v.status === "active") ?? null;
 
   const readiness = targetId ? planService.getReadiness(targetId) : null;
 
@@ -239,9 +241,9 @@ export default function PlanPage() {
         )}
       </Card>
 
-      {/* 动态重排（仅执行中的计划） */}
-      {currentPlan.status === "active" && targetId && (
-        <ReplanPanel targetId={targetId} activePlan={currentPlan} />
+      {/* 动态重排（存在执行中版本即可见；重排草稿基于执行中版本生成） */}
+      {activePlan && targetId && (
+        <ReplanPanel targetId={targetId} activePlan={activePlan} />
       )}
 
       {/* 版本历史 */}

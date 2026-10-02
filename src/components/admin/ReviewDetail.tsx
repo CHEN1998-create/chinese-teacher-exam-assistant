@@ -291,6 +291,13 @@ export function ReviewDetail({ itemId, onClose }: ReviewDetailProps) {
               />
             )}
 
+            {/* 提交结果反馈：独立于动作选择状态，提交成功后（action 已复位）仍展示 */}
+            {doneAt && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
+                ✅ 审核动作已记录（{doneAt}），用户端证据卡状态已同步更新。
+              </div>
+            )}
+
             {action && (
               <>
                 <Select
@@ -318,11 +325,6 @@ export function ReviewDetail({ itemId, onClose }: ReviewDetailProps) {
                     ⚠️ {error}
                   </div>
                 )}
-                {doneAt && (
-                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-sm text-emerald-700">
-                    ✅ 审核动作已记录（{doneAt}），用户端证据卡状态已同步更新。
-                  </div>
-                )}
                 <div className="flex items-center gap-3">
                   <Button
                     type="button"
@@ -340,13 +342,13 @@ export function ReviewDetail({ itemId, onClose }: ReviewDetailProps) {
         )}
       </Card>
 
-      {/* 错误结论撤回（治理）：未处于待确认状态的结论才可撤回 */}
-      {item.reviewStatus !== "unconfirmed" && (
-        <RetractConclusionPanel
-          evidenceItemId={item.id}
-          canAct={role === "exam_reviewer" || role === "admin"}
-        />
-      )}
+      {/* 错误结论撤回（治理）：始终渲染，由面板内部控制可见性，
+          保证撤回成功后（结论已变为待确认）成功提示不被卸载 */}
+      <RetractConclusionPanel
+        evidenceItemId={item.id}
+        canAct={role === "exam_reviewer" || role === "admin"}
+        retracted={item.reviewStatus === "unconfirmed"}
+      />
 
       {/* 历史版本 / 审核留痕 */}
       <Card>

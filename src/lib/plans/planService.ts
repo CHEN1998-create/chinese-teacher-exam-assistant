@@ -155,14 +155,20 @@ export const planService = {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   },
 
-  /** 当前计划：优先执行中，其次最新草稿 */
+  /** 当前计划：草稿优先（重新生成的新草稿需展示给用户确认），其次执行中，最后取最新 */
   getCurrentPlan(examTargetId?: string): WeeklyPlan | null {
     const userId = currentUserId();
     if (!userId) return null;
     const targetId = examTargetId ?? examTargetService.getCurrent()?.id;
     if (!targetId) return null;
     const plans = this.listPlans(targetId);
-    return plans.find((p) => p.status === "active") ?? plans[0] ?? null;
+    // 草稿优先：若旧 active 计划优先，重新生成的草稿会被挡住且永远无法确认（死锁）
+    return (
+      plans.find((p) => p.status === "draft") ??
+      plans.find((p) => p.status === "active") ??
+      plans[0] ??
+      null
+    );
   },
 
   getDailyPlans(weeklyPlanId: string): DailyPlan[] {
@@ -210,6 +216,11 @@ export const planService = {
     }
 
     const { weekly, daily } = generatePlan(input);
+
+    // 版本号按目标递增：重新生成的新草稿必须拿到新版本号，
+    // 否则版本历史出现多个 v1，且 confirmPlan 的 replan 判定（version>1）永远不触发
+    const existingVersions = loadWeeklyPlans().filter((p) => p.examTargetId === targetId);
+    weekly.version = existingVersions.reduce((max, p) => Math.max(max, p.version), 0) + 1;
 
     // 保存草稿（门禁通过后的失败属于真实异常，需要进异常监控；
     // “数据不足”的拦截在上方 readiness 处抛出，不计失败事件）

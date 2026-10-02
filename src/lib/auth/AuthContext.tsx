@@ -51,7 +51,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return authService.subscribe(() => {
       applySession(authService.getSession());
     });
-  }, [authService]);
+    // authService 为模块级单例（见 ./instance），引用恒定，无需作为依赖
+  }, []);
 
   const login = useCallback(
     async (credentials: AuthCredentials) => {
@@ -60,14 +61,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setStatus("authenticated");
       return next;
     },
-    [authService]
+    []
   );
 
   const logout = useCallback(async () => {
     await authService.logout();
     setSession(null);
     setStatus("unauthenticated");
-  }, [authService]);
+  }, []);
 
   const updateProfile = useCallback(
     (patch: Partial<User>) => {
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setStatus("authenticated");
       return updated.user;
     },
-    [authService]
+    []
   );
 
   const hasRole = useCallback(

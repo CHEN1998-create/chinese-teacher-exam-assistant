@@ -16,9 +16,12 @@ import type { RetractionRecord } from "@/types";
 export function RetractConclusionPanel({
   evidenceItemId,
   canAct,
+  retracted = false,
 }: {
   evidenceItemId: string;
   canAct: boolean;
+  /** 结论当前已是“待确认”（可能由本面板刚刚撤回，也可能本就待确认） */
+  retracted?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -31,6 +34,9 @@ export function RetractConclusionPanel({
   const [busy, setBusy] = useState(false);
 
   if (!canAct) return null;
+  // 已是待确认且非本次撤回（无本地成功记录）时不展示入口；
+  // 若本次撤回刚完成（record 存在），继续展示成功提示，避免结论状态变化导致面板卸载。
+  if (retracted && !record) return null;
 
   const toggle = () => {
     const next = !open;

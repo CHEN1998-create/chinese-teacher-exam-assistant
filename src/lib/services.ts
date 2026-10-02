@@ -256,7 +256,11 @@ export const examTargetService = {
       confirmedCandidateId: all[index].confirmedCandidateId,
     };
     all[index] = buildTarget({ id, userId: all[index].userId, input, existing: all[index] });
-    all[index].status = canGeneratePlan(all[index]) ? "confirmed" : "draft";
+    // buildTarget 会保留 existing 的归档状态；重新启用需按非归档口径重算门禁，
+    // 否则 canGeneratePlan 因 archived 短路恒为 false，目标被错误降为 draft
+    all[index].status = canGeneratePlan({ ...all[index], status: "draft" })
+      ? "confirmed"
+      : "draft";
     this.persist(all);
     return all[index];
   },

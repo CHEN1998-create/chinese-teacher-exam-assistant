@@ -197,7 +197,12 @@ export const evidenceService = {
         payload,
         now: finishedAt,
       });
-      const merged = mergeExtractedItems(loadItems(), newItems);
+      // 合并必须按目标隔离：仅替换“本目标”同字段的旧 AI 结论，
+      // 其他目标/其他用户的证据项原样保留（修复跨目标污染）
+      const allItems = loadItems();
+      const others = allItems.filter((i) => i.examTargetId !== target.id);
+      const scoped = allItems.filter((i) => i.examTargetId === target.id);
+      const merged = [...others, ...mergeExtractedItems(scoped, newItems)];
       saveToStorageStrict(STORAGE_KEYS.EVIDENCE_ITEMS, merged);
 
       const pendingReviewCount = newItems.filter((i) => i.reviewStatus === "pending_review").length;
