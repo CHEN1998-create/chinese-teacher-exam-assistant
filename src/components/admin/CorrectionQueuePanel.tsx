@@ -70,7 +70,7 @@ export function CorrectionQueuePanel() {
           <EmptyState
             icon={<span className="text-4xl">📭</span>}
             title="该队列暂无纠错"
-            description="用户在考情画像页提交的纠错会按状态进入对应队列"
+            description="用户在「这次考试怎么考」页提交的纠错会按状态进入对应队列"
           />
         ) : (
           <ul className="space-y-2">

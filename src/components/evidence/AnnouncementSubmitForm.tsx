@@ -63,7 +63,7 @@ export function AnnouncementSubmitForm({ target, busy, onSubmit }: AnnouncementS
     <Card>
       <CardHeader
         title="提交公告或来源信息"
-        description="提交后自动生成结构化考试画像。AI 提取结果只会标记为“AI已提取/待审核”，官方确认需人工审核"
+        description="提交后自动生成结构化考情。AI 提取结果只会标记为“AI已提取/待审核”，“已从官方公告核对”需人工审核"
       />
 
       {/* 来源类型切换 */}

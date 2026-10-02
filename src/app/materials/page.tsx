@@ -19,8 +19,8 @@ import { MaterialItem, USAGE_STATUS_LABELS } from "@/types";
 
 const TABS = [
   { id: "materials", label: "我的资料" },
-  { id: "baseline", label: "能力基线" },
-  { id: "diagnosis", label: "诊断结果" },
+  { id: "baseline", label: "准备情况" },
+  { id: "diagnosis", label: "资料怎么用" },
   { id: "public", label: "公共资源" },
 ];
 
@@ -35,8 +35,8 @@ export default function MaterialsPage() {
     return (
       <EmptyState
         icon={<span className="text-4xl">🎯</span>}
-        title="请先设置当前主目标"
-        description="资料诊断只针对你的当前主目标：先确定报考地区与考试，再整理资料。"
+        title="先确认你准备的考试"
+        description="资料怎么用只针对你准备的考试：先确定报考地区与考试，再整理资料。"
         actionLabel="去设置目标"
         actionHref="/exam"
       />
@@ -60,9 +60,9 @@ export default function MaterialsPage() {
       {/* 标题与当前目标范围声明 */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-slate-900">资料与能力基线</h2>
+          <h2 className="text-xl font-bold text-slate-900">我的资料与准备情况</h2>
           <p className="mt-1 text-sm text-slate-500">
-            诊断范围仅限当前主目标：
+            分析范围仅限你准备的考试：
             <span className="font-medium text-slate-700">「{target.name}」</span>
             （{target.region}
             {target.educationLevel === "middle" ? "·初中" : target.educationLevel === "primary" ? "·小学" : target.educationLevel === "high" ? "·高中" : ""}
@@ -97,8 +97,8 @@ export default function MaterialsPage() {
             {materials.length === 0 ? (
               <EmptyState
                 icon={<span className="text-4xl">📭</span>}
-                title="当前目标下还没有资料"
-                description="无需上传完整 PDF：填写名称、来源和大致章节目录即可。想先知道最少需要什么，可去「诊断结果」查看最小资料类别。"
+                title="这次考试下还没有资料"
+                description="无需上传完整 PDF：填写名称、来源和大致章节目录即可。想先知道最少需要什么，可去「资料怎么用」查看最小资料类别。"
                 actionLabel="新增我的第一份资料"
                 onAction={openCreate}
               />
@@ -107,10 +107,10 @@ export default function MaterialsPage() {
                 <div className="flex items-center justify-between px-1">
                   <p className="text-sm text-slate-500">
                     共 {materials.length} 份私有资料
-                    {snapshot && <Badge variant="muted" className="ml-2">已诊断 {snapshot.materialDiagnoses.length} 份</Badge>}
+                    {snapshot && <Badge variant="muted" className="ml-2">已分析 {snapshot.materialDiagnoses.length} 份</Badge>}
                   </p>
                   <Button variant="outline" size="sm" onClick={() => setActiveTab("diagnosis")}>
-                    查看诊断结果
+                    查看资料怎么用
                   </Button>
                 </div>
                 <div className="space-y-3">
@@ -133,7 +133,7 @@ export default function MaterialsPage() {
           {baseline && (
             <>
               <p className="mb-3 text-xs text-slate-500">
-                能力基线用于诊断取舍（如时间不足时收缩并行资料、薄弱模块优先保留），只保存在本地，不与公共资源混用。
+                准备情况用于判断资料怎么用（如时间不足时收缩并行资料、薄弱模块优先保留），只保存在本地，不与公共资源混用。
               </p>
               <AbilityBaselineForm key={target.id} baseline={baseline} />
             </>

@@ -34,7 +34,7 @@ export function MyCorrections({
       />
       {corrections.length === 0 ? (
         <p className="text-sm text-slate-500">
-          还没有提交过纠错。发现考情结论有误时，可在画像字段上点击「提交纠错」。
+          还没有提交过纠错。发现考情结论有误时，可在「这次考试怎么考」的字段上点击「提交纠错」。
         </p>
       ) : (
         <ul className="space-y-3">

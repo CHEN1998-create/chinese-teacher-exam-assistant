@@ -325,20 +325,20 @@ export const DATA_CATEGORY_META: DataCategoryMeta[] = [
   {
     key: "evidence_submissions",
     label: "公告提取记录与原文",
-    purpose: "从你提交的公告链接或粘贴文本生成考情画像",
+    purpose: "从你提交的公告链接或粘贴文本生成考情信息",
     retention: "保留到你删除账号；原文仅用于本次提取",
     handling: "delete",
   },
   {
     key: "materials",
     label: "私有资料与学习进度",
-    purpose: "资料诊断、任务安排与薄弱项分析，不会自动进入公共资源库",
+    purpose: "资料怎么用分析、任务安排与薄弱项分析，不会自动进入公共资源库",
     retention: "仅你本人可见，保留到你删除账号",
     handling: "delete",
   },
   {
     key: "baseline",
-    label: "能力基线与诊断结果",
+    label: "准备情况与资料分析结果",
     purpose: "安排任务量、识别薄弱模块",
     retention: "仅你本人可见，保留到你删除账号",
     handling: "delete",
@@ -346,7 +346,7 @@ export const DATA_CATEGORY_META: DataCategoryMeta[] = [
   {
     key: "plans",
     label: "周计划、任务、执行反馈与周复盘",
-    purpose: "生成每日任务、动态重排与学习复盘",
+    purpose: "生成每日任务、调整后面的安排与学习复盘",
     retention: "仅你本人可见，保留到你删除账号",
     handling: "delete",
   },

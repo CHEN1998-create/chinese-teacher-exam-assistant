@@ -23,7 +23,7 @@ interface EvidenceProfileProps {
   onCorrect: (item: EvidenceItem) => void;
 }
 
-/** 考情画像：11 个结构化字段，逐条展示结论值/证据标签/原始来源/适用范围/更新时间/审核状态 */
+/** 这次考试怎么考：11 个结构化字段，逐条展示结论值/证据标签/原始来源/适用范围/更新时间/审核状态 */
 export function EvidenceProfile({ rows, counts, targetId, onCorrect }: EvidenceProfileProps) {
   // 查看证据卡（同一会话只计一次），用于“证据卡查看率”
   useEffect(() => {
@@ -44,7 +44,7 @@ export function EvidenceProfile({ rows, counts, targetId, onCorrect }: EvidenceP
       <Card className="bg-slate-50/60">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
           <SummaryItem
-            label={isDemoMode ? "官方确认·演示" : "官方确认"}
+            label={isDemoMode ? `${REVIEW_STATUS_LABELS.official}·演示` : REVIEW_STATUS_LABELS.official}
             count={counts.official}
             tone="text-emerald-700"
           />
@@ -60,7 +60,7 @@ export function EvidenceProfile({ rows, counts, targetId, onCorrect }: EvidenceP
         {pendingHighImpact > 0 && (
           <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
             ⚠️ 有 {pendingHighImpact} 个高影响字段（时间/科目/分值/资格条件）处于“待审核”，
-            未经人工审核不会标记为“官方确认”，请勿据此做最终决定。
+            未经人工审核不会标记为“已从官方公告核对”，请勿据此做最终决定。
           </p>
         )}
         {hasConflict && (
@@ -74,7 +74,7 @@ export function EvidenceProfile({ rows, counts, targetId, onCorrect }: EvidenceP
         <EmptyState
           icon={<span className="text-4xl">📭</span>}
           title="还没有考情证据"
-          description="在“提交公告”中粘贴公告链接或正文，提取后这里会生成带来源与审核状态的结构化画像"
+          description="在“提交公告”中粘贴公告链接或正文，提取后这里会生成带来源与审核状态的结构化考情"
         />
       )}
 

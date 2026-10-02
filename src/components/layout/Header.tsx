@@ -8,12 +8,12 @@ import { useCurrentUser } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/config";
 
 const pageTitles: Record<string, string> = {
-  "/onboarding": "目标澄清",
+  "/onboarding": "快速问答",
   "/exam": "我的考试",
-  "/materials": "资料与基线",
-  "/plan": "本周计划",
-  "/today": "今天与复盘",
-  "/settings": "设置与数据",
+  "/materials": "我的资料",
+  "/plan": "接下来 7 天",
+  "/today": "今天",
+  "/settings": "设置",
 };
 
 export function Header() {

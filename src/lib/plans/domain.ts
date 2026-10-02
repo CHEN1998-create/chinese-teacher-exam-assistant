@@ -84,7 +84,7 @@ export function checkPlanReadiness(input: PlanGenerationInput): PlanReadiness {
 
   // 1. 目标
   if (input.target.status === "archived" || input.target.status !== "confirmed") {
-    missing.push("当前考试目标尚未确认，请先在「我的考试」完成目标澄清");
+    missing.push("你准备的考试尚未确认，请先在「我的考试」补充基本信息");
   }
 
   // 2. 学习内容来源
@@ -101,7 +101,7 @@ export function checkPlanReadiness(input: PlanGenerationInput): PlanReadiness {
 
   // 3. 可用时间
   if (input.dailyAvailableMinutes <= 0) {
-    missing.push("每日可用时间为 0，请在「资料与资源」能力基线中填写可用学习时间");
+    missing.push("每日可用时间为 0，请在「我的资料」的准备情况中填写可用学习时间");
   }
 
   // 软警告：考情
@@ -111,7 +111,7 @@ export function checkPlanReadiness(input: PlanGenerationInput): PlanReadiness {
   );
   if (!subjectsOfficial) {
     warnings.push(
-      "考试科目尚未官方确认：本周计划默认只安排语文学科模块，教综模块待科目确认后再排入"
+      "考试科目尚未从官方公告核对：本周计划默认只安排语文学科模块，教综模块待科目核对后再排入"
     );
   }
   if (!readiness.complete) {
@@ -119,7 +119,7 @@ export function checkPlanReadiness(input: PlanGenerationInput): PlanReadiness {
       .map((f) => HIGH_IMPACT_FIELDS_LABELS[f] ?? f)
       .join("、");
     warnings.push(
-      `以下高影响考情尚未官方确认（${pendingLabels}）：计划中的时间分配可能需要在确认后调整`
+      `以下高影响考情尚未从官方公告核对（${pendingLabels}）：计划中的时间分配可能需要在核对后调整`
     );
   }
 

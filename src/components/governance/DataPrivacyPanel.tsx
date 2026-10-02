@@ -74,11 +74,11 @@ export function DataPrivacyPanel() {
       <Card>
         <CardHeader
           title="隐私与数据用途"
-          description="我们只收集生成考情画像、学习计划与资源匹配所必需的数据"
+          description="我们只收集生成考情信息、学习计划与资源匹配所必需的数据"
         />
         <div className="space-y-3 text-sm leading-relaxed text-slate-600">
           <p>
-            你的目标考试、公告原文、私有资料、能力基线、计划与执行反馈仅用于为你本人提供备考服务，
+            你的目标考试、公告原文、私有资料、准备情况、计划与执行反馈仅用于为你本人提供备考服务，
             保存在本设备浏览器中，不会自动公开给其他用户。
           </p>
           <p>

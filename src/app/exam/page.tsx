@@ -34,7 +34,7 @@ import {
 } from "@/types";
 
 const tabs = [
-  { id: "profile", label: "考情画像" },
+  { id: "profile", label: "这次考试怎么考" },
   { id: "submit", label: "提交公告" },
   { id: "pending", label: "待确认与纠错" },
 ];
@@ -133,13 +133,13 @@ export default function ExamPage() {
         )}
         <EmptyState
           icon={<span className="text-5xl">🧭</span>}
-          title={hasDrafts ? "还没有当前主目标" : "先明确你正在准备哪一次考试"}
+          title={hasDrafts ? "还没有选定的考试" : "先明确你正在准备哪一次考试"}
           description={
             hasDrafts
-              ? "从历史目标中选择一个设为当前，或重新进行目标澄清"
-              : "信息不足时只会生成澄清任务，不会直接生成看似精确的学习计划"
+              ? "从历史目标中选择一个设为当前，或重新回答三个问题"
+              : "信息不足时只会生成信息查找任务，不会直接生成看似精确的学习计划"
           }
-          actionLabel="开始目标澄清"
+          actionLabel="开始快速问答"
           actionHref="/onboarding"
         />
         {renderEditModal()}
@@ -249,7 +249,7 @@ export default function ExamPage() {
           </Button>
           {isReady && (
             <Button size="sm" onClick={() => setActiveTab("profile")}>
-              进入考情核验
+              查看这次考试怎么考
             </Button>
           )}
         </div>
@@ -299,8 +299,8 @@ export default function ExamPage() {
                 <p className="text-xs text-slate-500 leading-relaxed">
                   说明：当前为公开演示环境，文本提取使用浏览器本地规则识别；链接来源不会真实访问网页，
                   结果按目标信息模拟生成并标注“模拟提取”。提取结论只会是“AI已提取”或“待审核”，
-                  “官方确认”在正式产品中仅来自工作人员的人工审核；公开演示环境未开放管理后台（/admin），
-                  页面中的“官方确认·演示”均为内置示例数据。
+                  “已从官方公告核对”在正式产品中仅来自工作人员的人工审核；公开演示环境未开放管理后台（/admin），
+                  页面中的“已从官方公告核对·演示”均为内置示例数据。
                 </p>
               </Card>
             </div>

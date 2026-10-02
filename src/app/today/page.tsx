@@ -1,42 +1,74 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Card, CardHeader } from "@/components/ui/Card";
+import Link from "next/link";
+import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { examTargetService, feedbackService, nextStepHint } from "@/lib/services";
+import {
+  examTargetService,
+  feedbackService,
+  materialService,
+  resourceService,
+  replanService,
+} from "@/lib/services";
 import { usePlans } from "@/lib/plans/usePlans";
 import { useTodayString } from "@/lib/plans/useToday";
 import { canGeneratePlan } from "@/lib/targets/domain";
-import { CompletionStatus } from "@/types";
-import { TodayTaskItem } from "@/components/plans/TodayTaskItem";
+import { PlanTask } from "@/types";
+import { QuickFeedbackPanel } from "@/components/plans/QuickFeedbackPanel";
+import { WeeklyReviewCard } from "@/components/plans/WeeklyReviewCard";
 import { ChangeNoticeBanner } from "@/components/governance/ChangeNoticeBanner";
 import { formatDateWithWeekday, formatTime, getGreeting } from "@/lib/utils";
 
+function addDays(dateStr: string, days: number): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate()
+  ).padStart(2, "0")}`;
+}
+
+/** 任务使用的资料/资源名称（展示用） */
+function sourceNameOf(task: PlanTask): string | null {
+  if (task.materialId) {
+    return materialService.getById(task.materialId)?.name ?? null;
+  }
+  if (task.resourceId) {
+    return resourceService.getById(task.resourceId)?.title ?? null;
+  }
+  return null;
+}
+
+/**
+ * 今天（v5.1）：有计划用户的默认首页。
+ * 首屏只突出第一项未完成任务；三个快速反馈操作；
+ * 反馈成功后自动展示下一项；全部完成后显示完成结果与明天预告；
+ * 7 天安排结束后显示本周回顾与下一步。
+ */
 export default function TodayPage() {
   const currentExam = examTargetService.getCurrent();
   const targetId = currentExam?.id ?? null;
   const { currentPlan, dailyPlans } = usePlans(targetId);
   const todayStr = useTodayString();
-
-  const [hint, setHint] = useState<{ status: CompletionStatus; nonce: number } | null>(null);
+  const [onlyFirst, setOnlyFirst] = useState(false);
 
   const todayPlan = useMemo(
     () => dailyPlans.find((d) => d.date === todayStr) ?? null,
     [dailyPlans, todayStr]
   );
 
-  // 反馈在渲染时直接读取：usePlans 已订阅 feedbackService，提交/修改会触发重渲染
+  // 反馈在渲染时直接读取：usePlans 已订阅 feedbackService，提交后自动重渲染
   const feedbacks = todayPlan ? feedbackService.listByDailyPlan(todayPlan.id) : [];
-
   const feedbackByTask = new Map(feedbacks.map((f) => [f.taskId, f]));
 
+  // ========== 守卫 ==========
   if (!currentExam) {
     return (
       <EmptyState
-        title="请先设置考试目标"
-        description="在查看今日任务之前，需要先明确你的考试目标"
-        actionLabel="开始目标澄清"
+        title="先说说你想考哪里"
+        description="回答三个问题，就能看到今天最该做的一件事"
+        actionLabel="开始快速问答"
         actionHref="/onboarding"
       />
     );
@@ -46,156 +78,237 @@ export default function TodayPage() {
     return (
       <EmptyState
         icon={<span className="text-5xl">🧭</span>}
-        title="请先完成目标澄清"
-        description="目标明确前不会安排每日精确任务。"
-        actionLabel="去完成目标澄清"
+        title="先确认这次考试的基本信息"
+        description="信息确认前不会安排每日任务，避免按错误的考情准备。"
+        actionLabel="去确认"
         actionHref="/exam"
       />
     );
   }
 
-  // 计划未确认（没有计划或只有草稿）
   if (!currentPlan || currentPlan.status !== "active") {
     return (
       <EmptyState
         icon={<span className="text-5xl">📋</span>}
-        title={currentPlan ? "计划尚未确认" : "还没有学习计划"}
+        title={currentPlan ? "安排还没有确认" : "还没有接下来 7 天的安排"}
         description={
           currentPlan
-            ? "你有一份草稿计划，请先在「本周计划」页确认后，今日任务才会显示。"
-            : "请先在「本周计划」页生成并确认计划，系统会自动安排今日任务。"
+            ? "你有一份草稿，确认后今天就能按它执行。"
+            : "生成并确认后，每天打开这里就知道先做什么。"
         }
-        actionLabel="去生成本周计划"
+        actionLabel="去看看接下来 7 天"
         actionHref="/plan"
       />
     );
   }
 
-  // 今天没有任务（不在计划周期内，或当日未排任务）
+  // ========== 7 天安排已结束：本周回顾 + 下一步 ==========
+  if (todayStr > currentPlan.endDate) {
+    const review = replanService.getLatestReview(currentExam.id);
+    return (
+      <div className="space-y-6">
+        <ChangeNoticeBanner types={["plan_reconfirm", "exam_change"]} />
+        <div>
+          <h2 className="text-xl font-bold text-slate-900">这 7 天的安排结束了</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            {formatDateWithWeekday(currentPlan.startDate)} — {formatDateWithWeekday(currentPlan.endDate)}
+          </p>
+        </div>
+        {review ? (
+          <WeeklyReviewCard review={review} />
+        ) : (
+          <Card>
+            <p className="text-sm text-slate-600">
+              本周回顾还没有生成，可以在「接下来 7 天」里生成回顾，看看这一周完成得怎么样。
+            </p>
+          </Card>
+        )}
+        <Link
+          href="/plan"
+          className="inline-flex h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+        >
+          安排下一周
+        </Link>
+      </div>
+    );
+  }
+
+  // ========== 今天没有任务 ==========
   if (!todayPlan || todayPlan.tasks.length === 0) {
     return (
       <EmptyState
         icon={<span className="text-5xl">🌤️</span>}
-        title="今日暂无任务"
-        description={`当前执行中计划周期为 ${currentPlan.startDate} 至 ${currentPlan.endDate}，今天没有安排任务。`}
-        actionLabel="查看本周计划"
+        title="今天没有安排任务"
+        description={`当前安排从 ${currentPlan.startDate} 开始，今天可以休息或自由复习。`}
+        actionLabel="查看接下来 7 天"
         actionHref="/plan"
       />
     );
   }
 
   const sortedTasks = [...todayPlan.tasks].sort((a, b) => a.order - b.order);
-  const coreTasks = sortedTasks.filter((t) => t.isCore);
-  const extraTasks = sortedTasks.filter((t) => !t.isCore);
-  const pendingCount = sortedTasks.filter((t) => !feedbackByTask.has(t.id)).length;
+  const pendingTasks = sortedTasks.filter((t) => !feedbackByTask.has(t.id));
+  const doneCount = sortedTasks.length - pendingTasks.length;
   const totalActual = feedbacks.reduce((sum, f) => sum + (f.actualTime ?? 0), 0);
+
+  // ========== 全部完成：完成结果 + 明天预告 ==========
+  if (pendingTasks.length === 0) {
+    const tomorrowStr = addDays(todayStr, 1);
+    const tomorrowPlan = dailyPlans.find((d) => d.date === tomorrowStr) ?? null;
+    const isLastDay = todayStr === currentPlan.endDate;
+    return (
+      <div className="space-y-6">
+        <ChangeNoticeBanner types={["plan_reconfirm", "exam_change"]} />
+        <Card className="text-center py-8">
+          <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">🎉</span>
+          </div>
+          <h2 className="text-xl font-bold text-slate-900">今天的任务都完成了</h2>
+          <p className="text-sm text-slate-500 mt-2">
+            共 {sortedTasks.length} 项
+            {totalActual > 0 && ` · 实际用时约 ${formatTime(totalActual)}`}
+          </p>
+        </Card>
+
+        {!isLastDay && tomorrowPlan && tomorrowPlan.tasks.length > 0 && (
+          <Card>
+            <p className="text-sm font-medium text-slate-900 mb-3">
+              明天预告（{formatDateWithWeekday(tomorrowStr)}）
+            </p>
+            <ul className="space-y-2">
+              {[...tomorrowPlan.tasks]
+                .sort((a, b) => a.order - b.order)
+                .map((t) => (
+                  <li key={t.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-slate-700 truncate">{t.title}</span>
+                    <span className="text-xs text-slate-400 shrink-0">
+                      约 {formatTime(t.estimatedTime)}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          </Card>
+        )}
+
+        {isLastDay && (
+          <Card>
+            <p className="text-sm text-slate-600">
+              这是本次安排的最后一天。明天起可以查看本周回顾，并安排下一周。
+            </p>
+          </Card>
+        )}
+
+        <Link
+          href="/plan"
+          className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+        >
+          查看接下来 7 天
+        </Link>
+      </div>
+    );
+  }
+
+  // ========== 正常执行：突出第一项任务 ==========
+  const visiblePending = onlyFirst ? pendingTasks.slice(0, 1) : pendingTasks;
+  const currentTask = visiblePending[0];
+  const currentSource = sourceNameOf(currentTask);
 
   return (
     <div className="space-y-6">
+      {/* 重要考试信息变化优先提示 */}
       <ChangeNoticeBanner types={["plan_reconfirm", "exam_change"]} />
-      {/* 概览 */}
+
       <div>
         <h2 className="text-xl font-bold text-slate-900">
-          {getGreeting()}，今天有 {pendingCount} 项任务待反馈
+          {getGreeting()}，今天先做这一项
         </h2>
         <p className="text-sm text-slate-500 mt-1">
-          {formatDateWithWeekday(todayPlan.date)} · 计划用时{" "}
-          {formatTime(todayPlan.totalEstimatedTime)} / 可用{" "}
-          {formatTime(todayPlan.availableMinutes)}
-          {totalActual > 0 && ` · 已记录实际用时 ${formatTime(totalActual)}`}
+          {formatDateWithWeekday(todayStr)} · 已完成 {doneCount}/{sortedTasks.length} 项
+          {totalActual > 0 && ` · 已用时 ${formatTime(totalActual)}`}
         </p>
       </div>
 
-      {/* 提交后的下一步提示（正式重排由下一模块负责） */}
-      {hint && (
-        <div
-          key={hint.nonce}
-          className="p-3.5 bg-emerald-50 text-emerald-800 rounded-xl text-sm font-medium flex items-start gap-2"
-        >
-          <span className="shrink-0">✅</span>
-          <span>{nextStepHint(hint.status)}</span>
-        </div>
-      )}
-
-      {todayPlan.isMinimumViable && (
-        <div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-sm">
-          今天可用时间较少，只安排了最低可完成任务，优先完成它即可。
-        </div>
-      )}
-
-      {/* 今日核心任务（1—3 项） */}
-      <Card>
-        <CardHeader
-          title="今日核心任务"
-          description="这些是今天最重要的学习任务，完成后请花一分钟提交反馈"
-          action={
-            pendingCount > 0 ? (
-              <Badge variant="primary">{pendingCount} 项待反馈</Badge>
-            ) : (
-              <Badge variant="success">今日已全部反馈</Badge>
-            )
-          }
-        />
-        <div className="space-y-4">
-          {coreTasks.map((task, idx) => (
-            <TodayTaskItem
-              key={task.id}
-              task={task}
-              feedback={feedbackByTask.get(task.id) ?? null}
-              isMinimumViableTask={todayPlan.isMinimumViable && idx === 0}
-              onSubmitted={(status) => setHint({ status, nonce: Date.now() })}
-            />
-          ))}
-          {coreTasks.length === 0 && (
-            <p className="text-sm text-slate-500">今天没有核心任务。</p>
+      {/* 当前任务：做什么 / 用什么 / 多久 / 怎样算完成 */}
+      <Card className="border-blue-200 bg-blue-50/40">
+        {todayPlan.isMinimumViable && (
+          <Badge variant="warning">今天时间少，先完成这一项就好</Badge>
+        )}
+        <h3 className="text-lg font-bold text-slate-900 mt-2">{currentTask.title}</h3>
+        <dl className="mt-3 space-y-2 text-sm">
+          {currentSource && (
+            <div className="flex gap-2">
+              <dt className="shrink-0 text-slate-400">用什么</dt>
+              <dd className="text-slate-700">{currentSource}</dd>
+            </div>
           )}
+          <div className="flex gap-2">
+            <dt className="shrink-0 text-slate-400">需要多久</dt>
+            <dd className="text-slate-700">约 {formatTime(currentTask.estimatedTime)}</dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="shrink-0 text-slate-400">怎样算完成</dt>
+            <dd className="text-slate-700">{currentTask.completionCriteria}</dd>
+          </div>
+        </dl>
+
+        <div className="mt-5">
+          <p className="text-xs text-slate-500 mb-2">做完后来点一下：</p>
+          <QuickFeedbackPanel
+            key={currentTask.id}
+            task={currentTask}
+            onSubmitted={() => {
+              /* usePlans 订阅自动刷新，下一项任务自动出现 */
+            }}
+          />
         </div>
       </Card>
 
-      {/* 补充任务 */}
-      {extraTasks.length > 0 && (
+      {/* 时间不够时的简化安排 */}
+      {pendingTasks.length > 1 && !onlyFirst && (
+        <button
+          type="button"
+          onClick={() => setOnlyFirst(true)}
+          className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
+        >
+          今天时间不够？只看最关键的一项 →
+        </button>
+      )}
+      {onlyFirst && (
+        <button
+          type="button"
+          onClick={() => setOnlyFirst(false)}
+          className="text-sm text-slate-500 hover:text-blue-600 transition-colors"
+        >
+          时间够了？查看今天全部 {pendingTasks.length} 项待办 →
+        </button>
+      )}
+
+      {/* 其余待办（简化列表） */}
+      {visiblePending.length > 1 && (
         <Card>
-          <CardHeader
-            title="补充任务"
-            description="有时间可以尝试，不影响核心进度；完成后同样可以提交反馈"
-          />
-          <div className="space-y-4">
-            {extraTasks.map((task) => (
-              <TodayTaskItem
-                key={task.id}
-                task={task}
-                feedback={feedbackByTask.get(task.id) ?? null}
-                onSubmitted={(status) => setHint({ status, nonce: Date.now() })}
-              />
+          <p className="text-sm font-medium text-slate-900 mb-3">接下来的任务</p>
+          <ul className="space-y-2">
+            {visiblePending.slice(1).map((t) => (
+              <li key={t.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-slate-700 truncate">{t.title}</span>
+                <span className="text-xs text-slate-400 shrink-0">
+                  约 {formatTime(t.estimatedTime)}
+                </span>
+              </li>
             ))}
-          </div>
+          </ul>
+          <p className="text-xs text-slate-400 mt-3">
+            完成当前这项后会自动切换；未完成的任务不会全部堆到明天。
+          </p>
         </Card>
       )}
 
-      {/* 调整说明 */}
       {todayPlan.adjustmentNote && (
         <Card className="bg-amber-50/50">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center shrink-0">
-              <svg
-                className="w-4 h-4 text-amber-600"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h3 className="font-medium text-amber-800">今日计划调整说明</h3>
-              <p className="text-sm text-amber-700 mt-1">{todayPlan.adjustmentNote}</p>
-            </div>
-          </div>
+          <p className="text-sm text-amber-800">
+            <span className="font-medium">安排有调整：</span>
+            {todayPlan.adjustmentNote}
+          </p>
         </Card>
       )}
     </div>

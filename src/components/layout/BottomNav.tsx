@@ -4,12 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
+// v5.1：主导航只保留三个入口
 const navItems = [
-  { href: "/exam", label: "考试", icon: "📋" },
-  { href: "/materials", label: "资料", icon: "📚" },
-  { href: "/plan", label: "计划", icon: "📅" },
   { href: "/today", label: "今天", icon: "✅" },
-  { href: "/settings", label: "设置", icon: "⚙️" },
+  { href: "/plan", label: "7 天", icon: "📅" },
+  { href: "/exam", label: "考试", icon: "📋" },
 ];
 
 export function BottomNav() {

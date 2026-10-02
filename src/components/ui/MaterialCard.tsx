@@ -30,7 +30,7 @@ export function MaterialCard({ material }: MaterialCardProps) {
       {material.diagnosis && (
         <div className="mt-3 p-3 bg-slate-50 rounded-lg">
           <p className="text-sm text-slate-700">
-            <span className="font-medium">诊断：</span>
+            <span className="font-medium">建议：</span>
             {material.diagnosis.reason}
           </p>
           {material.diagnosis.missingModules.length > 0 && (

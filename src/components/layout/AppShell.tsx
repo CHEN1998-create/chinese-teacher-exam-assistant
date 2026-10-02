@@ -32,13 +32,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     );
   }
 
-  // 目标澄清页：无导航外壳，但仍需登录
-  if (pathname === "/onboarding") {
+  // 价值首页 / 快速问答 / 首次结果页：无导航外壳，未登录也可访问（v5.1 先体验后登录）
+  if (pathname === "/" || pathname === "/onboarding" || pathname === "/preview") {
     return (
       <div className="min-h-screen bg-slate-50">
         <DemoBanner />
         <div className={DEMO_BANNER_SPACER_CLASS} />
-        <RequireAuth>{children}</RequireAuth>
+        {children}
       </div>
     );
   }

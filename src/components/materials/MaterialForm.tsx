@@ -257,7 +257,7 @@ export function MaterialForm({ targetId, initial, onClose }: MaterialFormProps) 
         {form.sourceType === "unknown_scan" && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-2.5 text-xs text-red-700">
             来源不明的完整扫描件存在版权风险：仅可作个人临时参考，<strong>不能进入公共资源库</strong>，
-            诊断也会建议本周暂不使用。
+            分析也会建议本周暂不使用。
           </div>
         )}
 

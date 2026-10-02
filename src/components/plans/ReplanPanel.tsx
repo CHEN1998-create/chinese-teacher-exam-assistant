@@ -156,21 +156,21 @@ export function ReplanPanel({ targetId, activePlan }: ReplanPanelProps) {
     return (
       <Card>
         <CardHeader
-          title={`重排草稿 v${draft.version}（基于 v${activePlan.version}）`}
+          title={`调整草稿 v${draft.version}（基于 v${activePlan.version}）`}
           description={draft.generationReason}
           action={<Badge variant="warning">待确认</Badge>}
         />
         {error && <div className="mb-3 p-2.5 bg-rose-50 text-rose-700 rounded-lg text-sm">{error}</div>}
         <div className="space-y-2 mt-3">
           {draftAdjustments.length === 0 ? (
-            <p className="text-sm text-slate-500">本次重排没有需要调整的任务。</p>
+            <p className="text-sm text-slate-500">本次调整没有需要调整的任务。</p>
           ) : (
             draftAdjustments.map((a) => <AdjustmentRow key={a.id} adjustment={a} />)
           )}
         </div>
         <div className="flex flex-wrap gap-2 mt-4">
           <Button variant="primary" onClick={handleConfirm} disabled={busy}>
-            确认重排，开始执行
+            确认调整，开始执行
           </Button>
           <Button variant="outline" onClick={handleDiscard} disabled={busy}>
             放弃草稿
@@ -187,7 +187,7 @@ export function ReplanPanel({ targetId, activePlan }: ReplanPanelProps) {
   return (
     <Card>
       <CardHeader
-        title="调整剩余计划（重排）"
+        title="调整后面的安排"
         description="根据真实执行结果调整剩余任务：在保留、缩减、顺延、替换、放弃之间作出可解释选择"
       />
       {error && <div className="mb-3 p-2.5 bg-rose-50 text-rose-700 rounded-lg text-sm">{error}</div>}
@@ -195,7 +195,7 @@ export function ReplanPanel({ targetId, activePlan }: ReplanPanelProps) {
       {!open && (
         <div className="flex flex-wrap gap-2 mt-2">
           <Button variant="outline" onClick={handleAnalyze}>
-            检测重排信号
+            检测调整信号
           </Button>
           {activeAdjustments.length > 0 && (
             <Button variant="ghost" onClick={() => setShowActiveAdjustments(!showActiveAdjustments)}>
@@ -213,7 +213,7 @@ export function ReplanPanel({ targetId, activePlan }: ReplanPanelProps) {
           {triggers.length === 0 ? (
             <p className="text-sm text-slate-500">
               未检测到自动触发信号（时间变化、未完成任务、重复错因、资料不适合、考情变化）；
-              你仍可以主动生成重排草稿。
+              你仍可以主动生成调整草稿。
             </p>
           ) : (
             triggers.map((t, i) => (
@@ -232,14 +232,14 @@ export function ReplanPanel({ targetId, activePlan }: ReplanPanelProps) {
           )}
           <div className="flex flex-wrap gap-2 pt-1">
             <Button variant="primary" onClick={handleCreateDraft} disabled={busy}>
-              {busy ? "生成中…" : "生成重排草稿（新版本）"}
+              {busy ? "生成中…" : "生成调整草稿（新版本）"}
             </Button>
             <Button variant="ghost" onClick={() => setOpen(false)}>
               取消
             </Button>
           </div>
           <p className="text-xs text-slate-400">
-            重排规则：剩余任务总时长不超过可用时间；未完成欠账不会全部堆到第二天；时间不足时优先保留关键模块与最低任务；资料不适合优先替换；重复错因降低难度；生成结果先作为草稿，确认后生效。
+            调整规则：剩余任务总时长不超过可用时间；未完成欠账不会全部堆到第二天；时间不足时优先保留关键模块与最低任务；资料不适合优先替换；重复错因降低难度；生成结果先作为草稿，确认后生效。
           </p>
         </div>
       )}

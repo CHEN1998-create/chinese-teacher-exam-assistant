@@ -56,7 +56,7 @@ export function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
   return (
     <Badge variant={variantMap[status]}>
       {isDemoMode && status === "official"
-        ? "官方确认·演示"
+        ? `${REVIEW_STATUS_LABELS.official}·演示`
         : REVIEW_STATUS_LABELS[status]}
     </Badge>
   );

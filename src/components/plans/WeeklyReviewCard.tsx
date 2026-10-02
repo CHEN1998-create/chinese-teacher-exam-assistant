@@ -33,7 +33,7 @@ export function WeeklyReviewCard({ review }: { review: WeeklyReview }) {
         </div>
         <div className="p-3 bg-slate-50 rounded-lg text-center">
           <p className="text-2xl font-bold text-slate-700">{review.adjustmentCount}</p>
-          <p className="text-xs text-slate-600">重排调整次数</p>
+          <p className="text-xs text-slate-600">调整次数</p>
         </div>
       </div>
 
@@ -111,7 +111,7 @@ export function WeeklyReviewCard({ review }: { review: WeeklyReview }) {
         <h4 className="text-sm font-medium text-slate-700 mb-2">
           哪些调整有效
           {review.adjustmentCount === 0 && (
-            <span className="text-slate-400 font-normal">（本周没有执行重排调整）</span>
+            <span className="text-slate-400 font-normal">（本周没有调整过安排）</span>
           )}
         </h4>
         {review.adjustmentOutcomes.length > 0 && (

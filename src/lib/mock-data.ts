@@ -921,4 +921,6 @@ export const STORAGE_KEYS = {
   // —— 数据指标与异常监控：统一分析事件流（live 真实操作 + seed 演示种子） ——
   ANALYTICS_EVENTS: "kb_analytics_events",
   SETTINGS: "kb_settings",
+  // —— v5.1 首次体验：未登录访客的三步问答进度与结果（仅本机浏览器，7 天过期） ——
+  GUEST_SESSION: "kb_guest_session",
 } as const;

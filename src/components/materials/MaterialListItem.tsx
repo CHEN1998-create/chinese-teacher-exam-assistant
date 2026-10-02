@@ -160,7 +160,7 @@ export function MaterialListItem({ material, diagnosis, onEdit }: MaterialListIt
           setConfirmOpen(false);
         }}
         title="删除这份资料？"
-        description={`将删除《${material.name}》及其章节记录，诊断结果会在下次重新计算时更新。`}
+        description={`将删除《${material.name}》及其章节记录，资料分析结果会在下次重新计算时更新。`}
         confirmLabel="删除"
         variant="danger"
       />

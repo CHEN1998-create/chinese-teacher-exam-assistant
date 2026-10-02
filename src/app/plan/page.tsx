@@ -54,7 +54,7 @@ export default function PlanPage() {
       <EmptyState
         title="请先设置考试目标"
         description="在生成计划之前，需要先明确你的考试目标"
-        actionLabel="开始目标澄清"
+        actionLabel="开始快速问答"
         actionHref="/onboarding"
       />
     );
@@ -64,9 +64,9 @@ export default function PlanPage() {
     return (
       <EmptyState
         icon={<span className="text-5xl">🧭</span>}
-        title="请先完成目标澄清"
-        description={`当前目标「${currentExam.name}」信息还不充分，目标明确前不会生成精确计划。`}
-        actionLabel="去完成目标澄清"
+        title="先确认这次考试的基本信息"
+        description={`你准备的考试「${currentExam.name}」信息还不充分，确认前不会生成看似精确的计划。`}
+        actionLabel="去确认"
         actionHref="/exam"
       />
     );
@@ -152,8 +152,8 @@ export default function PlanPage() {
             description={`目标：${currentExam.name}`}
           />
           <p className="text-sm text-slate-600 mt-2">
-            系统将根据你的目标、已审核考情、资料诊断、已加入计划的资源和可用时间，
-            自动生成一份可执行的 7 天计划。生成后为草稿状态，确认后开始执行。
+            系统将根据你准备的考试、已核对的考情、你的资料使用情况、已加入计划的资源和可用时间，
+            自动生成一份可执行的 7 天安排。生成后为草稿状态，确认后开始执行。
           </p>
           {readiness?.warnings && readiness.warnings.length > 0 && (
             <div className="mt-3 p-3 bg-amber-50 rounded-lg text-sm text-amber-800">
@@ -241,7 +241,7 @@ export default function PlanPage() {
         )}
       </Card>
 
-      {/* 动态重排（存在执行中版本即可见；重排草稿基于执行中版本生成） */}
+      {/* 调整后面的安排（存在执行中版本即可见；调整草稿基于执行中版本生成） */}
       {activePlan && targetId && (
         <ReplanPanel targetId={targetId} activePlan={activePlan} />
       )}
@@ -298,7 +298,7 @@ export default function PlanPage() {
           <p>• 每天至少保留 1 项最低可完成任务</p>
           <p>• 关键考试模块与薄弱模块优先安排</p>
           <p>• 未通过适用性判断的资料不会作为主要任务来源</p>
-          <p>• 执行反馈会驱动重排建议：重排草稿确认后生成新版本，历史版本保留可对比</p>
+          <p>• 执行反馈会驱动调整建议：调整草稿确认后生成新版本，历史版本保留可对比</p>
           <p>• 未完成欠账不会全部堆到第二天，系统在保留/缩减/顺延/替换/放弃之间分配</p>
         </div>
       </Card>

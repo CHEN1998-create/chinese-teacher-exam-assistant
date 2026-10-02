@@ -1251,7 +1251,7 @@ export const EVIDENCE_TYPE_LABELS: Record<EvidenceType, string> = {
 export const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
   ai_extracted: "AI已提取",
   pending_review: "待审核",
-  official: "官方确认",
+  official: "已从官方公告核对",
   historical: "历史经验",
   personal: "个人经验",
   unconfirmed: "待确认",

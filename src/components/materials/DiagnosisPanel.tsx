@@ -51,7 +51,7 @@ export function DiagnosisPanel({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
-  // 打开“诊断结果”标签即记录一次查看（同一会话去重）
+  // 打开“资料怎么用”标签即记录一次查看（同一会话去重）
   useEffect(() => {
     trackView(targetId, "diagnosis_viewed", "material", { targetId });
   }, [targetId]);
@@ -62,7 +62,7 @@ export function DiagnosisPanel({
     try {
       materialService.recompute(targetId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "诊断失败，请重试");
+      setError(e instanceof Error ? e.message : "分析失败，请重试");
     } finally {
       setRunning(false);
     }
@@ -118,9 +118,9 @@ export function DiagnosisPanel({
         {readiness && !readiness.complete && <EvidenceWarning readiness={readiness} />}
         <EmptyState
           icon={<span className="text-4xl">🩺</span>}
-          title="资料已就绪，还没有生成诊断"
-          description="点击生成后，规则层会结合当前目标、已确认考情和能力基线，逐项给出使用结论与原因。"
-          actionLabel="生成诊断"
+          title="资料已就绪，还没有分析怎么用"
+          description="点击生成后，规则层会结合你准备的考试、已核对考情和准备情况，逐项给出使用结论与原因。"
+          actionLabel="分析资料怎么用"
           onAction={handleRecompute}
         />
       </div>
@@ -136,9 +136,9 @@ export function DiagnosisPanel({
           <div className="flex items-start gap-2">
             <span className="text-amber-600">⚠</span>
             <div>
-              <p className="text-sm font-medium text-amber-800">诊断可能已过时</p>
+              <p className="text-sm font-medium text-amber-800">分析可能已过时</p>
               <p className="text-xs text-amber-700">
-                目标、考情、资料或能力基线在上次诊断后发生了变化（包括切换当前目标），请重新计算。
+                考试、考情、资料或准备情况在上次分析后发生了变化（包括切换当前考试），请重新计算。
               </p>
             </div>
           </div>
@@ -171,7 +171,7 @@ export function DiagnosisPanel({
           <p className="text-sm font-semibold text-slate-900">能力薄弱项（来自自评/成绩/手动标注）</p>
           {snapshot.weakModules.length === 0 ? (
             <p className="mt-2 text-xs text-slate-500">
-              暂未识别到薄弱模块：可在「能力基线」页补充自评与最近成绩。
+              暂未识别到薄弱模块：可在「准备情况」页补充自评与最近成绩。
             </p>
           ) : (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -212,7 +212,7 @@ export function DiagnosisPanel({
         </Card>
       )}
 
-      {/* 逐资料诊断 */}
+      {/* 逐份资料分析 */}
       <div className="space-y-3">
         {snapshot.materialDiagnoses.map((diagnosis) => {
           const material = materials.find((m) => m.id === diagnosis.materialId);
@@ -261,7 +261,7 @@ export function DiagnosisPanel({
 
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <p className="text-[11px] text-slate-400">
-          诊断时间：{new Date(snapshot.diagnosedAt).toLocaleString("zh-CN")} ·
+          分析时间：{new Date(snapshot.diagnosedAt).toLocaleString("zh-CN")} ·
           入口状态：{inventoryStatus === "none" ? "还没有资料" : inventoryStatus === "single" ? "一套资料" : "多套资料"}
         </p>
         <Button variant="outline" size="sm" onClick={handleRecompute} disabled={running}>
@@ -276,11 +276,11 @@ export function DiagnosisPanel({
 function EvidenceWarning({ readiness }: { readiness: EvidenceReadiness }) {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-      <p className="text-sm font-medium text-amber-800">考情尚未完全确认，诊断结果可能不完整</p>
+      <p className="text-sm font-medium text-amber-800">考情尚未完全核对，分析结果可能不完整</p>
       <p className="mt-1 text-xs leading-relaxed text-amber-700">
-        以下高影响字段还没有官方确认结论：
+        以下高影响字段还没有从官方公告核对：
         {readiness.pendingFields.map((f) => EVIDENCE_TYPE_LABELS[f]).join("、")}
-        。当前诊断先按已有考情与你的资料信息给出，考情确认后请重新计算。
+        。当前分析先按已有考情与你的资料信息给出，考情核对后请重新计算。
       </p>
     </div>
   );

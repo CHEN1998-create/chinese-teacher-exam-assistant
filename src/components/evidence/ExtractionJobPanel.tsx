@@ -81,7 +81,7 @@ export function ExtractionJobPanel({ job, history, busy, onRetry }: ExtractionJo
           <div className="mt-4 space-y-2">
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
               ✅ 提取成功，共识别 {job.extractedCount ?? 0} 个字段，暂无高影响字段需要逐条审核。
-              可在“考情画像”中查看每条结论的来源与状态。
+              可在“这次考试怎么考”中查看每条结论的来源与状态。
             </div>
           </div>
         )}
@@ -93,7 +93,7 @@ export function ExtractionJobPanel({ job, history, busy, onRetry }: ExtractionJo
               <p className="mt-1 text-amber-700">
                 报名/考试时间、科目、分值、资格条件等高影响字段已提取，但在人工审核完成前只会显示
                 <Badge variant="warning" className="mx-1">待审核</Badge>
-                ，不会标记为“官方确认”。
+                ，不会标记为“已从官方公告核对”。
               </p>
             </div>
           </div>

@@ -221,7 +221,7 @@ export function AbilityBaselineForm({ baseline }: AbilityBaselineFormProps) {
       <Card padding="sm">
         <h4 className="text-sm font-semibold text-slate-900">可用时间</h4>
         <p className="mt-1 text-xs text-slate-500">
-          每周可用时间过少时，诊断会主动收缩并行资料数量，避免多套资料同时摊开。
+          每周可用时间过少时，分析会主动收缩并行资料数量，避免多套资料同时摊开。
         </p>
         <div className="mt-3 grid grid-cols-2 gap-3">
           <Input
@@ -242,13 +242,13 @@ export function AbilityBaselineForm({ baseline }: AbilityBaselineFormProps) {
         {weeklyHours > 0 && weeklyHours < 8 && (
           <div className="mt-2 flex items-center gap-2">
             <Badge variant="warning">时间偏紧</Badge>
-            <span className="text-xs text-slate-500">诊断将优先保留覆盖面最匹配的一套主资料。</span>
+            <span className="text-xs text-slate-500">分析将优先保留覆盖面最匹配的一套主资料。</span>
           </div>
         )}
       </Card>
 
       <div className="flex items-center gap-3">
-        <Button onClick={handleSave}>保存能力基线</Button>
+        <Button onClick={handleSave}>保存准备情况</Button>
         {savedAt && <span className="text-xs text-slate-400">已于 {savedAt} 保存</span>}
       </div>
     </div>

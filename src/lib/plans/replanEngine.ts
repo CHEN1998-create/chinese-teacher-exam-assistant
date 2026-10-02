@@ -239,7 +239,7 @@ export function detectTriggers(input: ReplanEngineInput): ReplanTrigger[] {
     triggers.push({
       type: "time_change",
       detail: `当前每日可用时间为 ${input.dailyAvailableMinutes} 分钟，剩余 ${remaining.length} 天的计划按 ${changedDays[0].availableMinutes} 分钟生成，需要重新分配`,
-      refs: [{ kind: "baseline", label: `能力基线：每日可用 ${input.dailyAvailableMinutes} 分钟` }],
+      refs: [{ kind: "baseline", label: `准备情况：每日可用 ${input.dailyAvailableMinutes} 分钟` }],
     });
   }
 

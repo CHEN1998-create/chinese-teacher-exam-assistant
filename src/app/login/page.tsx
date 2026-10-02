@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser, DEMO_ACCOUNTS } from "@/lib/auth";
+import { migrateGuestSessionToUser } from "@/lib/guest/migrate";
 
 function LoginForm() {
   const router = useRouter();
@@ -33,10 +34,11 @@ function LoginForm() {
     return value;
   };
 
-  // 已登录用户访问登录页时直接跳转
+  // 已登录用户访问登录页时直接跳转；有未迁移的访客答案时先迁移（避免重复填写）
   useEffect(() => {
     if (status === "authenticated") {
-      router.replace(safeNext(nextParam) ?? "/exam");
+      const migrated = migrateGuestSessionToUser();
+      router.replace(migrated ? "/today" : (safeNext(nextParam) ?? "/today"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
@@ -59,7 +61,9 @@ function LoginForm() {
     setSubmitting(true);
     try {
       await login({ account: account.trim(), password });
-      router.replace(safeNext(nextParam) ?? "/exam");
+      // 登录成功后：将访客已填写的答案和结果迁移给当前用户，避免重复填写
+      const migrated = migrateGuestSessionToUser();
+      router.replace(migrated ? "/today" : (safeNext(nextParam) ?? "/today"));
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败，请稍后重试");
     } finally {
@@ -76,7 +80,7 @@ function LoginForm() {
             <span className="text-2xl">📝</span>
           </div>
           <h1 className="text-xl font-bold text-slate-900">语文教师编备考助手</h1>
-          <p className="text-sm text-slate-500 mt-1">登录后继续你的备考计划</p>
+          <p className="text-sm text-slate-500 mt-1">登录后可以保存安排和记录进度</p>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -170,6 +174,13 @@ function LoginForm() {
         <p className="text-center text-xs text-slate-400 mt-4">
           未注册账号？Demo 阶段无需注册，请直接使用演示账号
         </p>
+        {safeNext(nextParam) === "/preview" && (
+          <p className="text-center text-xs mt-3">
+            <a href="/preview" className="text-blue-600 hover:underline">
+              暂不登录，返回查看我的结果
+            </a>
+          </p>
+        )}
       </div>
     </div>
   );
