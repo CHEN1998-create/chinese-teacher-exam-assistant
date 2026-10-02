@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { formatDate } from "@/lib/utils";
 import { PROFILE_GROUPS, ProfileRow, isHighImpact } from "@/lib/evidence/domain";
 import { track, trackView } from "@/lib/analytics/eventService";
+import { isDemoMode } from "@/lib/demo/config";
 
 interface EvidenceProfileProps {
   rows: ProfileRow[];
@@ -42,7 +43,11 @@ export function EvidenceProfile({ rows, counts, targetId, onCorrect }: EvidenceP
       {/* 状态摘要：文字 + 数字，不仅靠颜色 */}
       <Card className="bg-slate-50/60">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <SummaryItem label="官方确认" count={counts.official} tone="text-emerald-700" />
+          <SummaryItem
+            label={isDemoMode ? "官方确认·演示" : "官方确认"}
+            count={counts.official}
+            tone="text-emerald-700"
+          />
           <SummaryItem label="AI已提取" count={counts.ai_extracted} tone="text-blue-700" />
           <SummaryItem label="待审核" count={counts.pending_review} tone="text-amber-700" />
           <SummaryItem
@@ -163,7 +168,13 @@ function EvidenceRow({
         <div className="mt-2.5 space-y-1.5">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
             <span>
-              来源：<span className="text-slate-600">{row.sourceName || "未知来源"}</span>
+              来源：
+              <span className="text-slate-600">{row.sourceName || "未知来源"}</span>
+              {isDemoMode && (
+                <span className="ml-1 px-1.5 py-px rounded bg-slate-200 text-slate-600 text-[10px] font-medium">
+                  示例来源
+                </span>
+              )}
               {row.sourceUrl && (
                 <a
                   href={row.sourceUrl}

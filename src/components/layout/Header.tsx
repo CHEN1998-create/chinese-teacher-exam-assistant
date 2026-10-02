@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import { EDUCATION_LEVEL_LABELS } from "@/types";
 import { useCurrentExamTarget } from "@/lib/targets/useCurrentExamTarget";
 import { NotificationCenter } from "@/components/governance/NotificationCenter";
+import { useCurrentUser } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo/config";
 
 const pageTitles: Record<string, string> = {
   "/onboarding": "目标澄清",
@@ -16,8 +18,12 @@ const pageTitles: Record<string, string> = {
 
 export function Header() {
   const pathname = usePathname();
+  const { status } = useCurrentUser();
   const currentExam = useCurrentExamTarget();
   const title = pageTitles[pathname] || "考编助手";
+
+  // 会话恢复完成前不渲染依赖存储的摘要与通知，保证与服务端渲染一致
+  const ready = status === "authenticated";
 
   const summary = currentExam
     ? [
@@ -31,7 +37,12 @@ export function Header() {
     : "";
 
   return (
-    <header className="md:hidden sticky top-0 z-40 bg-white border-b border-slate-200">
+    <header
+      className={`md:hidden sticky z-40 bg-white border-b border-slate-200 ${
+        // 演示模式：移动端为两行高的横幅让出空间
+        isDemoMode ? "top-11" : "top-0"
+      }`}
+    >
       <div className="flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-3">
           {pathname !== "/onboarding" && (
@@ -47,10 +58,10 @@ export function Header() {
           <h1 className="text-lg font-semibold text-slate-900">{title}</h1>
         </div>
         <div className="flex items-center gap-2">
-          {summary && pathname !== "/onboarding" && (
+          {ready && summary && pathname !== "/onboarding" && (
             <span className="truncate max-w-[140px] text-xs text-slate-500">{summary}</span>
           )}
-          <NotificationCenter />
+          {ready && <NotificationCenter />}
         </div>
       </div>
     </header>

@@ -7,6 +7,8 @@ import { useCurrentUser } from "@/lib/auth";
 import { STAFF_ROLES, USER_ROLE_LABELS } from "@/types";
 import { Badge } from "@/components/ui/Badge";
 import { cn } from "@/lib/utils";
+import { isDemoMode } from "@/lib/demo/config";
+import { DEMO_BANNER_SPACER_CLASS } from "@/components/demo/DemoBanner";
 
 const ADMIN_NAV = [
   { href: "/admin", label: "后台概览", exact: true },
@@ -86,7 +88,42 @@ function AdminChrome({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * 公开演示环境：管理后台整体关闭。
+ * 客户端角色守卫不构成安全边界，因此演示模式下无论是否登录、用什么账号，
+ * /admin 及其全部子路由都只显示关闭说明，不渲染任何管理功能。
+ */
+function AdminClosedNotice() {
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <div className={DEMO_BANNER_SPACER_CLASS} />
+      <div className="max-w-md mx-auto px-4 pt-20 text-center">
+        <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <span className="text-2xl">🔒</span>
+        </div>
+        <h1 className="text-xl font-bold text-slate-900 mb-2">
+          管理后台未在公开演示环境开放
+        </h1>
+        <p className="text-sm text-slate-500 leading-6 mb-6">
+          审核通过、驳回、考情修改、资源停用、结论撤回等管理操作需要服务端认证与权限控制，
+          当前演示版本不提供这些能力。
+        </p>
+        <Link
+          href="/exam"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+        >
+          返回用户端演示
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  if (isDemoMode) {
+    return <AdminClosedNotice />;
+  }
+
   return (
     <RequireRole roles={STAFF_ROLES}>
       <AdminChrome>{children}</AdminChrome>

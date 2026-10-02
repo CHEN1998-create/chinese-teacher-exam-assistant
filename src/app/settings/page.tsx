@@ -10,6 +10,8 @@ import { Input, Select } from "@/components/ui/Input";
 import { NotificationPreferencePanel } from "@/components/governance/NotificationPreferencePanel";
 import { DataPrivacyPanel } from "@/components/governance/DataPrivacyPanel";
 import { useCurrentUser } from "@/lib/auth";
+import { clearAllStorage } from "@/lib/storage";
+import { isDemoMode } from "@/lib/demo/config";
 import {
   EducationLevel,
   EDUCATION_LEVEL_LABELS,
@@ -70,7 +72,7 @@ export default function SettingsPage() {
           <Button variant="outline" size="sm" onClick={handleLogout}>
             退出登录
           </Button>
-          {hasRole(STAFF_ROLES) && (
+          {hasRole(STAFF_ROLES) && !isDemoMode && (
             <Link href="/admin">
               <Button variant="outline" size="sm">
                 进入运营后台
@@ -125,8 +127,53 @@ export default function SettingsPage() {
       {/* 通知设置（即时生效，无需保存） */}
       <NotificationPreferencePanel />
 
+      {/* 演示环境：一键重置浏览器中的全部演示数据 */}
+      {isDemoMode && <ResetDemoDataCard />}
+
       {/* 隐私说明、数据类别与删除申请 */}
       <DataPrivacyPanel />
     </div>
+  );
+}
+
+/**
+ * 重置演示数据：
+ * 清空本浏览器 localStorage 中的全部业务键（含演示会话）并刷新页面，
+ * 刷新后各服务重新播种默认演示数据。
+ * 两步确认，避免误触。
+ */
+function ResetDemoDataCard() {
+  const [confirming, setConfirming] = useState(false);
+
+  const handleReset = () => {
+    clearAllStorage();
+    window.location.reload();
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="重置演示数据"
+        description="清除本浏览器中的全部操作记录与演示会话，恢复到默认演示状态"
+      />
+      <p className="text-sm text-slate-600 mb-4">
+        该操作只影响当前浏览器：你创建的目标、提交的公告、资料、计划与反馈都会被清空，
+        页面刷新后自动恢复内置演示数据。
+      </p>
+      {confirming ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="danger" size="sm" onClick={handleReset}>
+            再次点击确认重置
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
+            取消
+          </Button>
+        </div>
+      ) : (
+        <Button variant="outline" size="sm" onClick={() => setConfirming(true)}>
+          重置演示数据
+        </Button>
+      )}
+    </Card>
   );
 }

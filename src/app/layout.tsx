@@ -17,6 +17,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "语文教师编备考助手",
   description: "帮你核对考什么、判断资料怎么用、安排接下来7天",
+  // 公开演示环境：禁止搜索引擎收录（配合 X-Robots-Tag 响应头双保险）
+  robots: { index: false, follow: false },
 };
 
 export const viewport: Viewport = {

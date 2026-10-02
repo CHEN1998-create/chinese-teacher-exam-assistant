@@ -12,7 +12,7 @@ type SourceType = AnnouncementSourceInput["sourceType"];
 const SOURCE_TABS: { value: SourceType; label: string; icon: string; hint: string }[] = [
   { value: "announcement_url", label: "公告链接", icon: "🔗", hint: "粘贴教育局/人社局官网公告链接" },
   { value: "announcement_text", label: "文本粘贴", icon: "📝", hint: "直接粘贴公告正文，本地识别字段" },
-  { value: "announcement_file", label: "文件上传", icon: "📎", hint: "支持 PDF / 图片 / Word（当前为占位入口）" },
+  { value: "announcement_file", label: "文件上传", icon: "📎", hint: "演示环境不接收文件（占位入口）" },
 ];
 
 interface AnnouncementSubmitFormProps {
@@ -161,8 +161,8 @@ export function AnnouncementSubmitForm({ target, busy, onSubmit }: AnnouncementS
               onChange={handleFileChange}
             />
           </label>
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-            文件上传当前为占位入口：只会记录文件名，不会真实读取或解析文件内容。
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-5">
+            公开演示环境不接收任何真实文件：这里只会记录文件名，不会读取、解析、保存或上传文件。
             请改用“公告链接”或“文本粘贴”完成提取。
           </p>
           <Button onClick={handleSubmit} disabled={busy || fileUnsupported} title={fileUnsupported ? "文件解析尚未开放" : undefined}>

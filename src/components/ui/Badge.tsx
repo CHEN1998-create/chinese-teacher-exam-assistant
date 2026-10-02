@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { isDemoMode } from "@/lib/demo/config";
 import {
   ExtractionJobStatus,
   ReviewStatus,
@@ -54,7 +55,9 @@ export function ReviewStatusBadge({ status }: { status: ReviewStatus }) {
   };
   return (
     <Badge variant={variantMap[status]}>
-      {REVIEW_STATUS_LABELS[status]}
+      {isDemoMode && status === "official"
+        ? "官方确认·演示"
+        : REVIEW_STATUS_LABELS[status]}
     </Badge>
   );
 }

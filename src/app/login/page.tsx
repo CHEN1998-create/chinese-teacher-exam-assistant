@@ -84,8 +84,8 @@ function LoginForm() {
           <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
             <p className="text-xs leading-5 text-amber-800">
               <strong>演示环境提示：</strong>
-              当前为前端 Demo 登录，账号仅保存在本地浏览器，不具备真实注册、密码校验和安全性。
-              请勿输入真实密码。
+              这里使用的是内置演示账号，<strong>不是真实身份认证</strong>，没有真实注册与密码校验；
+              演示数据仅保存在本机浏览器，不代表正式服务数据。请勿输入真实密码或其他个人信息。
             </p>
           </div>
 
