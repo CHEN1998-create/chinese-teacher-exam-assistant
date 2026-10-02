@@ -4,9 +4,11 @@
 
 ## 📢 公开演示地址
 
-**https://frontend-lv1m8jp8o-exam-test.vercel.app**
+**https://frontend-two-beryl-fywu4p42k8.vercel.app**
 
 > 当前为**公开演示环境**：数据仅用于功能展示，请勿填写真实个人信息；所有输入仅保存在本机浏览器，不会上传服务器。登录请使用下方演示账号。演示环境中**管理后台（/admin）未开放**。完整部署说明见 [DEPLOYMENT.md](./DEPLOYMENT.md)。
+>
+> 前端通过同源路径 `/api/*` 经 Vercel 服务端反向代理调用阿里云 NestJS 后端（当前为初始接入阶段，已提供 `/api/health` 健康检查）。
 
 ## 技术栈
 
