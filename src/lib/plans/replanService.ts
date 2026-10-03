@@ -37,7 +37,15 @@ import { resourceService } from "@/lib/resources/resourceService";
 import { planService } from "./planService";
 import { feedbackService } from "./feedbackService";
 import { todayString } from "./useToday";
-import { applyReplan, detectTriggers, type ReplanEngineInput } from "./replanEngine";
+import {
+  applyReplan,
+  buildRestoreVersion,
+  describeEvidenceChange,
+  describeNextStep,
+  detectTriggers,
+  type ReplanEngineInput,
+} from "./replanEngine";
+import { notificationService } from "@/lib/governance/notificationService";
 import { track } from "@/lib/analytics/eventService";
 
 const listeners = new Set<() => void>();
@@ -83,6 +91,7 @@ function buildEngineInput(plan: WeeklyPlan): ReplanEngineInput {
     .map((p) => p.id);
   const feedbacks = familyIds.flatMap((id) => feedbackService.listByWeeklyPlan(id));
   return {
+    target,
     weeklyPlan: plan,
     dailyPlans: planService.getDailyPlans(plan.id),
     feedbacks,
@@ -93,7 +102,27 @@ function buildEngineInput(plan: WeeklyPlan): ReplanEngineInput {
     resourceLinks: resourceService.listMyLinks(target.id).filter((l) => l.status !== "dismissed"),
     resources: resourceService.browseAll(),
     today: todayString(),
+    nowIso: new Date().toISOString(),
   };
+}
+
+/** 持久化一次重排结果（周计划 + 日计划 + 调整记录，只追加） */
+function persistReplanResult(result: {
+  weekly: WeeklyPlan;
+  daily: DailyPlan[];
+  adjustments: TaskAdjustment[];
+}): void {
+  const allWeekly = loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, []);
+  allWeekly.push(result.weekly);
+  saveToStorageStrict(STORAGE_KEYS.PLANS, allWeekly);
+
+  const allDaily = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.DAILY_PLANS, []);
+  allDaily.push(...result.daily);
+  saveToStorageStrict(STORAGE_KEYS.DAILY_PLANS, allDaily);
+
+  const allAdjustments = loadAdjustments();
+  allAdjustments.push(...result.adjustments);
+  persistAdjustments(allAdjustments);
 }
 
 /** 找到某计划的重排草稿（基于该计划生成的未确认新版本） */
@@ -192,6 +221,99 @@ export const replanService = {
     persistAdjustments(loadAdjustments().filter((a) => a.weeklyPlanId !== weeklyPlanId));
     notifyChanged();
     return true;
+  },
+
+  /**
+   * 反馈驱动的即时调整（/today 调用）：
+   * - 基于刚提交的反馈运行重排规则，直接生成并确认新版本（不让用户去计划页
+   *   理解“检测信号—草稿—确认”等内部步骤）；
+   * - 返回用户语言的“下一步做什么、原任务怎么处理”；
+   * - 没有实质调整（如只是“做完了”）时返回 null，不产生空版本。
+   */
+  applyFeedbackAdjustment(targetId: string): {
+    summary: ReturnType<typeof describeNextStep>;
+    version: number;
+  } | null {
+    const active = planService.getCurrentPlan(targetId);
+    if (!active || active.status !== "active") {
+      throw new Error("当前没有执行中的计划，无法调整");
+    }
+    const result = applyReplan(buildEngineInput(active));
+    if (result.adjustments.length === 0) return null;
+
+    persistReplanResult(result);
+    planService.confirmPlan(result.weekly.id);
+    notifyChanged();
+    return {
+      summary: describeNextStep(result.adjustments, todayString()),
+      version: result.weekly.version,
+    };
+  },
+
+  /**
+   * 恢复原安排：当前活动版本有上一版本时，以上一版本内容生成新版本并确认。
+   * 历史只追加；资料与考试信息保留，恢复版任务按当前可用时间压缩。
+   */
+  restoreOriginal(targetId: string): { restoredFromVersion: number } {
+    const engineInput = buildEngineInput(
+      planService.getCurrentPlan(targetId) ??
+        (() => {
+          throw new Error("当前没有执行中的计划");
+        })()
+    );
+    const active = engineInput.weeklyPlan;
+    const sourceId = active.previousVersionId;
+    if (!sourceId) {
+      throw new Error("当前是最初版本，没有可恢复的安排");
+    }
+    const source = planService.listPlans(targetId).find((p) => p.id === sourceId);
+    if (!source) {
+      throw new Error("找不到要恢复的版本");
+    }
+
+    const result = buildRestoreVersion({
+      current: active,
+      currentDaily: engineInput.dailyPlans,
+      source,
+      sourceDaily: planService.getDailyPlans(source.id),
+      today: todayString(),
+      nowIso: new Date().toISOString(),
+      dailyAvailableMinutes: engineInput.dailyAvailableMinutes,
+    });
+
+    persistReplanResult(result);
+    planService.confirmPlan(result.weekly.id);
+    notifyChanged();
+    return { restoredFromVersion: source.version };
+  },
+
+  /**
+   * 考情变化通知：检查计划生成后更新的证据，写入一条 exam_change 通知，
+   * 明确“哪条变了、今天安排是否受影响”。没有变化返回 null。
+   * （证据写入完成后由 evidenceService 触发；人工也可在页面操作后调用。）
+   */
+  ensureEvidenceChangeNotification(targetId: string) {
+    const active = planService.getCurrentPlan(targetId);
+    if (!active || active.status !== "active") return null;
+    const today = todayString();
+    const todayPlan = planService.getDailyPlans(active.id).find((d) => d.date === today);
+
+    const notice = describeEvidenceChange({
+      evidenceItems: evidenceService.getItems(targetId),
+      weeklyCreatedAt: active.createdAt,
+      today,
+      todayTaskCount: todayPlan?.tasks.length ?? 0,
+    });
+    if (!notice) return null;
+
+    return notificationService.push({
+      type: "exam_change",
+      title: notice.title,
+      body: `${notice.body}\n影响：${notice.affectedToday ? "今天的安排可能受影响" : "不影响今天已安排的任务"}`,
+      severity: notice.severity === "high" ? "important" : "info",
+      nextSteps: notice.nextSteps,
+      related: { examTargetId: targetId },
+    });
   },
 
   /** 某计划版本的全部任务级调整记录 */

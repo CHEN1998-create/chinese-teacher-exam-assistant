@@ -47,6 +47,19 @@ function notifyChanged(): void {
   emitEvidenceChanged();
 }
 
+/**
+ * 提取完成后触发考情变化检查（动态导入避免与 replanService 的循环依赖）。
+ * 通知写入失败不影响提取结果本身。
+ */
+async function triggerEvidenceChangeNotice(targetId: string): Promise<void> {
+  try {
+    const { replanService } = await import("@/lib/plans/replanService");
+    replanService.ensureEvidenceChangeNotification(targetId);
+  } catch {
+    // 通知失败不阻塞主流程
+  }
+}
+
 function currentUserId(): string {
   return authService.getSession()?.user.id ?? "anonymous";
 }
@@ -214,6 +227,8 @@ export const evidenceService = {
         pendingReviewCount,
         finishedAt,
       });
+      // 考情变化说明（哪条变了、今天安排是否受影响）
+      await triggerEvidenceChangeNotice(targetId);
       return this.getJobById(job.id)!;
     } catch (e) {
       const reason = e instanceof Error ? e.message : "提取失败，请稍后重试";

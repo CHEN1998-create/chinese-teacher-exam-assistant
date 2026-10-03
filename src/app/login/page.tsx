@@ -34,11 +34,17 @@ function LoginForm() {
     return value;
   };
 
-  // 已登录用户访问登录页时直接跳转；有未迁移的访客答案时先迁移（避免重复填写）
+  // 已登录用户访问登录页时直接跳转；有未迁移的访客答案时先迁移（避免重复填写）。
+  // 目的地按迁移结果决定：生成了计划 → 今天；未支持的考试 → 我的考试继续核对，
+  // 不能把未生成计划的用户送进空白的「今天」。
   useEffect(() => {
     if (status === "authenticated") {
       const migrated = migrateGuestSessionToUser();
-      router.replace(migrated ? "/today" : (safeNext(nextParam) ?? "/today"));
+      if (migrated) {
+        router.replace(migrated.planReady ? "/today" : "/exam");
+      } else {
+        router.replace(safeNext(nextParam) ?? "/today");
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
@@ -61,9 +67,8 @@ function LoginForm() {
     setSubmitting(true);
     try {
       await login({ account: account.trim(), password });
-      // 登录成功后：将访客已填写的答案和结果迁移给当前用户，避免重复填写
-      const migrated = migrateGuestSessionToUser();
-      router.replace(migrated ? "/today" : (safeNext(nextParam) ?? "/today"));
+      // 登录成功后的访客迁移与跳转统一在上面的 useEffect（status 变化）中处理，
+      // 避免两次调用迁移、两次 router.replace 互相覆盖。
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败，请稍后重试");
     } finally {

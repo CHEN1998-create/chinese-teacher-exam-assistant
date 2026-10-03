@@ -30,6 +30,7 @@ import {
   moduleLabel,
   requiredModuleKeys,
 } from "@/lib/materials/domain";
+import { checkRecommendable, scopeMatches } from "@/lib/resources/domain";
 
 // ==================== 计划生成输入 ====================
 
@@ -53,6 +54,8 @@ export interface PlanGenerationInput {
   startDate: string;
   /** 周序号 */
   weekNumber: number;
+  /** 规则判定时刻 ISO（由 service 传入，保证确定性与可测试性） */
+  nowIso: string;
 }
 
 // ==================== 就绪检查 ====================
@@ -92,7 +95,7 @@ export function checkPlanReadiness(input: PlanGenerationInput): PlanReadiness {
     (d) => d.recommendation !== "pause"
   );
   const hasUsableMaterial = usableMaterials.length > 0;
-  const hasResourceLinks = input.resourceLinks.length > 0;
+  const hasResourceLinks = usableResourceLinks(input).length > 0;
   if (!hasUsableMaterial && !hasResourceLinks) {
     missing.push(
       "还没有可用的学习内容：请在「资料与资源」页添加至少一套适用资料，或将公共资源加入本周计划"
@@ -135,6 +138,30 @@ const HIGH_IMPACT_FIELDS_LABELS: Record<string, string> = {
 };
 
 // ==================== 任务来源收集 ====================
+
+/**
+ * 当前仍然可用的资源链接：
+ * - 链接未放弃、资源详情存在；
+ * - 通过合规闸门（链接失效、停用、超期未复核等一律剔除）；
+ * - 适用范围仍贴合目标（地区/学段/类型/年份）。
+ * 计划生成时重新校验，不能因为“加入时可用”就默认一直可用。
+ */
+function usableResourceLinks(input: PlanGenerationInput): {
+  link: ResourcePlanLink;
+  resource: ResourceItem;
+}[] {
+  const resourceMap = new Map(input.resources.map((r) => [r.id, r]));
+  const result: { link: ResourcePlanLink; resource: ResourceItem }[] = [];
+  for (const link of input.resourceLinks) {
+    if (link.status === "dismissed") continue;
+    const resource = resourceMap.get(link.resourceId);
+    if (!resource) continue;
+    if (!checkRecommendable(resource, input.nowIso).ok) continue;
+    if (!scopeMatches(resource, input.target)) continue;
+    result.push({ link, resource });
+  }
+  return result;
+}
 
 interface TaskSource {
   module: string;
@@ -179,12 +206,8 @@ function collectSources(input: PlanGenerationInput): TaskSource[] {
     }
   }
 
-  // 2) 公共资源来源：已加入计划且未放弃
-  const resourceMap = new Map(input.resources.map((r) => [r.id, r]));
-  for (const link of input.resourceLinks) {
-    if (link.status === "dismissed") continue;
-    const resource = resourceMap.get(link.resourceId);
-    if (!resource) continue;
+  // 2) 公共资源来源：当前仍通过合规闸门、范围贴合
+  for (const { link, resource } of usableResourceLinks(input)) {
     sources.push({
       module: link.module,
       sourceType: "resource",
@@ -254,19 +277,16 @@ function dayOfWeek(dateStr: string): number {
 
 // ==================== 任务构造 ====================
 
-/** 最低可完成任务的固定时长（分钟） */
-const MINIMUM_TASK_MINUTES = 30;
-
 function makeTask(
   source: TaskSource & { priority: "high" | "medium" | "low" },
   dailyPlanId: string,
   order: number,
   estimatedMinutes: number,
   dateStr: string,
-  dayIndex: number
+  dayIndex: number,
+  nowIso: string
 ): PlanTask {
   const moduleName = moduleLabel(source.module);
-  const now = new Date().toISOString();
   let title: string;
   let completionCriteria: string;
   let arrangementReason: string;
@@ -280,8 +300,13 @@ function makeTask(
     const mat = source.material;
     chapterTitle = source.chapterTitles[0];
     materialId = mat.id;
-    title = `${moduleName}：${chapterTitle ? `《${chapterTitle}》` : "章节学习"}`;
-    completionCriteria = `完成《${mat.name}》${chapterTitle ? `中「${chapterTitle}」相关章节` : "相关章节"}的学习，整理要点笔记`;
+    // 章节已知：写明具体章节；未知：不编造章节名，让用户对照目录定位
+    title = chapterTitle
+      ? `${moduleName}：《${chapterTitle}》`
+      : `${moduleName}：对照《${mat.name}》目录学习对应章节`;
+    completionCriteria = chapterTitle
+      ? `完成《${mat.name}》中「${chapterTitle}」的学习，整理要点笔记`
+      : `翻开《${mat.name}》目录找到与「${moduleName}」对应的章节学习，整理要点笔记（具体章节以你手上的书为准）`;
     arrangementReason = buildArrangementReason(source, dayIndex);
     reviewAction = `合上书本复述「${moduleName}」本节核心要点，完成课后练习并记录正确率`;
   } else if (source.resource) {
@@ -319,8 +344,9 @@ function makeTask(
     status: "pending",
     priority: source.priority,
     isCore: source.priority === "high",
-    createdAt: now,
-    updatedAt: now,
+    executable: true,
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 }
 
@@ -361,8 +387,7 @@ export interface GeneratedPlan {
  * 调用方需先通过 checkPlanReadiness 校验，本函数假设输入就绪。
  */
 export function generatePlan(input: PlanGenerationInput): GeneratedPlan {
-  const { target, startDate, weekNumber, dailyAvailableMinutes } = input;
-  const now = new Date().toISOString();
+  const { target, startDate, weekNumber, dailyAvailableMinutes, nowIso } = input;
   const weeklyId = `wp-${target.id}-${Date.now()}`;
 
   const readiness = assessEvidenceReadiness(input.evidenceItems);
@@ -390,8 +415,8 @@ export function generatePlan(input: PlanGenerationInput): GeneratedPlan {
       let est = Math.min(src.baseMinutes, remaining);
 
       if (tasks.length === 0) {
-        // 第一项：保证可完成，最低 30 分钟
-        est = Math.max(Math.min(est, remaining), Math.min(MINIMUM_TASK_MINUTES, remaining));
+        // 首项保底只允许向下压缩以适配可用时间，绝不把小任务向上膨胀
+        est = Math.min(est, remaining);
       } else if (est > remaining) {
         break; // 时间不够，不再加
       }
@@ -399,14 +424,14 @@ export function generatePlan(input: PlanGenerationInput): GeneratedPlan {
       // 每项至少 20 分钟，避免碎片化（除非剩余时间很少）
       if (tasks.length > 0 && est < 20) break;
 
-      tasks.push(makeTask(src, dailyPlanId, tasks.length + 1, est, dateStr, dayIndex));
+      tasks.push(makeTask(src, dailyPlanId, tasks.length + 1, est, dateStr, dayIndex, nowIso));
       remaining -= est;
       sourceCursor++;
     }
 
     // 如果当天来源用完（最后几天），用复盘任务保底
     if (tasks.length === 0) {
-      tasks.push(makeReviewTask(dailyPlanId, 1, dayIndex, remaining));
+      tasks.push(makeReviewTask(dailyPlanId, 1, dayIndex, remaining, nowIso, sources));
       remaining -= tasks[0].estimatedTime;
     }
 
@@ -420,8 +445,8 @@ export function generatePlan(input: PlanGenerationInput): GeneratedPlan {
       totalEstimatedTime: total,
       isMinimumViable: tasks.length === 1,
       availableMinutes: dailyAvailableMinutes,
-      createdAt: now,
-      updatedAt: now,
+      createdAt: nowIso,
+      updatedAt: nowIso,
     });
   }
 
@@ -440,38 +465,55 @@ export function generatePlan(input: PlanGenerationInput): GeneratedPlan {
     status: "draft",
     version: 1,
     generationReason,
-    createdAt: now,
-    updatedAt: now,
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 
   return { weekly, daily };
 }
 
-/** 第 7 天或来源不足时的复盘保底任务 */
+/**
+ * 第 7 天或来源不足时的复盘保底任务。
+ * 复盘也必须有明确资料入口：优先本周已排的可打开公共资源，其次用户自有资料；
+ * 都没有时不标为可执行（不能假装用户对着空气复盘）。
+ */
 function makeReviewTask(
   dailyPlanId: string,
   order: number,
   dayIndex: number,
-  remaining: number
+  remaining: number,
+  nowIso: string,
+  sources: TaskSource[]
 ): PlanTask {
-  const est = Math.max(Math.min(remaining, 40), MINIMUM_TASK_MINUTES);
-  const now = new Date().toISOString();
+  const refResource = sources.find((s) => s.resource)?.resource;
+  const refMaterial = refResource ? undefined : sources.find((s) => s.material)?.material;
+  const hasRef = !!(refResource || refMaterial);
+
+  // 时长不超过当天剩余可用时间（原实现的 30 分钟下限可能超过可用时间）
+  const est = remaining >= 20 ? Math.min(40, remaining) : remaining;
+
   return {
     id: `pt-${dailyPlanId}-${order}`,
     dailyPlanId,
     title: `本周学习回顾与薄弱点复盘`,
     module: "mod_zhenti",
-    sourceType: "material",
+    sourceType: refResource ? "resource" : "material",
+    resourceId: refResource?.id,
+    materialId: refMaterial?.id,
     estimatedTime: est,
-    completionCriteria: "整理本周已学内容，标记仍然不理解的知识点",
+    completionCriteria: "打开资料回顾本周已学内容，整理笔记，标记仍然不理解的知识点",
     arrangementReason: `第 ${dayIndex + 1} 天安排复盘，消化本周学习内容，避免堆积`,
     reviewAction: "列出本周 3 个掌握较好的点和 3 个需要再练的点",
     order,
     status: "pending",
     priority: "medium",
     isCore: false,
-    createdAt: now,
-    updatedAt: now,
+    executable: hasRef,
+    blockedReason: hasRef
+      ? undefined
+      : "还没有可用于复盘的资料：请先添加合规公共资源，或确认你已有的资料",
+    createdAt: nowIso,
+    updatedAt: nowIso,
   };
 }
 

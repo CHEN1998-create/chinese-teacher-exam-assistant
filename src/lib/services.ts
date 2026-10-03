@@ -120,13 +120,15 @@ export const examTargetService = {
     return this.getAllRaw().filter((t) => t.userId === userId);
   },
 
-  /** 当前主目标：优先取会话指针，回退 isCurrent 标记；归档目标不作为主目标 */
+  /** 当前主目标：优先持久化 isCurrent，回退会话指针；归档目标不作为主目标 */
   getCurrent(): ExamTarget | null {
     const targets = this.getAll();
     const currentId = userService.getUser()?.currentExamTargetId;
+    // 持久化的 isCurrent 是 durable 真值；重新登录会重放种子 session 指针（et-001），
+    // 若 session 指针优先，用户迁移/确认过的目标在重登后将永远找不到。
     const found =
-      targets.find((t) => t.id === currentId) ||
       targets.find((t) => t.isCurrent) ||
+      targets.find((t) => t.id === currentId) ||
       null;
     return found && found.status !== "archived" ? found : null;
   },

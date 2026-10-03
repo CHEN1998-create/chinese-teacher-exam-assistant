@@ -10,15 +10,16 @@ import { useCurrentUser } from "@/lib/auth";
 import { guestSessionService } from "@/lib/guest/guestSession";
 import { buildFirstResult, FirstResult } from "@/lib/guest/previewEngine";
 import { migrateGuestSessionToUser } from "@/lib/guest/migrate";
-import { examTargetService, evidenceService } from "@/lib/services";
+import { examTargetService, evidenceService, resourceService } from "@/lib/services";
 import { LoadingPage } from "@/components/ui/Loading";
 
 /**
- * 首次结果页（v5.1）：
+ * 首次结果页（v5.1，v5.2 强化依据与资料入口）：
  * 未登录用户完成三步问答后，立即看到“今日第一步 + 7 天主题预览”。
  *
- * - 考情已核对（匹配到 official 证据）：基于已核对信息给出今日任务与主题；
- * - 考情未核对：给出具体的信息查找任务，并列出哪些内容仍待核对，不编造科目或日期；
+ * - supported：基于可查看来源的已核对信息给出针对这场考试的任务；
+ * - unsupported：明确提示暂未支持，第一项是信息查找任务或标注“通用起步建议”的任务，
+ *   绝不把通用内容包装为当地定制安排；
  * - 这只是轻量预览，不是经过资料分析的正式计划；
  * - 点击“保存接下来 7 天”才进入登录流程。
  */
@@ -36,7 +37,13 @@ export default function PreviewPage() {
     if (guest && guest.step >= 3) {
       const targets = examTargetService.getAllRaw();
       const evidence = targets.flatMap((t) => evidenceService.getItems(t.id));
-      return buildFirstResult(guest.answers, targets, evidence);
+      return buildFirstResult(
+        guest.answers,
+        targets,
+        evidence,
+        resourceService.browseAll(),
+        new Date().toISOString()
+      );
     }
     return null;
   });
@@ -65,12 +72,14 @@ export default function PreviewPage() {
         router.push("/login?next=/preview");
         return;
       }
-      const migrated = migrateGuestSessionToUser();
-      if (migrated) {
-        router.push("/today");
-      } else {
-        router.push("/today");
+      const migration = migrateGuestSessionToUser();
+      if (!migration) {
+        setError("保存失败：没有找到首次填写内容，请重新回答三个问题");
+        setSaving(false);
+        return;
       }
+      // 计划已生成 → 今天；未生成 → 我的考试继续核对（已填信息保留，不落入空白页）
+      router.push(migration.planReady ? "/today" : "/exam");
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存失败，请稍后重试");
       setSaving(false);
@@ -80,6 +89,8 @@ export default function PreviewPage() {
   if (status === "loading") return <LoadingPage />;
   if (!result) return <LoadingPage />;
 
+  const task = result.todayTask;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-slate-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
@@ -87,35 +98,66 @@ export default function PreviewPage() {
         <div className="text-center mb-6">
           <p className="text-xs text-slate-400 mb-1">你准备的考试</p>
           <h1 className="text-xl md:text-2xl font-bold text-slate-900">{result.examName}</h1>
-          {result.verified ? (
-            <Badge variant="success">已从官方公告核对</Badge>
+          {result.supportStatus === "supported" ? (
+            <Badge variant="success">已从官方公告核对 · 针对这场考试</Badge>
+          ) : task.kind === "info_find" ? (
+            <Badge variant="warning">考情还在核对</Badge>
           ) : (
-            <Badge variant="warning">考情待核对</Badge>
+            <Badge variant="muted">暂未支持针对这场考试的安排</Badge>
           )}
+          <p className="text-xs text-slate-500 mt-2 leading-relaxed">{result.supportNote}</p>
         </div>
 
         {/* 今天先做的一项任务 */}
         <Card className="mb-4">
-          <p className="text-xs font-medium text-blue-600 mb-2">今天先做这一项</p>
-          <h2 className="text-lg font-bold text-slate-900">{result.todayTask.title}</h2>
+          <p className="text-xs font-medium text-blue-600 mb-2">
+            {task.generalAdvice ? "通用起步建议（不是当地定制安排）" : "今天先做这一项"}
+          </p>
+          <h2 className="text-lg font-bold text-slate-900">{task.title}</h2>
           <div className="mt-3 space-y-2 text-sm text-slate-600">
+            {task.material ? (
+              <p>
+                <span className="text-slate-400">用什么：</span>
+                {task.material.url ? (
+                  <a
+                    href={task.material.url}
+                    target="_blank"
+                    rel="noreferrer noopener"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {task.material.name}（点击打开）
+                  </a>
+                ) : (
+                  task.material.name
+                )}
+              </p>
+            ) : (
+              <p className="text-amber-700">
+                <span className="text-slate-400">用什么：</span>
+                {task.kind === "info_find"
+                  ? "无需资料，先查找官方公告"
+                  : "暂无可打开的资料入口，这项任务暂不可执行"}
+              </p>
+            )}
             <p>
               <span className="text-slate-400">预计需要：</span>
-              约 {result.todayTask.estimatedMinutes} 分钟
+              约 {task.estimatedMinutes} 分钟
             </p>
             <p>
               <span className="text-slate-400">做到什么算完成：</span>
-              {result.todayTask.completionCriteria}
-            </p>
-            <p>
-              <span className="text-slate-400">为什么先做这件事：</span>
-              {result.todayTask.reason}
+              {task.completionCriteria}
             </p>
           </div>
+          <details className="mt-3 group">
+            <summary className="text-xs text-slate-400 cursor-pointer hover:text-slate-600">
+              为什么先做这件事？
+            </summary>
+            <p className="text-sm text-slate-600 mt-2 leading-relaxed">{task.reason}</p>
+          </details>
         </Card>
 
         {/* 待核对内容（未核实时重点展示） */}
-        {!result.verified && result.pendingChecks.length > 0 && (
+        {result.supportStatus === "unsupported" && result.pendingChecks.length > 0 && (
           <Card className="mb-4 bg-amber-50/60">
             <p className="text-sm font-medium text-amber-800 mb-2">这些内容还需要核对</p>
             <ul className="text-sm text-amber-700 space-y-1">
@@ -147,12 +189,18 @@ export default function PreviewPage() {
         {/* 保存按钮：只有这里才需要登录 */}
         <div className="my-6">
           <Button onClick={handleSave} size="lg" fullWidth disabled={saving}>
-            {saving ? "保存中..." : "保存接下来 7 天"}
+            {saving
+              ? "保存中..."
+              : result.supportStatus === "supported"
+                ? "保存接下来 7 天"
+                : "保存已填信息，去核对考情"}
           </Button>
           <p className="text-center text-xs text-slate-400 mt-2">
-            {status === "authenticated"
-              ? "保存后进入「今天」，按计划开始执行"
-              : "登录后可以保存安排和记录进度；不登录也可以继续查看本页"}
+            {result.supportStatus === "supported"
+              ? status === "authenticated"
+                ? "保存后进入「今天」，按计划开始执行"
+                : "登录后可以保存安排和记录进度；不登录也可以继续查看本页"
+              : "不会为未核对的考试生成 7 天计划；登录后先保存已填信息，核对考情后再生成安排"}
           </p>
           {error && (
             <p role="alert" className="text-center text-sm text-red-600 mt-2">

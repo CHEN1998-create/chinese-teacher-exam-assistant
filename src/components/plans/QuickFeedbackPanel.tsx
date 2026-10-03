@@ -6,19 +6,24 @@ import { feedbackService, DuplicateFeedbackError } from "@/lib/plans/feedbackSer
 
 interface QuickFeedbackPanelProps {
   task: PlanTask;
-  /** 提交成功后回调，页面展示下一项任务 */
+  /** 提交成功后回调，页面就地展示下一步 */
   onSubmitted: (status: TaskFeedback["status"]) => void;
+  /** 唯一追加问题（明天能学多久）的回答：更新可用时间，影响后续安排 */
+  onAvailableTimeChange?: (minutes: number) => void;
 }
 
+type Stage = "choose" | "reason" | "time_followup";
+
 /**
- * 一分钟点选式快速反馈（v5.1）：
+ * 一分钟点选式快速反馈（v5.2）：
  * - 三个主操作：我做完了 / 做了一部分 / 今天没做；
- * - 「做完了」一次点击即完成提交；其余两种先点选一个简短原因再提交（最多三次点击）；
- * - 保存失败时保留已选状态，可直接重试；
- * - 重复提交由 service 层拦截兜底。
+ * - 「做完了」一次点击即提交；其余两种可选一个原因，也可「跳过原因，直接保存」；
+ * - 只在原因是“时间不够”时补问唯一一个真正影响调整的问题（明天能学多久）；
+ * - 保存失败时保留已选状态，可直接重试；重复提交由 service 层拦截兜底。
  */
-export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProps) {
+export function QuickFeedbackPanel({ task, onSubmitted, onAvailableTimeChange }: QuickFeedbackPanelProps) {
   const [pendingStatus, setPendingStatus] = useState<"partial" | "not_completed" | null>(null);
+  const [stage, setStage] = useState<Stage>("choose");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,8 +44,24 @@ export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProp
       onSubmitted(result.status);
     } catch (e) {
       if (e instanceof DuplicateFeedbackError) {
-        // 已有反馈（极端并发）：视为成功，页面会展示已有反馈摘要
-        onSubmitted(e.existing.status);
+        const existing = e.existing;
+        const reason = status === "completed" ? undefined : incompleteReason;
+        // 同一条反馈重复进入（快速连点/跨渲染重复点击）：不再次触发重排，防止版本增殖
+        if (
+          existing.status === status &&
+          (existing.incompleteReason ?? undefined) === (reason ?? undefined)
+        ) {
+          return;
+        }
+        // 反馈结论确实改变（如部分完成→做完了）：修改已有反馈，而不是新建
+        const updated = feedbackService.update(existing.id, {
+          status,
+          actualTime: status === "completed" ? task.estimatedTime : undefined,
+          incompleteReason,
+          errorTypes: [],
+          hasSecondPractice: false,
+        });
+        onSubmitted(updated.status);
       } else {
         // 保存失败：保留当前选择，可点重试
         setError(e instanceof Error ? `保存失败：${e.message}` : "保存失败，请重试");
@@ -50,9 +71,23 @@ export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProp
     }
   };
 
-  const reasonChips = (
+  const reset = () => {
+    setPendingStatus(null);
+    setStage("choose");
+  };
+
+  const pickReason = (reason: IncompleteReason) => {
+    // 唯一追加问题：时间不够 → 问明天能学多久；其余原因直接保存
+    if (reason === "time") {
+      setStage("time_followup");
+    } else {
+      submit(pendingStatus!, reason);
+    }
+  };
+
+  const reasonStep = (
     <div className="mt-3">
-      <p className="text-xs text-slate-500 mb-2">选一个最接近的原因（选完即保存）</p>
+      <p className="text-xs text-slate-500 mb-2">可以选一个最接近的原因，也可以跳过（选完即保存）</p>
       <div className="flex flex-wrap gap-2">
         {(Object.entries(INCOMPLETE_REASON_LABELS) as [IncompleteReason, string][]).map(
           ([key, label]) => (
@@ -60,7 +95,7 @@ export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProp
               key={key}
               type="button"
               disabled={saving}
-              onClick={() => submit(pendingStatus!, key)}
+              onClick={() => pickReason(key)}
               className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50"
             >
               {label}
@@ -68,19 +103,68 @@ export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProp
           )
         )}
       </div>
+      <div className="flex items-center justify-between mt-2">
+        <button
+          type="button"
+          onClick={reset}
+          className="text-xs text-slate-400 hover:text-slate-600"
+        >
+          返回重新选择
+        </button>
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => submit(pendingStatus!)}
+          className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+        >
+          跳过原因，直接保存
+        </button>
+      </div>
+    </div>
+  );
+
+  const timeFollowupStep = (
+    <div className="mt-3">
+      <p className="text-xs text-slate-500 mb-2">
+        明天大约能学多久？（只问这一个，用来安排明天的任务总时长）
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {[30, 45, 60].map((m) => (
+          <button
+            key={m}
+            type="button"
+            disabled={saving}
+            onClick={() => {
+              onAvailableTimeChange?.(m);
+              submit(pendingStatus!, "time");
+            }}
+            className="px-3 py-2 rounded-lg border border-slate-200 text-sm text-slate-700 hover:border-blue-400 hover:bg-blue-50 transition-colors disabled:opacity-50"
+          >
+            {m} 分钟
+          </button>
+        ))}
+        <button
+          type="button"
+          disabled={saving}
+          onClick={() => submit(pendingStatus!, "time")}
+          className="px-3 py-2 rounded-lg text-sm text-slate-400 hover:text-slate-600 disabled:opacity-50"
+        >
+          不确定
+        </button>
+      </div>
       <button
         type="button"
-        onClick={() => setPendingStatus(null)}
+        onClick={() => setStage("reason")}
         className="mt-2 text-xs text-slate-400 hover:text-slate-600"
       >
-        返回重新选择
+        返回
       </button>
     </div>
   );
 
   return (
     <div>
-      {!pendingStatus && (
+      {stage === "choose" && (
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
@@ -93,7 +177,10 @@ export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProp
           <button
             type="button"
             disabled={saving}
-            onClick={() => setPendingStatus("partial")}
+            onClick={() => {
+              setPendingStatus("partial");
+              setStage("reason");
+            }}
             className="h-11 rounded-xl bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
           >
             做了一部分
@@ -101,7 +188,10 @@ export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProp
           <button
             type="button"
             disabled={saving}
-            onClick={() => setPendingStatus("not_completed")}
+            onClick={() => {
+              setPendingStatus("not_completed");
+              setStage("reason");
+            }}
             className="h-11 rounded-xl border border-slate-300 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
           >
             今天没做
@@ -109,18 +199,19 @@ export function QuickFeedbackPanel({ task, onSubmitted }: QuickFeedbackPanelProp
         </div>
       )}
 
-      {pendingStatus && reasonChips}
+      {stage === "reason" && pendingStatus && reasonStep}
+      {stage === "time_followup" && pendingStatus && timeFollowupStep}
 
       {error && (
         <div role="alert" className="mt-3 p-3 rounded-lg bg-red-50 border border-red-200">
           <p className="text-sm text-red-700">{error}</p>
           <p className="text-xs text-red-500 mt-1">
-            你的选择已保留，检查网络或存储后
+            你的选择已保留，检查存储后
             <button
               type="button"
               className="underline ml-1"
               onClick={() =>
-                pendingStatus ? setError(null) : submit("completed")
+                pendingStatus ? submit(pendingStatus) : submit("completed")
               }
             >
               点击重试

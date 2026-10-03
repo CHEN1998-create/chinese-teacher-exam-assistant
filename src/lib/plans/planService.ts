@@ -129,6 +129,7 @@ function buildInput(target: ExamTarget): PlanGenerationInput {
     weeklyAvailableHours: weeklyHours,
     startDate,
     weekNumber,
+    nowIso: new Date().toISOString(),
   };
 }
 

@@ -25,6 +25,7 @@ import {
   DailyPlan,
   ErrorCategory,
   ERROR_TYPE_LABELS,
+  ExamTarget,
   EvidenceItem,
   MaterialDiagnosisSnapshot,
   MaterialItem,
@@ -40,10 +41,13 @@ import {
   WeeklyPlan,
 } from "@/types";
 import { chapterTitlesForModule, moduleLabel } from "@/lib/materials/domain";
+import { checkRecommendable, scopeMatches } from "@/lib/resources/domain";
 
 // ==================== 输入与输出 ====================
 
 export interface ReplanEngineInput {
+  /** 目标考试（资源适用范围校验用） */
+  target: ExamTarget;
   /** 当前执行中的周计划 */
   weeklyPlan: WeeklyPlan;
   /** 该计划的全部日计划（含已执行日） */
@@ -59,6 +63,8 @@ export interface ReplanEngineInput {
   resources: ResourceItem[];
   /** 今天，YYYY-MM-DD（由 service 传入，保证确定性） */
   today: string;
+  /** 规则判定时刻 ISO（由 service 传入，保证确定性与可测试性） */
+  nowIso: string;
 }
 
 export interface ReplanOptions {
@@ -334,7 +340,11 @@ interface ReplacementCandidate {
   refs: ReplanRef[];
 }
 
-/** 基础巩固兜底任务：不依赖特定资料，降低难度 */
+/**
+ * 基础巩固兜底任务：没有可指定的资料来源。
+ * 按 PRD 要求不能编造“10 道题”之类的假资料入口，因此显式标为不可执行，
+ * 并在 blockedReason 说明缺什么；用户补资料后任务才可执行。
+ */
 function buildConsolidation(
   ctx: ReplanContext,
   task: PlanTask,
@@ -349,13 +359,15 @@ function buildConsolidation(
       materialChapterId: undefined,
       resourceId: undefined,
       chapterTitle: undefined,
-      title: `「${moduleName}」基础巩固练习`,
+      title: `「${moduleName}」基础巩固（缺资料，暂不可执行）`,
       estimatedTime: Math.min(task.estimatedTime, 30),
-      completionCriteria: `完成「${moduleName}」10 道基础题练习并归因错题，正确率记入反馈`,
+      completionCriteria: `先添加「${moduleName}」的基础练习资料（合规公共资源或你已有的资料），再完成基础练习并归因错题`,
       arrangementReason: why,
-      reviewAction: `整理「${moduleName}」基础错题，标记仍不理解的知识点`,
+      reviewAction: `资料补齐后，整理「${moduleName}」基础错题并标记仍不理解的知识点`,
       status: "pending",
       feedback: undefined,
+      executable: false,
+      blockedReason: "还没有可用于基础巩固的资料：请添加合规公共资源，或确认你已有的资料",
     },
     reason: why,
     refs: [],
@@ -397,12 +409,14 @@ function buildReplacement(ctx: ReplanContext, task: PlanTask): ReplacementCandid
     }
   }
 
-  // 2) 同模块的其他公共资源
+  // 2) 同模块的其他公共资源（仍须通过合规闸门、范围贴合）
   for (const link of ctx.input.resourceLinks) {
     if (link.status === "dismissed" || link.module !== task.module) continue;
     if (link.resourceId === task.resourceId) continue;
     const resource = ctx.resourcesById.get(link.resourceId);
     if (!resource) continue;
+    if (!checkRecommendable(resource, ctx.input.nowIso).ok) continue;
+    if (!scopeMatches(resource, ctx.input.target)) continue;
     const chapter = resource.suggestedChapters[0];
     return {
       task: {
@@ -464,7 +478,7 @@ export function applyReplan(input: ReplanEngineInput, opts: ReplanOptions = {}):
   ];
 
   const old = input.weeklyPlan;
-  const now = new Date().toISOString();
+  const now = input.nowIso;
   const newWeeklyId = `wp-${old.examTargetId}-${Date.now()}`;
   const newVersion = old.version + 1;
   const adjustments: TaskAdjustment[] = [];
@@ -577,6 +591,8 @@ export function applyReplan(input: ReplanEngineInput, opts: ReplanOptions = {}):
     const completedKept: PlanTask[] = [];
     let completedEst = 0;
     const queue: QueueItem[] = [];
+    // 今天声明“没做”的任务：不占今天，直接进入后续日子的待安排池
+    const movedOutToday: QueueItem[] = [];
 
     for (const task of day.tasks) {
       const fb = ctx.latestFeedbackByTask.get(task.id);
@@ -645,19 +661,35 @@ export function applyReplan(input: ReplanEngineInput, opts: ReplanOptions = {}):
           refs: fbRef ? [fbRef] : [],
         };
       } else if (fb && fb.status === "not_completed") {
-        item = {
-          ...item,
-          action: "keep",
-          reason: "未完成：当天重新安排（容量不足时将顺延或放弃）",
-          refs: fbRef ? [fbRef] : [],
-        };
+        if (i === 0) {
+          // 今天没做：任务移出今天，交给后面的日子；容量不足时缩减/放弃，不堆欠账
+          item = {
+            ...item,
+            action: "postpone",
+            reason: "今天没做：改到后面的日子（容量不足时缩减或放弃，欠账不会堆到一天）",
+            refs: fbRef ? [fbRef] : [],
+            carried: true,
+            freshId: true,
+          };
+          movedOutToday.push(item);
+        } else {
+          item = {
+            ...item,
+            action: "keep",
+            reason: "未完成：当天重新安排（容量不足时将顺延或放弃）",
+            refs: fbRef ? [fbRef] : [],
+          };
+        }
       }
 
       if (evidenceHighImpactChanged) {
         item.needsConfirmation = true;
         item.refs = [...item.refs, ...evidenceRefs];
       }
-      queue.push(item);
+      // 今天声明没做的任务不进今天的队列
+      if (!(i === 0 && fb?.status === "not_completed")) {
+        queue.push(item);
+      }
     }
 
     // 排队：优先级高 → 低；同优先级顺延/替换来的优先（先还欠账）；再按原顺序
@@ -676,11 +708,21 @@ export function applyReplan(input: ReplanEngineInput, opts: ReplanOptions = {}):
     for (const qi of merged) {
       const est = qi.task.estimatedTime;
       if (assigned.length === 0 && completedKept.length === 0) {
-        const est2 = Math.max(Math.min(est, remainingTime), Math.min(30, remainingTime));
-        if (est2 <= remainingTime && remainingTime >= 20) {
-          assigned.push({ item: qi, est: est2, clamped: est2 < est });
-          remainingTime -= est2;
-          continue;
+        // 首项保底只允许“向下压缩到 ≤30 分钟”，绝不能把小任务向上膨胀
+        // （否则部分完成后已减半的任务会被重新拉长，调整失效）
+        if (est <= remainingTime) {
+          if (remainingTime >= 20) {
+            assigned.push({ item: qi, est, clamped: false });
+            remainingTime -= est;
+            continue;
+          }
+        } else {
+          const est2 = Math.min(30, remainingTime);
+          if (est2 >= 20 && est2 <= remainingTime) {
+            assigned.push({ item: qi, est: est2, clamped: true });
+            remainingTime -= est2;
+            continue;
+          }
         }
       }
       if (est <= remainingTime) {
@@ -699,9 +741,10 @@ export function applyReplan(input: ReplanEngineInput, opts: ReplanOptions = {}):
       }
     }
 
-    // 溢出处理：顺延到下一个剩余日 / 多次顺延或最后一天 → 放弃
+    // 溢出（含今天移出的“没做”任务）：顺延到下一个剩余日 / 多次顺延或最后一天 → 放弃
+    const overflowAll = i === 0 ? [...overflow, ...movedOutToday] : overflow;
     const nextCarry: QueueItem[] = [];
-    for (const qi of overflow) {
+    for (const qi of overflowAll) {
       if (qi.postponeCount >= 2) {
         pushAdjustment({
           taskId: qi.before.id,
@@ -897,4 +940,266 @@ export function applyReplan(input: ReplanEngineInput, opts: ReplanOptions = {}):
   };
 
   return { weekly, daily: newDaily, adjustments, triggers };
+}
+
+// ==================== 恢复原安排 ====================
+
+export interface RestoreVersionInput {
+  /** 当前版本（将被新版本替代） */
+  current: WeeklyPlan;
+  currentDaily: DailyPlan[];
+  /** 要恢复到的版本 */
+  source: WeeklyPlan;
+  sourceDaily: DailyPlan[];
+  today: string;
+  nowIso: string;
+  /** 当前每日可用时间，恢复版按它压缩，保证总时长不超可用时间 */
+  dailyAvailableMinutes: number;
+}
+
+/**
+ * 按用户要求恢复原安排：以 source 版本为内容生成一个新版本（历史仍只追加）。
+ * - 已执行日原样取 source；
+ * - 剩余日取 source 任务并重置为待执行，按当前可用时间压缩，放不下的任务记录放弃；
+ * - 资料与考试信息全部保留。
+ */
+export function buildRestoreVersion(input: RestoreVersionInput): ReplanResult {
+  const { current, source, today, nowIso, dailyAvailableMinutes } = input;
+  const newWeeklyId = `wp-${source.examTargetId}-${Date.now()}`;
+  const newVersion = current.version + 1;
+  const adjustments: TaskAdjustment[] = [];
+
+  const pushAdjustment = (
+    a: Omit<TaskAdjustment, "id" | "weeklyPlanId" | "fromVersion" | "toVersion" | "createdAt">
+  ): void => {
+    adjustments.push({
+      ...a,
+      id: `ta-${newWeeklyId}-${adjustments.length + 1}`,
+      weeklyPlanId: newWeeklyId,
+      fromVersion: current.version,
+      toVersion: newVersion,
+      createdAt: nowIso,
+    });
+  };
+
+  const sourceDays = [...input.sourceDaily].sort((a, b) => a.date.localeCompare(b.date));
+  const currentByDate = new Map(
+    [...input.currentDaily].sort((a, b) => a.date.localeCompare(b.date)).map((d) => [d.date, d])
+  );
+  const newDaily: DailyPlan[] = [];
+
+  for (const day of sourceDays) {
+    const newDpId = `dp-${newWeeklyId}-${day.date}`;
+
+    if (day.date < today) {
+      // 已执行日：原样保留（反馈引用的周计划 id 指向新版本）
+      const tasks = day.tasks.map((t) => ({
+        ...t,
+        dailyPlanId: newDpId,
+        feedback: t.feedback
+          ? { ...t.feedback, taskId: t.id, dailyPlanId: newDpId, weeklyPlanId: newWeeklyId }
+          : undefined,
+      }));
+      newDaily.push({
+        ...day,
+        id: newDpId,
+        weeklyPlanId: newWeeklyId,
+        tasks,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      });
+      continue;
+    }
+
+    // 剩余日：source 任务重置，按优先级在可用时间内压缩
+    const currentDay = currentByDate.get(day.date);
+    const candidates = [...day.tasks]
+      .sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] || a.order - b.order);
+    let remainingTime = dailyAvailableMinutes;
+    const restored: PlanTask[] = [];
+    const dropped: PlanTask[] = [];
+
+    for (const t of candidates) {
+      const est = Math.min(t.estimatedTime, remainingTime);
+      if (est >= 20) {
+        restored.push({
+          ...t,
+          dailyPlanId: newDpId,
+          estimatedTime: est,
+          order: restored.length + 1,
+          status: "pending",
+          feedback: undefined,
+          needsConfirmation: undefined,
+        });
+        remainingTime -= est;
+      } else {
+        dropped.push(t);
+      }
+    }
+
+    // 恢复记录：与当前版本同日同位任务对照，动作为 keep
+    restored.forEach((after) => {
+      const before = currentDay?.tasks.find((x) => x.order === after.order);
+      pushAdjustment({
+        taskId: before?.id ?? after.id,
+        date: day.date,
+        toDate: day.date,
+        action: "keep",
+        reason: "按你的要求恢复原安排：资料与考试信息保留，任务回到调整前内容",
+        refs: [{ kind: "plan", id: source.id, label: `恢复至 v${source.version}` }],
+        before: before ?? null,
+        after,
+      });
+    });
+    dropped.forEach((t) => {
+      pushAdjustment({
+        taskId: t.id,
+        date: day.date,
+        toDate: day.date,
+        action: "abandon",
+        reason: "恢复原安排时当前可用时间不足，该任务本周不再安排（记录已保留）",
+        refs: [],
+        before: t,
+        after: null,
+      });
+    });
+
+    const total = restored.reduce((s, t) => s + t.estimatedTime, 0);
+    newDaily.push({
+      id: newDpId,
+      weeklyPlanId: newWeeklyId,
+      date: day.date,
+      dayOfWeek: day.dayOfWeek,
+      tasks: restored,
+      totalEstimatedTime: total,
+      isMinimumViable: restored.length <= 1,
+      availableMinutes: dailyAvailableMinutes,
+      adjustmentNote: `已恢复 v${source.version} 的安排`,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    });
+  }
+
+  const triggers: ReplanTrigger[] = [
+    {
+      type: "user_request",
+      detail: `按你的要求恢复原安排（v${source.version}）`,
+      refs: [{ kind: "plan", id: source.id, label: `恢复至 v${source.version}` }],
+    },
+  ];
+
+  const weekly: WeeklyPlan = {
+    id: newWeeklyId,
+    userId: source.userId,
+    examTargetId: source.examTargetId,
+    weekNumber: source.weekNumber,
+    startDate: source.startDate,
+    endDate: source.endDate,
+    focus: source.focus,
+    status: "draft",
+    version: newVersion,
+    previousVersionId: current.id,
+    generationReason: `第 ${newVersion} 版：按你的要求恢复 v${source.version} 的安排；资料与考试信息保留，剩余任务按每日可用 ${dailyAvailableMinutes} 分钟压缩。`,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  return { weekly, daily: newDaily, adjustments, triggers };
+}
+
+// ==================== 用户语言的下一步说明 ====================
+
+export interface NextStepSummary {
+  nextStep: string;
+  originalHandling: string;
+}
+
+/**
+ * 从调整记录生成“下一步做什么、原任务怎么处理”的用户语言说明（供 /today 就地展示）。
+ * 取今天产生的第一条实质调整。
+ */
+export function describeNextStep(
+  adjustments: TaskAdjustment[],
+  today: string
+): NextStepSummary | null {
+  const adj = adjustments
+    .filter((a) => a.toDate >= today && a.action !== "keep")
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+  if (!adj) return null;
+
+  switch (adj.action) {
+    case "reduce":
+      return {
+        nextStep: `今天接着做：剩余部分已压缩为 ${adj.after?.estimatedTime ?? 0} 分钟`,
+        originalHandling: "原任务不整项重做，只完成剩余部分",
+      };
+    case "postpone":
+      return {
+        nextStep: `已改到 ${adj.toDate} 继续（约 ${adj.after?.estimatedTime ?? 0} 分钟）`,
+        originalHandling: "今天不再做这项；容量不够时会再缩减，欠账不会堆到一天",
+      };
+    case "replace":
+      return {
+        nextStep: `下一步改用「${adj.after?.title ?? "新任务"}」`,
+        originalHandling: "原任务的记录已保留，不再使用原资料",
+      };
+    case "abandon":
+      return {
+        nextStep: "这项任务本周不再安排",
+        originalHandling: "记录已保留，欠账不会继续堆积",
+      };
+    default:
+      return null;
+  }
+}
+
+// ==================== 考情变化说明 ====================
+
+export interface EvidenceChangeNotice {
+  title: string;
+  body: string;
+  affectedToday: boolean;
+  nextSteps: string[];
+  severity: "high" | "medium";
+}
+
+/**
+ * 生成考情变化的用户可见说明：哪条信息变了、状态是什么、今天安排是否受影响。
+ * 仅描述 updatedAt 晚于计划生成时间的证据；未核对的信息明确标注状态，不称官方结论。
+ */
+export function describeEvidenceChange(args: {
+  evidenceItems: EvidenceItem[];
+  weeklyCreatedAt: string;
+  today: string;
+  todayTaskCount: number;
+}): EvidenceChangeNotice | null {
+  const changed = args.evidenceItems
+    .filter((e) => e.updatedAt > args.weeklyCreatedAt && e.value.trim())
+    // 每个字段只取最新一条
+    .reduce<Map<string, EvidenceItem>>((map, e) => {
+      const prev = map.get(e.field);
+      if (!prev || e.updatedAt > prev.updatedAt) map.set(e.field, e);
+      return map;
+    }, new Map());
+
+  if (changed.size === 0) return null;
+
+  const lines = [...changed.values()].map(
+    (e) =>
+      `${EVIDENCE_FIELD_LABELS[e.field] ?? e.field}：${e.value}（${
+        e.reviewStatus === "official" ? "已核对" : "待核对"
+      }）`
+  );
+  const hasHighImpact = [...changed.keys()].some((f) => HIGH_IMPACT_FIELDS.has(f));
+  const affectedToday = hasHighImpact && args.todayTaskCount > 0;
+
+  return {
+    title: affectedToday ? "考情有更新，今天的安排可能受影响" : "考情有更新",
+    body: `以下考情在计划生成后发生变化：\n${lines.join("；")}。`,
+    affectedToday,
+    severity: hasHighImpact ? "high" : "medium",
+    nextSteps: affectedToday
+      ? ["在「今天」查看调整后的任务，再继续学习", "未核对的信息不会被当作官方结论"]
+      : ["在「我的考试」核对更新内容，核对后再调整安排"],
+  };
 }

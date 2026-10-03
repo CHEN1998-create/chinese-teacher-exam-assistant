@@ -87,7 +87,8 @@ export default function OnboardingPage() {
     if (isLoggedIn) {
       // 已登录用户：直接把问答结果落到自己的数据层（创建/确认目标并尝试生成首个安排）
       const result = migrateGuestSessionToUser();
-      router.push(result ? "/today" : "/exam");
+      // 计划已生成 → 今天；未生成 → 我的考试继续核对（已填信息保留，不落入空白态）
+      router.push(result?.planReady ? "/today" : "/exam");
     } else {
       router.push("/preview");
     }

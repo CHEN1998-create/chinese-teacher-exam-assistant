@@ -699,6 +699,13 @@ export interface PlanTask {
   isCore: boolean;
   /** 高影响考情在计划生成后发生变化：任务待用户重新确认 */
   needsConfirmation?: boolean;
+  /**
+   * 是否可执行：存在可打开的合规资源或用户已确认拥有的资料时为 true。
+   * 缺资料入口的任务必须标为 false（并在 blockedReason 说明），不能伪装可执行。
+   */
+  executable?: boolean;
+  /** 不可执行的原因（如：还没有可用资料、来源链接失效待核对） */
+  blockedReason?: string;
   feedback?: TaskFeedback;
   createdAt: string;
   updatedAt: string;
