@@ -19,7 +19,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      const next = encodeURIComponent(pathname || "/exam");
+      const next = encodeURIComponent(pathname || "/opportunities");
       router.replace(`/login?next=${next}`);
     }
   }, [status, pathname, router]);
@@ -77,10 +77,10 @@ export function ForbiddenState({ requiredRoles }: { requiredRoles?: UserRole[] }
         </p>
         <div className="flex gap-3 justify-center">
           <Link
-            href="/exam"
+            href="/opportunities"
             className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
           >
-            返回我的考试
+            返回机会页
           </Link>
           <Link
             href="/login"

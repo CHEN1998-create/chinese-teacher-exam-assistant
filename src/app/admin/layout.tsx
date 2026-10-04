@@ -45,7 +45,7 @@ function AdminChrome({ children }: { children: React.ReactNode }) {
               )}
             </div>
             <Link
-              href="/exam"
+              href="/opportunities"
               className="text-xs text-slate-300 hover:text-white transition-colors"
             >
               返回用户端
@@ -110,7 +110,7 @@ function AdminClosedNotice() {
           当前演示版本不提供这些能力。
         </p>
         <Link
-          href="/exam"
+          href="/opportunities"
           className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
           返回用户端演示

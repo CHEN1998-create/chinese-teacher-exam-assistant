@@ -5,16 +5,15 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCurrentUser } from "@/lib/auth";
 import { guestSessionService } from "@/lib/guest/guestSession";
-import { examTargetService, planService } from "@/lib/services";
 import { LoadingPage } from "@/components/ui/Loading";
 
 /**
- * 首页路由规则（v5.1）：
- * - 未登录且没有体验进度 → 价值首页（本页内容）；
- * - 未登录但体验到一半 → 回到上次未完成的问题（/onboarding）；
- * - 未登录且已看完首次结果 → /preview；
- * - 已登录但没有安排 → 快速问答（/onboarding）；
- * - 已登录且有执行中的安排 → 默认进入“今天”（/today）。
+ * 首页路由规则（v6.1）：
+ * - 已登录 → 默认进入「机会」/opportunities（不做复杂智能路由；紧急报名事项
+ *   在机会页顶部作为唯一优先行动展示）；
+ * - 未登录且画像问答进行到一半 → 回到 /onboarding；
+ * - 未登录且已看完初步结果 → /preview；
+ * - 其余访客 → 价值首页（本页内容，无需登录）。
  */
 export default function Home() {
   const router = useRouter();
@@ -24,57 +23,45 @@ export default function Home() {
     if (status === "loading") return;
 
     if (status === "authenticated") {
-      const target = examTargetService.getCurrent();
-      const plan = planService.getCurrentPlan();
-      if (target && plan?.status === "active") {
-        router.replace("/today");
-      } else if (!target) {
-        router.replace("/onboarding");
-      } else {
-        // 有目标但还没有执行中的安排：仍进入“今天”，由该页引导下一步
-        router.replace("/today");
-      }
+      router.replace("/opportunities");
       return;
     }
 
-    // 未登录
     if (guestSessionService.isInProgress()) {
       router.replace("/onboarding");
       return;
     }
     if (guestSessionService.isComplete()) {
       router.replace("/preview");
-      return;
     }
-    // landing：无需任何操作，直接渲染首页
   }, [status, router]);
 
   if (status === "loading") return <LoadingPage />;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-slate-50 flex items-center justify-center px-4 py-12">
+    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-12">
       <div className="w-full max-w-lg text-center">
-        <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <span className="text-3xl">📝</span>
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
+          <span className="text-3xl" aria-hidden="true">📝</span>
         </div>
-        <h1 className="text-2xl md:text-3xl font-bold text-slate-900 leading-snug">
-          告诉我你想考哪里、每天有多少时间，
+        <h1 className="text-2xl font-bold leading-snug text-slate-900 md:text-3xl">
+          填几个条件，先看你可能能报哪些
           <br />
-          我先帮你安排今天做什么
+          语文教师公开招聘
         </h1>
-        <p className="text-slate-500 mt-4 text-sm md:text-base">
-          三个问题，一分钟，就能看到今天的第一步。
+        <p className="mt-4 text-sm text-slate-500 md:text-base">
+          每个结论都给出公告依据：初步符合、还需补充什么、哪些要向招聘单位确认，自己看得懂、能核对。
         </p>
         <Link
           href="/onboarding"
-          className="mt-8 inline-flex h-12 items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-medium text-white hover:bg-blue-700 transition-colors"
+          className="mt-8 inline-flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         >
-          看看我今天先做什么
+          看看我可能能报哪些
         </Link>
         <p className="mt-3 text-xs text-slate-400">无需登录，答案只保存在本机浏览器</p>
         <p className="mt-8 text-xs text-slate-400">
           已有账号？
-          <Link href="/login" className="text-blue-600 hover:underline ml-1">
+          <Link href="/login" className="ml-1 text-blue-600 hover:underline">
             直接登录
           </Link>
         </p>

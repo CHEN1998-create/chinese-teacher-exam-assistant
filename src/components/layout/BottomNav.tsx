@@ -3,33 +3,43 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { PRIMARY_NAV, isNavActive } from "@/lib/ia/nav";
+import { NavIcon } from "./navIcons";
 
-// v5.1：主导航只保留三个入口
-const navItems = [
-  { href: "/today", label: "今天", icon: "✅" },
-  { href: "/plan", label: "7 天", icon: "📅" },
-  { href: "/exam", label: "考试", icon: "📋" },
-];
-
+/**
+ * 移动端主导航（v6.1）：只有 机会 / 日程 / 备考 三个入口。
+ * - 激活态同时用 顶部指示条 + 字重 + 颜色 + aria-current 表达，不只靠颜色；
+ * - 每个入口等宽、高 64px，满足移动端触控目标；
+ * - 设置/通知/资料/账号不在此处，进入头像菜单或上下文页面。
+ */
 export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-50">
-      <div className="flex items-center justify-around h-16">
-        {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
+    <nav
+      aria-label="主导航"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-white md:hidden"
+    >
+      <div className="flex h-16 items-stretch justify-around border-t border-slate-200">
+        {PRIMARY_NAV.map((item) => {
+          const active = isNavActive(pathname, item.href);
           return (
             <Link
-              key={item.href}
+              key={item.id}
               href={item.href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center justify-center flex-1 h-full gap-1 transition-colors",
-                isActive ? "text-blue-600" : "text-slate-500"
+                "-mt-px flex flex-1 flex-col items-center justify-center gap-1 border-t-2 transition-colors",
+                active
+                  ? "border-blue-600 text-blue-700"
+                  : "border-transparent text-slate-500 hover:text-slate-800",
               )}
             >
-              <span className="text-xl">{item.icon}</span>
-              <span className="text-xs font-medium">{item.label}</span>
+              <NavIcon id={item.id} className="h-6 w-6" />
+              <span className={cn("text-xs", active ? "font-semibold" : "font-medium")}>
+                {item.label}
+              </span>
+              {active && <span className="sr-only">（当前页面）</span>}
             </Link>
           );
         })}

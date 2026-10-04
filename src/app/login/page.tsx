@@ -41,9 +41,9 @@ function LoginForm() {
     if (status === "authenticated") {
       const migrated = migrateGuestSessionToUser();
       if (migrated) {
-        router.replace(migrated.planReady ? "/today" : "/exam");
+        router.replace(migrated.planReady ? "/study" : "/opportunities");
       } else {
-        router.replace(safeNext(nextParam) ?? "/today");
+        router.replace(safeNext(nextParam) ?? "/opportunities");
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
