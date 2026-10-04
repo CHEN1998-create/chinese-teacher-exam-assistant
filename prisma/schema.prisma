@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("user")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  extractionRuns ExtractionRun[]
+  reviewRecords  ReviewRecord[]
+
+  @@map("users")
+}
+
+// ==================== 公告数据流水线（v6.1 数据管道文档） ====================
+
+/** 官方来源登记 */
+model Source {
+  id             String   @id @default(uuid())
+  publisher      String
+  regionCode     String?
+  officialUrl    String
+  sourceType     String // government / institution / other
+  contactInfo    String?
+  lastSuccessAt  DateTime?
+  lastFailReason String?
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  snapshots SourceSnapshot[]
+
+  @@map("sources")
+}
+
+/**
+ * 原始内容快照：每次提交/获取都留档，永不覆盖。
+ * contentHash 在同一来源下唯一，相同内容不创建重复快照。
+ */
+model SourceSnapshot {
+  id          String   @id @default(uuid())
+  sourceId    String
+  source      Source   @relation(fields: [sourceId], references: [id])
+  officialUrl String?
+  /** 原始内容存储地址（对象存储 key 或本地路径） */
+  storageKey  String
+  mimeType    String
+  /** SHA-256 内容指纹 */
+  contentHash String
+  /** 抓取/提交时间 */
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+  httpStatus  Int?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  extractionRuns ExtractionRun[]
+
+  @@unique([sourceId, contentHash])
+  @@index([contentHash])
+  @@map("source_snapshots")
+}
+
+/**
+ * 提取任务：状态机 submitted → extracting → pending_review → approved → published。
+ * 另有 rejected、failed 可重入。
+ */
+model ExtractionRun {
+  id             String   @id @default(uuid())
+  snapshotId     String
+  snapshot       SourceSnapshot @relation(fields: [snapshotId], references: [id])
+  announcementId String?
+  /** 解析器/模型版本 */
+  parserVersion  String
+  /** 幂等键：snapshotId + parserVersion */
+  idempotencyKey String   @unique @map("idempotency_key")
+  status         String   @default("submitted")
+  /** 提取进度 0-100 */
+  progress       Int      @default(0)
+  /** 候选结果 JSON（未经审核） */
+  candidate      Json?
+  errorCode      String?
+  errorMessage   String?
+  retryCount     Int      @default(0) @map("retry_count")
+  submittedBy    String?
+  submittedByUser User?   @relation(fields: [submittedBy], references: [id])
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  finishedAt     DateTime? @map("finished_at")
+
+  evidenceAnchors EvidenceAnchor[]
+  reviewRecords   ReviewRecord[]
+  publishedVersion PublishedAnnouncementVersion?
+
+  @@index([status])
+  @@index([announcementId])
+  @@map("extraction_runs")
+}
+
+/**
+ * 字段级证据锚点：高影响字段必须有锚点才能审核通过。
+ * 与候选字段中的 anchor 一一对应，单独建表便于审计与查询。
+ */
+model EvidenceAnchor {
+  id          String   @id @default(uuid())
+  runId       String
+  run         ExtractionRun @relation(fields: [runId], references: [id])
+  field       String
+  locatorKind String // url / file / worksheet / excerpt
+  locatorData Json
+  excerpt     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([runId, field])
+  @@map("evidence_anchors")
+}
+
+/** 审核留痕（只追加） */
+model ReviewRecord {
+  id           String   @id @default(uuid())
+  runId        String
+  run          ExtractionRun @relation(fields: [runId], references: [id])
+  reviewerId   String
+  reviewer     User     @relation(fields: [reviewerId], references: [id])
+  reviewerName String
+  action       String // approve / approve_with_edit / reject / mark_incomplete
+  reason       String
+  beforePayload Json
+  afterPayload  Json
+  reviewedAt   DateTime @default(now()) @map("reviewed_at")
+
+  @@index([runId])
+  @@map("review_records")
+}
+
+/**
+ * 已发布的不可变公告版本。
+ * 任何修改产生新版本，旧版本标记 superseded 但保留可查。
+ * 用户端与匹配模块只能读取 status=published 的版本。
+ */
+model PublishedAnnouncementVersion {
+  id               String   @id @default(uuid())
+  announcementId   String
+  runId            String   @unique
+  run              ExtractionRun @relation(fields: [runId], references: [id])
+  versionNumber    Int
+  status           String   @default("published") // published / superseded / withdrawn
+  payload          Json
+  publishedAt      DateTime @default(now()) @map("published_at")
+  previousVersionId String?  @unique @map("previous_version_id")
+  previousVersion  PublishedAnnouncementVersion? @relation("VersionChain", fields: [previousVersionId], references: [id])
+  supersededAt     DateTime? @map("superseded_at")
+
+  nextVersion PublishedAnnouncementVersion? @relation("VersionChain")
+
+  @@unique([announcementId, versionNumber])
+  @@index([announcementId, status])
+  @@map("published_announcement_versions")
+}
