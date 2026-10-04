@@ -1,18 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { AuthProvider } from "@/lib/auth";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+// 字体策略（v6.1 模块 0A，国内普通网络可访问基线）：
+// 不使用任何 Google 网络字体或境外字体 CDN（在中国大陆普通网络下可能被
+// 阻断，导致构建或首屏失败）。统一使用系统字体栈，见 globals.css 中的
+// --font-sans / --font-mono；如后续确有品牌字体需求，须使用有授权的
+// 字体文件，放 public/ 下以本地字体加载方式随项目部署。
 
 export const metadata: Metadata = {
   title: "语文教师编备考助手",
@@ -33,10 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="zh-CN"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
-    >
+    <html lang="zh-CN" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <AuthProvider>
           <AppShell>{children}</AppShell>

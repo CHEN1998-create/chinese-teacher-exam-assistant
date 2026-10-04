@@ -10,7 +10,11 @@ import path from "node:path";
 export default defineConfig({
   test: {
     environment: "jsdom",
-    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
+    include: [
+      "src/**/*.test.ts",
+      "src/**/*.test.tsx",
+      "scripts/**/*.test.mjs", // 网络基线守卫（模块 0A）
+    ],
     globals: false,
   },
   resolve: {

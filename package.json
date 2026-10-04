@@ -5,9 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/check-external-deps.mjs --build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:external": "node scripts/check-external-deps.mjs --build"
   },
   "dependencies": {
     "clsx": "^2.1.1",
