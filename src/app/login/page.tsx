@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser, DEMO_ACCOUNTS } from "@/lib/auth";
-import { migrateGuestSessionToUser } from "@/lib/guest/migrate";
 
 function LoginForm() {
   const router = useRouter();
@@ -34,17 +33,11 @@ function LoginForm() {
     return value;
   };
 
-  // 已登录用户访问登录页时直接跳转；有未迁移的访客答案时先迁移（避免重复填写）。
-  // 目的地按迁移结果决定：生成了计划 → 今天；未支持的考试 → 我的考试继续核对，
-  // 不能把未生成计划的用户送进空白的「今天」。
+  // 已登录用户访问登录页时直接跳转。
+  // v6.1 访客画像的登录后持久化在后续模块接入后端时实现，本轮不做本地迁移。
   useEffect(() => {
     if (status === "authenticated") {
-      const migrated = migrateGuestSessionToUser();
-      if (migrated) {
-        router.replace(migrated.planReady ? "/study" : "/opportunities");
-      } else {
-        router.replace(safeNext(nextParam) ?? "/opportunities");
-      }
+      router.replace(safeNext(nextParam) ?? "/opportunities");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);

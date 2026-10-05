@@ -923,4 +923,6 @@ export const STORAGE_KEYS = {
   SETTINGS: "kb_settings",
   // —— v5.1 首次体验：未登录访客的三步问答进度与结果（仅本机浏览器，7 天过期） ——
   GUEST_SESSION: "kb_guest_session",
+  // —— v6.1 首次体验：未登录访客的五组基础画像与初步机会结果（与旧键隔离，7 天过期） ——
+  GUEST_PROFILE_V61: "kb_guest_profile_v61",
 } as const;

@@ -45,12 +45,16 @@ export default function Home() {
           <span className="text-3xl" aria-hidden="true">📝</span>
         </div>
         <h1 className="text-2xl font-bold leading-snug text-slate-900 md:text-3xl">
-          填几个条件，先看你可能能报哪些
+          填写地区、学历、专业、毕业状态和教师资格，
           <br />
-          语文教师公开招聘
+          查看当前可能适合的教师公开招聘
         </h1>
+        <p className="mt-3 inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+          当前先开放语文教师岗位
+        </p>
         <p className="mt-4 text-sm text-slate-500 md:text-base">
-          每个结论都给出公告依据：初步符合、还需补充什么、哪些要向招聘单位确认，自己看得懂、能核对。
+          每个结论都给出公告依据：初步符合、补充信息后判断、建议人工确认、明确不符合，
+          自己看得懂、能核对。
         </p>
         <Link
           href="/onboarding"
