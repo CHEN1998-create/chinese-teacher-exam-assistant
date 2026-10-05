@@ -1,12 +1,7 @@
 "use client";
 
-import {
-  V61_NOW,
-  V61_SEED_ANNOUNCEMENTS,
-  V61_SEED_FOLLOWS,
-} from "@/lib/seed/v61-opportunities";
+import { useSchedule } from "@/lib/schedule/useSchedule";
 import { buildScheduleView } from "@/lib/ia/schedule-view";
-import { useV61SeedData } from "@/lib/ia/useV61SeedData";
 import { Hero } from "@/components/ia/Hero";
 import { Timeline } from "@/components/ia/Timeline";
 import { LayerHeading } from "@/components/ia/Layer";
@@ -14,21 +9,25 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
 
-function loadView() {
-  return buildScheduleView(V61_SEED_FOLLOWS, V61_SEED_ANNOUNCEMENTS, V61_NOW);
-}
-
 export default function SchedulePage() {
-  const { data, loading, error, reload } = useV61SeedData(loadView);
+  const { state, reload, toggleMute } = useSchedule();
 
-  if (loading) return <LoadingPage />;
-  if (error) {
-    return <ErrorState title="日程暂时加载失败" description={error} onRetry={reload} />;
+  if (state.status === "loading") return <LoadingPage />;
+
+  if (state.status === "error") {
+    return (
+      <ErrorState
+        title="日程暂时加载失败"
+        description={state.error}
+        onRetry={reload}
+      />
+    );
   }
-  if (!data) return null;
+
+  const view = buildScheduleView(state.data.events);
 
   // 空态 1：没有关注任何机会——不制造虚假紧迫感
-  if (!data.next && data.groups.length === 0) {
+  if (view.groups.length === 0) {
     return (
       <div className="mx-auto max-w-2xl">
         <EmptyState
@@ -43,29 +42,31 @@ export default function SchedulePage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-2">
-      {data.next ? (
+      {view.next ? (
         <Hero
           meta="下一件不能错过的事"
-          conclusion={`${data.next.groupTitle} · ${data.next.event.kindLabel}`}
+          conclusion={`${view.next.groupTitle} · ${view.next.event.kindLabel}`}
           risk={{
-            tone: data.next.event.urgency === "must" ? "must" : "info",
+            tone: view.next.event.urgency === "must" ? "must" : "info",
             text:
-              data.next.event.urgency === "must"
-                ? `必须处理：${data.next.event.dateText}，截止后通常无法补报名，请提前准备材料`
-                : `建议处理：${data.next.event.dateText}，提前安排当天时间`,
+              view.next.event.urgency === "must"
+                ? `必须处理：${view.next.event.dateText}，截止后通常无法补报名，请提前准备材料`
+                : view.next.event.urgency === "suggest"
+                  ? `建议处理：${view.next.event.dateText}，提前安排当天时间`
+                  : `${view.next.event.dateText}`,
           }}
           action={
-            data.next.event.action
+            view.next.event.action
               ? {
-                  label: data.next.event.action.label,
-                  href: data.next.event.action.href,
-                  external: data.next.event.action.external,
+                  label: view.next.event.action.label,
+                  href: view.next.event.action.href,
+                  external: view.next.event.action.external,
                 }
               : undefined
           }
         >
           <p className="text-sm text-slate-600">
-            {data.next.regionText} · {data.next.event.dateText}
+            {view.next.regionText} · {view.next.event.dateText}
           </p>
         </Hero>
       ) : (
@@ -78,10 +79,30 @@ export default function SchedulePage() {
         </div>
       )}
 
+      {/* 时间冲突提示：只提示，不替用户自动放弃 */}
+      {view.conflicts.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm font-semibold text-amber-800">时间冲突提醒</p>
+          <ul className="mt-2 space-y-1.5">
+            {view.conflicts.map((c) => (
+              <li key={c.dateIso} className="text-sm text-amber-700">
+                <span className="font-medium">{c.dateText}</span>：
+                {c.items.map((i) => `${i.unitName}·${i.kindLabel}`).join("；")}
+                。请自行取舍，系统不会替你放弃任何机会。
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* 第二层：按关注机会分组的时间线；不默认展示月历 */}
       <section className="space-y-3">
-        <LayerHeading title="关注机会时间线" count={data.groups.length} />
-        <Timeline groups={data.groups} />
+        <LayerHeading title="关注机会时间线" count={view.groups.length} />
+        <Timeline
+          groups={view.groups}
+          mutedUnitIds={state.data.mutedUnitIds}
+          onToggleMute={toggleMute}
+        />
       </section>
     </div>
   );

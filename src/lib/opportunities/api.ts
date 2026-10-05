@@ -107,6 +107,14 @@ export const opportunitiesApi = {
     );
   },
 
+  /** 开启/关闭单个机会的站内提醒（日程仍可见，只控制通知生成） */
+  setRemindersMuted(unitId: string, muted: boolean): Promise<FollowDTO> {
+    return request<FollowDTO>(
+      `/units/${encodeURIComponent(unitId)}/reminders`,
+      { method: "PATCH", body: JSON.stringify({ muted }) },
+    );
+  },
+
   submitCorrection(
     unitId: string,
     input: { fieldPath: string; content: string; contact?: string },

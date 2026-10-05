@@ -1,42 +1,20 @@
 /**
- * 日程页视图模型（模块 3 骨架）。
+ * 日程页视图模型（模块 6）。
  *
- * 只从“已关注机会”的当前已发布公告版本派生时间线（PRD：不关注的机会不制造
- * 提醒）。时间未定一律输出 pending=true，展示“待官方通知”，禁止推测日期。
- * 纯函数、确定性；事件来源/变更留痕属于模块 6，本模块只做只读骨架。
+ * 事件由后端从已发布公告版本同步生成（含去重、变更留痕、静音隔离），
+ * 本模块是纯函数：把扁平的 TimelineEventDTO 数组按机会分组、
+ * 选出“下一件不能错过的事”、识别时间冲突。不访问网络、不读状态。
+ *
+ * 时间未定一律 pending=true，展示“待官方通知”，禁止推测日期。
  */
 import type {
-  AnnouncementVersion,
-  ApplicationUnit,
-  RecruitmentAnnouncement,
-} from "@/lib/announcements/types";
-import type { FollowedOpportunity } from "@/lib/opportunities/types";
-import { currentVersion } from "@/lib/announcements/domain";
-import { dateWithWeekday, daysUntil, regionLabel } from "./labels";
+  ScheduleUrgency,
+  TimelineEventDTO,
+  TimelineEventKind,
+} from "@/lib/schedule/types";
 
-export type ScheduleEventKind =
-  | "registration_start"
-  | "registration_end"
-  | "written_exam"
-  | "pending_notice";
-
-/** 通知强度三档（docs IA 第 5 节） */
-export type ScheduleUrgency = "must" | "suggest" | "info";
-
-export interface ScheduleEvent {
-  id: string;
-  kind: ScheduleEventKind;
-  kindLabel: string;
-  /** ISO 日期；待官方通知时为空 */
-  dateIso: string | null;
-  dateText: string;
-  /** 待官方通知（时间未定，不显示任何推测日期） */
-  pending: boolean;
-  urgency: ScheduleUrgency;
-  past: boolean;
-  /** 该事件的唯一下一步（没有动作时为 null） */
-  action: { label: string; href: string; external?: boolean } | null;
-}
+/** 日程事件 = 后端 DTO（视图层不重新派生强度/日期） */
+export type ScheduleEvent = TimelineEventDTO;
 
 export interface ScheduleGroup {
   unitId: string;
@@ -47,151 +25,114 @@ export interface ScheduleGroup {
 
 export interface NextScheduleItem {
   event: ScheduleEvent;
-  /** 事件所属报考单元（首屏一句话需要说明“哪件事”） */
   groupTitle: string;
   regionText: string;
 }
 
+/** 时间冲突：同一天有多个机会的节点（不替用户自动放弃，只提示） */
+export interface ScheduleConflict {
+  dateIso: string;
+  dateText: string;
+  items: { unitName: string; kindLabel: string; event: ScheduleEvent }[];
+}
+
 export interface ScheduleView {
-  /** 第一层：下一件不能错过的事；无关注/无待办时为 null（页面给明确空态） */
+  /** 第一层：下一件不能错过的事；无关注/无待办时为 null */
   next: NextScheduleItem | null;
   groups: ScheduleGroup[];
+  /** 同一天跨多个机会的节点（提示用，不自动放弃） */
+  conflicts: ScheduleConflict[];
 }
 
-interface ResolvedFollow {
-  follow: FollowedOpportunity;
-  announcement: RecruitmentAnnouncement;
-  version: AnnouncementVersion;
-  unit: ApplicationUnit;
-}
-
-function resolveFollow(
-  follow: FollowedOpportunity,
-  announcements: RecruitmentAnnouncement[],
-): ResolvedFollow | null {
-  const announcement = announcements.find((a) => a.id === follow.announcementId);
-  if (!announcement) return null;
-  const version = currentVersion(announcement);
-  const unit =
-    version.units.find((u) => u.id === follow.unitId) ??
-    announcement.versions.flatMap((v) => v.units).find((u) => u.id === follow.unitId);
-  if (!unit) return null;
-  return { follow, announcement, version, unit };
-}
-
-function buildEvents(resolved: ResolvedFollow, nowIso: string): ScheduleEvent[] {
-  const { version, unit } = resolved;
-  const timeline = version.timeline;
-  const events: ScheduleEvent[] = [];
-
-  const past = (iso: string) => daysUntil(iso, nowIso) < 0;
-
-  events.push({
-    id: `${unit.id}-registration-start`,
-    kind: "registration_start",
-    kindLabel: "报名开始",
-    dateIso: timeline.registrationStart,
-    dateText: dateWithWeekday(timeline.registrationStart),
-    pending: false,
-    urgency: "info",
-    past: past(timeline.registrationStart),
-    action: null,
-  });
-
-  events.push({
-    id: `${unit.id}-registration-end`,
-    kind: "registration_end",
-    kindLabel: "报名截止",
-    dateIso: timeline.registrationEnd,
-    dateText: dateWithWeekday(timeline.registrationEnd),
-    pending: false,
-    urgency: "must",
-    past: past(timeline.registrationEnd),
-    action:
-      !past(timeline.registrationEnd) && unit.registerUrl
-        ? { label: "去报名入口", href: unit.registerUrl, external: true }
-        : null,
-  });
-
-  if (timeline.writtenExamDate) {
-    events.push({
-      id: `${unit.id}-written-exam`,
-      kind: "written_exam",
-      kindLabel: "笔试",
-      dateIso: timeline.writtenExamDate,
-      dateText: dateWithWeekday(timeline.writtenExamDate),
-      pending: false,
-      urgency: "suggest",
-      past: past(timeline.writtenExamDate),
-      action: !past(timeline.writtenExamDate)
-        ? { label: "去备考", href: "/study" }
-        : null,
-    });
-  }
-
-  // 时间未定事项：保留官方原句（如“面试时间待官方通知”），不推测日期
-  for (const [index, item] of (timeline.pendingItems ?? []).entries()) {
-    events.push({
-      id: `${unit.id}-pending-${index}`,
-      kind: "pending_notice",
-      kindLabel: item,
-      dateIso: null,
-      dateText: "待官方通知",
-      pending: true,
-      urgency: "info",
-      past: false,
-      action: null,
-    });
-  }
-
-  return events;
-}
-
-const KIND_ORDER: ScheduleEventKind[] = [
+const KIND_ORDER: TimelineEventKind[] = [
   "registration_start",
   "registration_end",
+  "payment",
+  "admit_ticket",
   "written_exam",
+  "score",
+  "interview",
   "pending_notice",
 ];
 
-export function buildScheduleView(
-  follows: FollowedOpportunity[],
-  announcements: RecruitmentAnnouncement[],
-  nowIso: string,
-): ScheduleView {
-  const activeFollows = follows.filter(
-    (f) => f.status !== "abandoned" && f.status !== "closed",
-  );
+const URGENCY_RANK: Record<ScheduleUrgency, number> = {
+  must: 0,
+  suggest: 1,
+  info: 2,
+};
 
-  const groups: ScheduleGroup[] = [];
-  for (const follow of activeFollows) {
-    const resolved = resolveFollow(follow, announcements);
-    if (!resolved) continue;
-    const events = buildEvents(resolved, nowIso).sort(
-      (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
-    );
-    groups.push({
-      unitId: resolved.unit.id,
-      title: resolved.unit.name,
-      regionText: regionLabel(resolved.unit.region),
-      events,
-    });
+export function buildScheduleView(
+  events: ScheduleEvent[],
+): ScheduleView {
+  // 按机会分组（后端已保证每个 unitId 对应同一公告版本的事件）
+  const groupMap = new Map<string, ScheduleGroup>();
+  for (const event of events) {
+    let group = groupMap.get(event.unitId);
+    if (!group) {
+      group = {
+        unitId: event.unitId,
+        title: event.unitName,
+        regionText: event.regionText,
+        events: [],
+      };
+      groupMap.set(event.unitId, group);
+    }
+    group.events.push(event);
   }
 
-  // 下一件：所有关注机会中“尚未过去、带行动”的最早事件；
-  // 必须处理（报名截止）优先于建议处理（备考），同强度再比日期。
-  const URGENCY_RANK: Record<ScheduleUrgency, number> = { must: 0, suggest: 1, info: 2 };
+  const groups = Array.from(groupMap.values()).map((g) => ({
+    ...g,
+    events: [...g.events].sort((a, b) => {
+      const byKind = KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind);
+      if (byKind !== 0) return byKind;
+      return (a.dateIso ?? "").localeCompare(b.dateIso ?? "");
+    }),
+  }));
+
+  // 下一件：尚未过去、带行动、有明确日期的事件；must > suggest > info，同档比日期
   const upcoming = groups
     .flatMap((g) =>
       g.events
         .filter((e) => e.action && !e.past && e.dateIso)
-        .map((event) => ({ event, groupTitle: g.title, regionText: g.regionText })),
+        .map((event) => ({
+          event,
+          groupTitle: g.title,
+          regionText: g.regionText,
+        })),
     )
     .sort((a, b) => {
-      const byUrgency = URGENCY_RANK[a.event.urgency] - URGENCY_RANK[b.event.urgency];
+      const byUrgency =
+        URGENCY_RANK[a.event.urgency] - URGENCY_RANK[b.event.urgency];
       if (byUrgency !== 0) return byUrgency;
       return (a.event.dateIso ?? "").localeCompare(b.event.dateIso ?? "");
     });
 
-  return { next: upcoming[0] ?? null, groups };
+  // 冲突：同一 dateIso（非空）出现在多个 unitId
+  const byDate = new Map<string, ScheduleConflict>();
+  for (const event of events) {
+    if (!event.dateIso || event.past) continue;
+    const existing = byDate.get(event.dateIso);
+    const item = {
+      unitName: event.unitName,
+      kindLabel: event.kindLabel,
+      event,
+    };
+    if (existing) {
+      existing.items.push(item);
+    } else {
+      byDate.set(event.dateIso, {
+        dateIso: event.dateIso,
+        dateText: event.dateText,
+        items: [item],
+      });
+    }
+  }
+  const conflicts = Array.from(byDate.values())
+    .filter((c) => {
+      const unitIds = new Set(c.items.map((i) => i.event.unitId));
+      return unitIds.size > 1;
+    })
+    .sort((a, b) => a.dateIso.localeCompare(b.dateIso));
+
+  return { next: upcoming[0] ?? null, groups, conflicts };
 }
