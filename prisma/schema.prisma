@@ -42,6 +42,8 @@ model FollowedOpportunity {
   followedAt     DateTime @default(now()) @map("followed_at")
   statusHistory  Json     @map("status_history")
   abandonReason  String?  @map("abandon_reason")
+  /** 是否关闭该机会的所有站内提醒（报名截止等仍在日程可见，但不产生通知） */
+  remindersMuted Boolean  @default(false) @map("reminders_muted")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -213,4 +215,62 @@ model PublishedAnnouncementVersion {
   @@unique([announcementId, versionNumber])
   @@index([announcementId, status])
   @@map("published_announcement_versions")
+}
+
+// ==================== 报名日程与站内提醒（v6.1 模块 6） ====================
+
+/**
+ * 时间线事件：从已发布公告版本的 timeline 生成，按用户关注的报考单元落库。
+ *
+ * - eventKey = `${unitId}-${kind}`，同一用户下唯一；同一公告版本重复同步不产生重复记录；
+ * - 新版本发布导致时间/标题变化时，更新同一条 eventKey 记录，并把旧值追加到 changeHistory；
+ * - dateIso 为 null 表示“待官方通知”，绝不写入推测日期；
+ * - muted 由 FollowedOpportunity.remindersMuted 控制，查询时过滤，不在事件表冗余。
+ */
+model TimelineEvent {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  unitId        String   @map("unit_id")
+  announcementId String  @map("announcement_id")
+  versionId     String   @map("version_id")
+  /** 用户内唯一：unitId + kind */
+  eventKey      String   @map("event_key")
+  kind          String // registration_start / registration_end / review / payment / admit_ticket / written_exam / score / interview / pending_notice
+  title         String
+  /** ISO 日期；待官方通知时为 null */
+  dateIso       String?  @map("date_iso")
+  status        String   @default("active") // active / superseded
+  /** 变更历史：[{versionId, dateIso, title, changedAt}]，只追加 */
+  changeHistory Json     @default("[]") @map("change_history")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, eventKey])
+  @@index([userId, status])
+  @@index([unitId])
+  @@map("timeline_events")
+}
+
+/**
+ * 站内通知记录（不接短信/微信/邮件/Web Push）。
+ *
+ * - severity 三档：must_handle（即将截止/资格变化/岗位取消）、suggest_handle（材料未准备/主要目标未定）、info（公告新增/时间待定）；
+ * - 由事件变更或系统判定产生，前端通知中心按 severity 分级展示，普通信息不与截止风险同视觉强度；
+ * - readAt 为空即未读。
+ */
+model NotificationRecord {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  severity      String // must_handle / suggest_handle / info
+  title         String
+  body          String
+  /** 关联的时间线事件键（可选，非事件类通知留空） */
+  eventKey      String?  @map("event_key")
+  relatedUnitId String?  @map("related_unit_id")
+  readAt        DateTime? @map("read_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([userId, readAt])
+  @@index([userId, severity])
+  @@map("notification_records")
 }

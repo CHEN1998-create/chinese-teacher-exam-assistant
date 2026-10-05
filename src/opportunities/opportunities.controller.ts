@@ -98,6 +98,17 @@ export class OpportunitiesController {
     return this.service.setRole(req.user!.id, unitId, body.role);
   }
 
+  /** 开启/关闭单个机会的站内提醒（不影响日程展示，只控制通知生成） */
+  @Patch('units/:unitId/reminders')
+  setRemindersMuted(
+    @Param('unitId') unitId: string,
+    @Body() body: { muted?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const muted = typeof body.muted === 'boolean' ? body.muted : !!body.muted;
+    return this.service.setRemindersMuted(req.user!.id, unitId, muted);
+  }
+
   /** 详情第三层：提交证据/条件/版本纠错留痕 */
   @Post('units/:unitId/corrections')
   submitCorrection(

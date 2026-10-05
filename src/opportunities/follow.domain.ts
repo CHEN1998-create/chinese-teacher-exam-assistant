@@ -34,6 +34,8 @@ export interface FollowRecord {
   followedAt: string;
   statusHistory: FollowStatusEvent[];
   abandonReason: string | null;
+  /** 是否已关闭该机会的站内提醒 */
+  remindersMuted: boolean;
 }
 
 /** 允许的状态流转图 */

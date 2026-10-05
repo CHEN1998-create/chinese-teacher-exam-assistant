@@ -46,6 +46,8 @@ export interface FollowDTO {
   abandonReason: string | null;
   /** 关注时的公告版本是否已被新版本取代 */
   newerVersion: boolean;
+  /** 是否已关闭该机会的站内提醒 */
+  remindersMuted: boolean;
 }
 
 export interface DimensionDTO {
@@ -151,6 +153,7 @@ function toFollowDTO(
     statusHistory: follow.statusHistory,
     abandonReason: follow.abandonReason,
     newerVersion: hasNewerVersion(follow, currentVersionId),
+    remindersMuted: follow.remindersMuted,
   };
 }
 

@@ -21,6 +21,7 @@ function makeFollow(overrides: Partial<FollowRecord> = {}): FollowRecord {
     followedAt: NOW,
     statusHistory: [{ status: 'considering', at: NOW }],
     abandonReason: null,
+    remindersMuted: false,
     ...overrides,
   };
 }

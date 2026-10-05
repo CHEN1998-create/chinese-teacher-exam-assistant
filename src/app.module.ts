@@ -7,9 +7,10 @@ import { InternalTokenGuard } from './internal-token.guard.js';
 import { PrismaModule } from './prisma.module.js';
 import { AnnouncementsModule } from './announcements/announcements.module.js';
 import { OpportunitiesModule } from './opportunities/opportunities.module.js';
+import { ScheduleModule } from './schedule/schedule.module.js';
 
 @Module({
-  imports: [PrismaModule, AnnouncementsModule, OpportunitiesModule],
+  imports: [PrismaModule, AnnouncementsModule, OpportunitiesModule, ScheduleModule],
   controllers: [AppController, HealthController],
   providers: [
     AppService,

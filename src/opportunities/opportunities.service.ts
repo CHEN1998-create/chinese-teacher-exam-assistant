@@ -107,6 +107,7 @@ export class OpportunitiesService {
         newerVersion: announcement
           ? follow.versionId !== currentVersion(announcement).id
           : false,
+        remindersMuted: follow.remindersMuted,
       };
     });
   }
@@ -225,6 +226,23 @@ export class OpportunitiesService {
     return this.toDTO(this.fromRow(row));
   }
 
+  /** 开启/关闭单个机会的站内提醒（日程仍可见，只是不产生通知） */
+  async setRemindersMuted(
+    userId: string,
+    unitId: string,
+    muted: boolean,
+  ): Promise<FollowDTO> {
+    const row = await this.prisma.followedOpportunity.findUnique({
+      where: { userId_unitId: { userId, unitId } },
+    });
+    if (!row) throw new NotFoundException('请先关注该机会，再设置提醒开关');
+    const updated = await this.prisma.followedOpportunity.update({
+      where: { userId_unitId: { userId, unitId } },
+      data: { remindersMuted: muted },
+    });
+    return this.toDTO(this.fromRow(updated));
+  }
+
   // ==================== 纠错提交（证据层，PRD 7.10） ====================
 
   async submitCorrection(
@@ -294,6 +312,7 @@ export class OpportunitiesService {
     followedAt: Date;
     statusHistory: Prisma.JsonValue;
     abandonReason: string | null;
+    remindersMuted?: boolean;
   }): FollowRecord {
     return {
       id: row.id,
@@ -306,6 +325,7 @@ export class OpportunitiesService {
       followedAt: row.followedAt.toISOString(),
       statusHistory: row.statusHistory as unknown as FollowStatusEvent[],
       abandonReason: row.abandonReason,
+      remindersMuted: row.remindersMuted ?? false,
     };
   }
 
@@ -327,6 +347,7 @@ export class OpportunitiesService {
       statusHistory: follow.statusHistory,
       abandonReason: follow.abandonReason,
       newerVersion: follow.versionId !== currentVersionId,
+      remindersMuted: follow.remindersMuted,
     };
   }
 
