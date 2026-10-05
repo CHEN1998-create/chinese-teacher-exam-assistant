@@ -41,6 +41,7 @@ import {
   resourceService,
 } from "@/lib/services";
 import { usePlans } from "@/lib/plans/usePlans";
+import { setActivePlanTarget } from "@/lib/plans/planStore";
 import { useTodayString } from "@/lib/plans/useToday";
 import type { NextStepSummary } from "@/lib/plans/replanEngine";
 import type { PlanTask, TaskFeedback } from "@/types";
@@ -346,6 +347,8 @@ function ReadySection({
   const todayStr = useTodayString();
   const [nextStep, setNextStep] = useState<NextStepState | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
+  // invited 模式：从服务端加载该目标的计划快照后再渲染，避免读到空/伪造数据
+  const [loadedTargetId, setLoadedTargetId] = useState<string | null>(null);
 
   // 主要目标桥接：upsert 进本地目标库并设为当前（稳定 id，旧目标保留为历史）。
   // 同一机会 + 同一公告版本只同步一次，避免每次渲染重复写库。
@@ -356,6 +359,23 @@ function ReadySection({
     syncedKeyRef.current = key;
     goalService.syncPrimaryTarget(goal);
   }, [goal, userId]);
+
+  // invited 模式加载服务端计划快照
+  useEffect(() => {
+    let cancelled = false;
+    setActivePlanTarget(targetId)
+      .then(() => {
+        if (!cancelled) setLoadedTargetId(targetId);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadedTargetId(targetId);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [targetId]);
+
+  const plansLoaded = loadedTargetId === targetId;
 
   const readiness = examTargetService.getById(targetId)
     ? planService.getReadiness(targetId)
@@ -376,6 +396,10 @@ function ReadySection({
     () => dailyPlans.find((d) => d.date === todayStr) ?? null,
     [dailyPlans, todayStr],
   );
+
+  if (!plansLoaded) {
+    return <LoadingPage />;
+  }
 
   const handleGenerate = () => {
     setGenerateError(null);

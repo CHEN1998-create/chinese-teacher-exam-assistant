@@ -4,11 +4,13 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser, DEMO_ACCOUNTS } from "@/lib/auth";
+import { isDemoMode } from "@/lib/demo/config";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, status } = useCurrentUser();
+  const demo = isDemoMode;
 
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
@@ -83,13 +85,15 @@ function LoginForm() {
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           {/* Demo 声明 */}
-          <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
-            <p className="text-xs leading-5 text-amber-800">
-              <strong>演示环境提示：</strong>
-              这里使用的是内置演示账号，<strong>不是真实身份认证</strong>，没有真实注册与密码校验；
-              演示数据仅保存在本机浏览器，不代表正式服务数据。请勿输入真实密码或其他个人信息。
-            </p>
-          </div>
+          {demo && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200">
+              <p className="text-xs leading-5 text-amber-800">
+                <strong>演示环境提示：</strong>
+                这里使用的是内置演示账号，<strong>不是真实身份认证</strong>，没有真实注册与密码校验；
+                演示数据仅保存在本机浏览器，不代表正式服务数据。请勿输入真实密码或其他个人信息。
+              </p>
+            </div>
+          )}
 
           {/* 会话失效提示 */}
           {(sessionExpired || reason === "expired") && (
@@ -112,7 +116,7 @@ function LoginForm() {
                 id="account"
                 type="text"
                 autoComplete="username"
-                placeholder="演示邮箱，例如 student@demo.app"
+                placeholder={demo ? "演示邮箱，例如 student@demo.app" : "邮箱"}
                 value={account}
                 onChange={(e) => setAccount(e.target.value)}
                 className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -130,7 +134,7 @@ function LoginForm() {
                 id="password"
                 type="password"
                 autoComplete="current-password"
-                placeholder="演示密码：demo1234"
+                placeholder={demo ? "演示密码：demo1234" : "密码"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full h-10 px-3 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -149,28 +153,32 @@ function LoginForm() {
           </form>
 
           {/* 演示账号快捷填充 */}
-          <div className="mt-6">
-            <p className="text-xs font-medium text-slate-500 mb-2">
-              演示账号（点击自动填充，密码均为 demo1234）
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {DEMO_ACCOUNTS.map((item) => (
-                <button
-                  key={item.account}
-                  type="button"
-                  onClick={() => fillDemoAccount(item.account, item.password)}
-                  className="text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
-                >
-                  <p className="text-sm font-medium text-slate-900">{item.description}</p>
-                  <p className="text-xs text-slate-400 truncate mt-0.5">{item.account}</p>
-                </button>
-              ))}
+          {demo && (
+            <div className="mt-6">
+              <p className="text-xs font-medium text-slate-500 mb-2">
+                演示账号（点击自动填充，密码均为 demo1234）
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {DEMO_ACCOUNTS.map((item) => (
+                  <button
+                    key={item.account}
+                    type="button"
+                    onClick={() => fillDemoAccount(item.account, item.password)}
+                    className="text-left p-2.5 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50/50 transition-colors"
+                  >
+                    <p className="text-sm font-medium text-slate-900">{item.description}</p>
+                    <p className="text-xs text-slate-400 truncate mt-0.5">{item.account}</p>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <p className="text-center text-xs text-slate-400 mt-4">
-          未注册账号？Demo 阶段无需注册，请直接使用演示账号
+          {demo
+            ? "未注册账号？Demo 阶段无需注册，请直接使用演示账号"
+            : "仅限受邀测试用户，不开放公开注册"}
         </p>
         {safeNext(nextParam) === "/preview" && (
           <p className="text-center text-xs mt-3">

@@ -27,8 +27,6 @@ import {
   WeeklyReviewAdjustmentOutcome,
   WeeklyReviewStat,
 } from "@/types";
-import { STORAGE_KEYS } from "@/lib/mock-data";
-import { loadFromStorage, saveToStorageStrict } from "@/lib/storage";
 import { authService } from "@/lib/auth";
 import { examTargetService } from "@/lib/services";
 import { evidenceService } from "@/lib/evidence/evidenceService";
@@ -36,6 +34,7 @@ import { materialService } from "@/lib/materials/materialService";
 import { resourceService } from "@/lib/resources/resourceService";
 import { planService } from "./planService";
 import { feedbackService } from "./feedbackService";
+import { planStore } from "./planStore";
 import { todayString } from "./useToday";
 import {
   applyReplan,
@@ -61,19 +60,19 @@ function currentUserId(): string | null {
 }
 
 function loadAdjustments(): TaskAdjustment[] {
-  return loadFromStorage<TaskAdjustment[]>(STORAGE_KEYS.PLAN_ADJUSTMENTS, []);
+  return planStore.loadAdjustments();
 }
 
 function persistAdjustments(all: TaskAdjustment[]): void {
-  saveToStorageStrict(STORAGE_KEYS.PLAN_ADJUSTMENTS, all);
+  planStore.persistAdjustments(all);
 }
 
 function loadReviews(): WeeklyReview[] {
-  return loadFromStorage<WeeklyReview[]>(STORAGE_KEYS.WEEKLY_REVIEWS, []);
+  return planStore.loadReviews();
 }
 
 function persistReviews(all: WeeklyReview[]): void {
-  saveToStorageStrict(STORAGE_KEYS.WEEKLY_REVIEWS, all);
+  planStore.persistReviews(all);
 }
 
 /** 组装重排引擎输入（从各服务实时读取） */
@@ -112,13 +111,13 @@ function persistReplanResult(result: {
   daily: DailyPlan[];
   adjustments: TaskAdjustment[];
 }): void {
-  const allWeekly = loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, []);
+  const allWeekly = planStore.loadWeeklyPlans();
   allWeekly.push(result.weekly);
-  saveToStorageStrict(STORAGE_KEYS.PLANS, allWeekly);
+  planStore.persistWeeklyPlans(allWeekly);
 
-  const allDaily = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.DAILY_PLANS, []);
+  const allDaily = planStore.loadDailyPlans();
   allDaily.push(...result.daily);
-  saveToStorageStrict(STORAGE_KEYS.DAILY_PLANS, allDaily);
+  planStore.persistDailyPlans(allDaily);
 
   const allAdjustments = loadAdjustments();
   allAdjustments.push(...result.adjustments);
@@ -128,7 +127,7 @@ function persistReplanResult(result: {
 /** 找到某计划的重排草稿（基于该计划生成的未确认新版本） */
 function findReplanDraft(activePlanId: string): WeeklyPlan | null {
   return (
-    loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, []).find(
+    planStore.loadWeeklyPlans().find(
       (p) => p.status === "draft" && p.previousVersionId === activePlanId
     ) ?? null
   );
@@ -188,13 +187,13 @@ export const replanService = {
 
     const result = applyReplan(buildEngineInput(active), { userReason });
 
-    const allWeekly = loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, []);
+    const allWeekly = planStore.loadWeeklyPlans();
     allWeekly.push(result.weekly);
-    saveToStorageStrict(STORAGE_KEYS.PLANS, allWeekly);
+    planStore.persistWeeklyPlans(allWeekly);
 
-    const allDaily = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.DAILY_PLANS, []);
+    const allDaily = planStore.loadDailyPlans();
     allDaily.push(...result.daily);
-    saveToStorageStrict(STORAGE_KEYS.DAILY_PLANS, allDaily);
+    planStore.persistDailyPlans(allDaily);
 
     const allAdjustments = loadAdjustments();
     allAdjustments.push(...result.adjustments);
@@ -206,15 +205,14 @@ export const replanService = {
 
   /** 丢弃重排草稿：仅删除草稿版本自身的数据（历史不受影响） */
   discardReplanDraft(weeklyPlanId: string): boolean {
-    const allWeekly = loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, []);
+    const allWeekly = planStore.loadWeeklyPlans();
     const idx = allWeekly.findIndex((p) => p.id === weeklyPlanId && p.status === "draft");
     if (idx === -1) return false;
     allWeekly.splice(idx, 1);
-    saveToStorageStrict(STORAGE_KEYS.PLANS, allWeekly);
+    planStore.persistWeeklyPlans(allWeekly);
 
-    const allDaily = loadFromStorage<DailyPlan[]>(STORAGE_KEYS.DAILY_PLANS, []);
-    saveToStorageStrict(
-      STORAGE_KEYS.DAILY_PLANS,
+    const allDaily = planStore.loadDailyPlans();
+    planStore.persistDailyPlans(
       allDaily.filter((d) => d.weeklyPlanId !== weeklyPlanId)
     );
 
@@ -330,7 +328,7 @@ export const replanService = {
     const userId = currentUserId();
     if (!userId) return [];
     const planIds = new Set(
-      loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, [])
+      planStore.loadWeeklyPlans()
         .filter((p) => p.userId === userId && p.examTargetId === targetId)
         .map((p) => p.id)
     );

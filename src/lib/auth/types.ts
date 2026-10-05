@@ -40,10 +40,10 @@ export interface AuthService {
   /** 退出登录，清除本地会话 */
   logout(): Promise<void>;
   /**
-   * 恢复会话：读取本地会话并校验有效期。
+   * 恢复会话：Demo 模式同步读 localStorage；invited 模式异步请求 /api/auth/session。
    * 不存在、解析失败或已过期时返回 null（过期会同时清除本地记录）。
    */
-  restoreSession(): Session | null;
+  restoreSession(): Session | null | Promise<Session | null>;
   /** 读取当前原始会话（不做过期跳转判断），供 service 层取用户信息 */
   getSession(): Session | null;
   /** 更新会话中的用户资料，返回更新后的会话 */

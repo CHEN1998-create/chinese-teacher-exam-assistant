@@ -18,8 +18,6 @@ import {
   ResourcePlanLink,
   WeeklyPlan,
 } from "@/types";
-import { STORAGE_KEYS } from "@/lib/mock-data";
-import { loadFromStorage, saveToStorageStrict } from "@/lib/storage";
 import { authService } from "@/lib/auth";
 import { examTargetService } from "@/lib/services";
 import { evidenceService } from "@/lib/evidence/evidenceService";
@@ -31,6 +29,7 @@ import {
   type PlanGenerationInput,
   type PlanReadiness,
 } from "./domain";
+import { planStore } from "./planStore";
 import { track, classifyErrorCode } from "@/lib/analytics/eventService";
 
 const listeners = new Set<() => void>();
@@ -46,19 +45,19 @@ function currentUserId(): string | null {
 }
 
 function loadWeeklyPlans(): WeeklyPlan[] {
-  return loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, []);
+  return planStore.loadWeeklyPlans();
 }
 
 function persistWeeklyPlans(all: WeeklyPlan[]): void {
-  saveToStorageStrict(STORAGE_KEYS.PLANS, all);
+  planStore.persistWeeklyPlans(all);
 }
 
 function loadDailyPlans(): DailyPlan[] {
-  return loadFromStorage<DailyPlan[]>(STORAGE_KEYS.DAILY_PLANS, []);
+  return planStore.loadDailyPlans();
 }
 
 function persistDailyPlans(all: DailyPlan[]): void {
-  saveToStorageStrict(STORAGE_KEYS.DAILY_PLANS, all);
+  planStore.persistDailyPlans(all);
 }
 
 /** 归一化旧版 PlanTask（补全新字段，避免旧数据渲染报错） */

@@ -4,7 +4,7 @@
  * 浏览器只调用同源 /api/opportunities/*（由 Next 路由代理到后端），
  * 身份头从本地会话注入；判定逻辑全部在后端，这里只负责收发与错误归一。
  */
-import { authService } from "@/lib/auth";
+import { authService, AUTH_MODE } from "@/lib/auth";
 import type { UserRecruitmentProfile } from "@/lib/profile/types";
 import type {
   FollowDTO,
@@ -18,10 +18,10 @@ import type {
 const API_BASE = "/api/opportunities";
 
 function authHeaders(): Record<string, string> {
+  // invited 模式：身份由 HttpOnly 会话 cookie 承载，绝不发送客户端可伪造的 x-user-id；
+  // demo 模式：保持现有 x-user-id 头链路。
+  if (AUTH_MODE === "invited") return {};
   const session = authService.getSession();
-  // 仅传后端 UserGuard 需要的 x-user-id。
-  // 不放 x-user-name：中文名超出 fetch 请求头允许的 ISO-8859-1 范围会直接抛错，
-  // 展示名也不应经由请求头上行。
   if (!session) return {};
   return {
     "x-user-id": session.userId,
@@ -45,22 +45,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const opportunitiesApi = {
-  /** 机会列表（按当前画像即时计算，四档分组 + 关注状态 + 版本信息） */
+  /** 机会列表（按当前画像即时计算，四档分组 + 关注状态 + 版本信息）。
+   *  invited 模式下不发送画像，由后端读取已持久化的画像（跨浏览器一致）。 */
   match(profile: UserRecruitmentProfile): Promise<MatchResponse> {
     return request<MatchResponse>("/match", {
       method: "POST",
-      body: JSON.stringify({ profile }),
+      body: AUTH_MODE === "invited" ? JSON.stringify({}) : JSON.stringify({ profile }),
     });
   },
 
-  /** 机会详情（三层结构所需的逐条件、证据、版本链数据） */
+  /** 机会详情（三层结构所需的逐条件、证据、版本链数据）。
+   *  invited 模式下不发送画像，由后端读取已持久化的画像。 */
   unitDetail(
     unitId: string,
     profile: UserRecruitmentProfile,
   ): Promise<UnitDetailResponse> {
     return request<UnitDetailResponse>(`/units/${encodeURIComponent(unitId)}/detail`, {
       method: "POST",
-      body: JSON.stringify({ profile }),
+      body: AUTH_MODE === "invited" ? JSON.stringify({}) : JSON.stringify({ profile }),
     });
   },
 

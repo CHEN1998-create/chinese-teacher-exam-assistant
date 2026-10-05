@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { useCurrentUser } from "@/lib/auth";
+import { useCurrentUser, AUTH_MODE } from "@/lib/auth";
 import {
   CITY_OPTIONS,
   CREDENTIAL_LEVEL_OPTIONS,
@@ -17,10 +17,12 @@ import {
   SUBJECT_OPTIONS,
   TEACHER_CERT_STATUS_OPTIONS,
   TOTAL_PROFILE_STEPS,
+  draftToProfile,
   guestSessionService,
   isStepComplete,
   type GuestProfileDraft,
 } from "@/lib/guest/guestSession";
+import { profileApi } from "@/lib/profile/profileApi";
 import type { EmploymentNatureCode, SubjectCode } from "@/lib/announcements/types";
 import type {
   RegionPreference,
@@ -90,10 +92,15 @@ export default function OnboardingPage() {
     setDraft((prev) => ({ ...prev, ...patch }));
   };
 
-  /** 进入下一组：保存草稿与完成进度 */
+  /** 进入下一组：保存草稿与完成进度。
+   *  invited 模式下若草稿已完整，同步持久化到服务端（跨浏览器恢复）。 */
   const goNext = () => {
     const finishedStep = view;
     guestSessionService.save({ draft, step: finishedStep });
+    if (AUTH_MODE === "invited") {
+      const profile = draftToProfile(draft);
+      if (profile) profileApi.saveProfile(profile).catch(() => undefined);
+    }
     if (finishedStep >= TOTAL_PROFILE_STEPS) {
       router.push("/preview");
     } else {

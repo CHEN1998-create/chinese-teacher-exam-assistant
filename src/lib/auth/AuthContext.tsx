@@ -44,8 +44,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setStatus(next ? "authenticated" : "unauthenticated");
     };
 
-    // 挂载时从 localStorage 恢复会话（含过期校验）
-    applySession(authService.restoreSession());
+    // 挂载时恢复会话：Demo 同步、invited 异步请求服务端
+    Promise.resolve(authService.restoreSession()).then(applySession);
 
     // service 层变更会话时（登录/退出/资料更新）同步到 React 状态
     return authService.subscribe(() => {

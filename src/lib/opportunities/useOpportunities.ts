@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { AUTH_MODE } from "@/lib/auth";
 import {
   buildActiveProfile,
   type ActiveProfileReason,
@@ -13,6 +14,9 @@ import type {
   StudyTargetRole,
   UnitMatchDTO,
 } from "./api-types";
+
+/** invited 模式占位画像：后端会忽略请求体，读取已持久化画像 */
+const INVITED_PLACEHOLDER_PROFILE = {} as UserRecruitmentProfile;
 
 export type OpportunitiesLoadState =
   | { status: "loading" }
@@ -35,6 +39,7 @@ export interface OpportunitiesApi {
 function computeInitialState():
   | { status: "loading" }
   | { status: "no-profile"; reason: ActiveProfileReason } {
+  if (AUTH_MODE === "invited") return { status: "loading" };
   const active = buildActiveProfile();
   return active.ready
     ? { status: "loading" }
@@ -43,8 +48,8 @@ function computeInitialState():
 
 /**
  * 机会列表数据：登录后只读后端匹配结果（按请求即时计算）。
- * 画像来自本机基础画像草稿 + 补充事实；画像变化后调用 reload 即得新结果。
- * 动作失败不破坏已有数据，通过 actionError 提示。
+ * - demo：画像来自本机基础画像草稿 + 补充事实；
+ * - invited：画像由后端读取已持久化数据，前端不依赖本地草稿。
  */
 export function useOpportunities(): OpportunitiesApi {
   const [state, setState] = useState<OpportunitiesLoadState>(computeInitialState);
@@ -53,40 +58,57 @@ export function useOpportunities(): OpportunitiesApi {
 
   const reload = useCallback(async (silent = false) => {
     if (!silent) setState({ status: "loading" });
-    const active = buildActiveProfile();
-    if (!active.ready) {
-      setState({ status: "no-profile", reason: active.reason });
-      return;
+    let profile: UserRecruitmentProfile;
+    if (AUTH_MODE === "invited") {
+      profile = INVITED_PLACEHOLDER_PROFILE;
+    } else {
+      const active = buildActiveProfile();
+      if (!active.ready) {
+        setState({ status: "no-profile", reason: active.reason });
+        return;
+      }
+      profile = active.profile;
     }
     try {
-      const data = await opportunitiesApi.match(active.profile);
-      setState({ status: "ready", data, profile: active.profile });
+      const data = await opportunitiesApi.match(profile);
+      setState({ status: "ready", data, profile });
     } catch (error) {
-      setState({
-        status: "error",
-        error: error instanceof Error ? error.message : "机会加载失败",
-      });
+      const msg = error instanceof Error ? error.message : "机会加载失败";
+      // 后端提示未保存画像：展示无画像引导
+      if (msg.includes("尚未保存画像")) {
+        setState({ status: "no-profile", reason: "incomplete" });
+      } else {
+        setState({ status: "error", error: msg });
+      }
     }
   }, []);
 
-  // 初次加载：仅在画像 ready 时发起请求；setState 均在异步回调中
+  // 初次加载：setState 均在异步回调中
   useEffect(() => {
-    const active = buildActiveProfile();
-    if (!active.ready) return;
     let cancelled = false;
+    const profile =
+      AUTH_MODE === "invited"
+        ? INVITED_PLACEHOLDER_PROFILE
+        : (() => {
+            const active = buildActiveProfile();
+            return active.ready ? active.profile : null;
+          })();
+    if (profile === null) return;
     opportunitiesApi
-      .match(active.profile)
+      .match(profile)
       .then((data) => {
         if (!cancelled) {
-          setState({ status: "ready", data, profile: active.profile });
+          setState({ status: "ready", data, profile });
         }
       })
       .catch((error) => {
         if (!cancelled) {
-          setState({
-            status: "error",
-            error: error instanceof Error ? error.message : "机会加载失败",
-          });
+          const msg = error instanceof Error ? error.message : "机会加载失败";
+          if (msg.includes("尚未保存画像")) {
+            setState({ status: "no-profile", reason: "incomplete" });
+          } else {
+            setState({ status: "error", error: msg });
+          }
         }
       });
     return () => {
@@ -127,9 +149,14 @@ export type ActiveProfileLoadState =
   | { status: "no-profile"; reason: ActiveProfileReason }
   | { status: "ready"; profile: UserRecruitmentProfile };
 
-/** 供详情页复用的画像读取（本地数据，惰性计算，无副作用） */
+/** 供详情页复用的画像读取。
+ * - demo：本地草稿 + 补充事实；
+ * - invited：占位 ready，由后端读取已持久化画像。 */
 export function useActiveProfile(): ActiveProfileLoadState {
   const [state] = useState<ActiveProfileLoadState>(() => {
+    if (AUTH_MODE === "invited") {
+      return { status: "ready", profile: INVITED_PLACEHOLDER_PROFILE };
+    }
     const active = buildActiveProfile();
     return active.ready
       ? { status: "ready", profile: active.profile }

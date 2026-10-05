@@ -130,6 +130,9 @@ export default function SettingsPage() {
       {/* 演示环境：一键重置浏览器中的全部演示数据 */}
       {isDemoMode && <ResetDemoDataCard />}
 
+      {/* invited 模式：删除测试数据 / 注销账号 */}
+      {!isDemoMode && <AccountDangerZoneCard />}
+
       {/* 隐私说明、数据类别与删除申请 */}
       <DataPrivacyPanel />
     </div>
@@ -174,6 +177,117 @@ function ResetDemoDataCard() {
           重置演示数据
         </Button>
       )}
+    </Card>
+  );
+}
+
+/**
+ * invited 模式危险操作区：
+ * - 删除测试数据：清空该用户的画像、关注、目标、计划、反馈，账号与登录会话保留；
+ * - 注销账号：删除账号及全部数据并退出登录。
+ * 均两步确认，避免误触。
+ */
+function AccountDangerZoneCard() {
+  const router = useRouter();
+  const [confirmTarget, setConfirmTarget] = useState<"data" | "account" | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const deleteTestData = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/test-data", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("删除测试数据失败");
+      setConfirmTarget(null);
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/account", {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("注销账号失败");
+      clearAllStorage();
+      router.replace("/login");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "操作失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="账号与数据"
+        description="管理你的测试数据与账号"
+      />
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm text-slate-600">
+            删除测试数据会清空你的画像、关注、目标、计划与反馈，账号与登录状态保留。
+          </p>
+          {confirmTarget === "data" ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button variant="danger" size="sm" onClick={deleteTestData} disabled={busy}>
+                {busy ? "处理中..." : "再次点击确认删除测试数据"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setConfirmTarget(null)} disabled={busy}>
+                取消
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => setConfirmTarget("data")}
+            >
+              删除测试数据
+            </Button>
+          )}
+        </div>
+
+        <div className="border-t border-slate-200 pt-4">
+          <p className="text-sm text-slate-600">
+            注销账号会永久删除你的账号及全部数据，且无法恢复。
+          </p>
+          {confirmTarget === "account" ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <Button variant="danger" size="sm" onClick={deleteAccount} disabled={busy}>
+                {busy ? "处理中..." : "再次点击确认注销账号"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setConfirmTarget(null)} disabled={busy}>
+                取消
+              </Button>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => setConfirmTarget("account")}
+            >
+              注销账号
+            </Button>
+          )}
+        </div>
+
+        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
     </Card>
   );
 }

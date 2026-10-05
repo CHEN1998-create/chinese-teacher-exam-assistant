@@ -19,10 +19,9 @@ import {
   TaskStatus,
   WeeklyPlan,
 } from "@/types";
-import { STORAGE_KEYS } from "@/lib/mock-data";
-import { loadFromStorage, saveToStorageStrict } from "@/lib/storage";
 import { authService } from "@/lib/auth";
 import { track, classifyErrorCode } from "@/lib/analytics/eventService";
+import { planStore } from "./planStore";
 
 const listeners = new Set<() => void>();
 let storeVersion = 0;
@@ -37,23 +36,23 @@ function currentUserId(): string | null {
 }
 
 function loadFeedbacks(): TaskFeedback[] {
-  return loadFromStorage<TaskFeedback[]>(STORAGE_KEYS.TASK_FEEDBACKS, []).map(normalizeFeedback);
+  return planStore.loadFeedbacks().map(normalizeFeedback);
 }
 
 function persistFeedbacks(all: TaskFeedback[]): void {
-  saveToStorageStrict(STORAGE_KEYS.TASK_FEEDBACKS, all);
+  planStore.persistFeedbacks(all);
 }
 
 function loadDailyPlans(): DailyPlan[] {
-  return loadFromStorage<DailyPlan[]>(STORAGE_KEYS.DAILY_PLANS, []);
+  return planStore.loadDailyPlans();
 }
 
 function persistDailyPlans(all: DailyPlan[]): void {
-  saveToStorageStrict(STORAGE_KEYS.DAILY_PLANS, all);
+  planStore.persistDailyPlans(all);
 }
 
 function loadWeeklyPlans(): WeeklyPlan[] {
-  return loadFromStorage<WeeklyPlan[]>(STORAGE_KEYS.PLANS, []);
+  return planStore.loadWeeklyPlans();
 }
 
 /** 归一化旧版反馈（补全新增关联字段与 updatedAt） */
