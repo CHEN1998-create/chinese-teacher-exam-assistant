@@ -1,9 +1,13 @@
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // 解析 Cookie，供 SessionAuthGuard 读取 HttpOnly 会话令牌
+  app.use(cookieParser());
 
   // 受邀部署中 Nginx 终止 TLS 并以 /api/* 反向代理到本服务。
   // 显式设置 trust proxy，Express 才会信任代理设置的 X-Forwarded-*，

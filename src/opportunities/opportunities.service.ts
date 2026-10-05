@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service.js';
+import { ProfileService } from '../profile/profile.service.js';
 import { CATALOG_ANNOUNCEMENTS } from '../matching/catalog.js';
 import { buildCandidates, currentVersion } from '../matching/engine.js';
 import type {
@@ -47,12 +48,30 @@ import {
  */
 @Injectable()
 export class OpportunitiesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly profileService: ProfileService,
+  ) {}
+
+  /** 画像来源：请求体优先；未携带时读取服务端持久画像（受邀模式跨浏览器恢复） */
+  private async resolveProfile(
+    profile: unknown,
+    userId: string,
+  ): Promise<UserRecruitmentProfile> {
+    if (profile !== undefined && profile !== null) {
+      return this.validateProfile(profile);
+    }
+    const persisted = await this.profileService.getProfile(userId);
+    if (persisted === null) {
+      throw new BadRequestException('尚未保存画像，请先完成基础画像');
+    }
+    return this.validateProfile(persisted);
+  }
 
   // ==================== 匹配：列表 / 详情 ====================
 
   async match(profile: unknown, userId: string): Promise<MatchResponse> {
-    const valid = this.validateProfile(profile);
+    const valid = await this.resolveProfile(profile, userId);
     const candidates = buildCandidates(
       CATALOG_ANNOUNCEMENTS,
       valid,
@@ -66,7 +85,7 @@ export class OpportunitiesService {
     userId: string,
     unitId: string,
   ): Promise<UnitDetailResponse> {
-    const valid = this.validateProfile(profile);
+    const valid = await this.resolveProfile(profile, userId);
     const candidates = buildCandidates(
       CATALOG_ANNOUNCEMENTS,
       valid,

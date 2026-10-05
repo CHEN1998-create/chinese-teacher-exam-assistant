@@ -17,8 +17,62 @@ model User {
 
   extractionRuns ExtractionRun[]
   reviewRecords  ReviewRecord[]
+  credential     Credential?
+  sessions       Session[]
+  profile        UserProfile?
 
   @@map("users")
+}
+
+/**
+ * 受邀用户登录凭证（模块 8）。
+ * 只保存 bcrypt 哈希，绝不保存明文密码；一个用户一条凭证。
+ * 不收集身份证、社保等非必要信息。
+ */
+model Credential {
+  id           String   @id @default(uuid())
+  userId       String   @unique @map("user_id")
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("credentials")
+}
+
+/**
+ * 服务端会话（模块 8）。
+ * token 只以 HttpOnly Cookie 形式下发，库内只存 SHA-256 哈希；
+ * 会话失效靠 revokedAt 或 expiresAt，不在前端保存任何令牌。
+ */
+model Session {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  userAgent   String?   @map("user_agent")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/**
+ * 用户基础画像持久化（模块 8）。
+ * 五组画像以 JSON 存，随用户修改 upsert；匹配接口在请求未携带画像时读取本表。
+ * 不保存身份证号、社保账号等敏感字段。
+ */
+model UserProfile {
+  id        String   @id @default(uuid())
+  userId    String   @unique @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profile   Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("user_profiles")
 }
 
 /**
@@ -273,4 +327,82 @@ model NotificationRecord {
   @@index([userId, readAt])
   @@index([userId, severity])
   @@map("notification_records")
+}
+
+// ==================== 学习计划服务端持久化（模块 8） ====================
+
+/**
+ * 周计划。任务列表以 JSON 存在 DailyPlan 上，调整与复盘以 JSON 存在本表，
+ * 保留前端既有纯函数结构，不重写领域逻辑。
+ */
+model WeeklyPlan {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  examTargetId      String   @map("exam_target_id")
+  weekNumber        Int      @map("week_number")
+  startDate         String   @map("start_date")
+  endDate           String   @map("end_date")
+  focus             String
+  status            String
+  version           Int
+  previousVersionId String?  @map("previous_version_id")
+  generationReason  String   @map("generation_reason")
+  adjustments       Json     @default("[]")
+  reviews           Json     @default("[]")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  dailyPlans DailyPlan[]
+  feedbacks  TaskFeedback[]
+
+  @@index([userId, examTargetId])
+  @@map("weekly_plans")
+}
+
+/** 日计划：任务数组以 JSON 存储，字段与前端 DailyPlan 对齐。 */
+model DailyPlan {
+  id                 String   @id @default(uuid())
+  weeklyPlanId       String   @map("weekly_plan_id")
+  weeklyPlan         WeeklyPlan @relation(fields: [weeklyPlanId], references: [id], onDelete: Cascade)
+  userId             String   @map("user_id")
+  date               String
+  dayOfWeek          Int      @map("day_of_week")
+  tasks              Json
+  totalEstimatedTime Int      @map("total_estimated_time")
+  isMinimumViable    Boolean  @default(false) @map("is_minimum_viable")
+  availableMinutes   Int      @map("available_minutes")
+  adjustmentNote     String?  @map("adjustment_note")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@unique([weeklyPlanId, date])
+  @@index([userId, date])
+  @@map("daily_plans")
+}
+
+/**
+ * 任务反馈：一任务一用户一条，修改时更新 updatedAt。
+ * errorTypes 以 JSON 数组存储。
+ */
+model TaskFeedback {
+  id               String   @id @default(uuid())
+  userId           String   @map("user_id")
+  taskId           String   @map("task_id")
+  weeklyPlanId     String   @map("weekly_plan_id")
+  weeklyPlan       WeeklyPlan @relation(fields: [weeklyPlanId], references: [id], onDelete: Cascade)
+  weeklyVersion    Int      @map("weekly_version")
+  dailyPlanId      String   @map("daily_plan_id")
+  date             String
+  status           String
+  actualTime       Int?     @map("actual_time")
+  incompleteReason String?  @map("incomplete_reason")
+  errorTypes       Json     @default("[]")
+  hasSecondPractice Boolean @default(false) @map("has_second_practice")
+  notes            String?
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, taskId])
+  @@index([userId, date])
+  @@map("task_feedbacks")
 }

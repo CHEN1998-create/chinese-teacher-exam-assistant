@@ -146,10 +146,15 @@ function createFakePrisma() {
   };
 }
 
+const fakeProfileService = {
+  getProfile: async () => null,
+  saveProfile: async () => undefined,
+} as never;
+
 describe('OpportunitiesService：匹配响应', () => {
   it('六场景全部出现且每条结论携带规则版本、公告版本与证据锚点', async () => {
     const fake = createFakePrisma();
-    const service = new OpportunitiesService(fake.prisma);
+    const service = new OpportunitiesService(fake.prisma, fakeProfileService);
     const response = await service.match(PROFILE, 'user-1');
 
     expect(response.meta.ruleVersion).toBe(MATCH_RULE_VERSION);
@@ -189,14 +194,14 @@ describe('OpportunitiesService：匹配响应', () => {
   });
 
   it('画像结构非法时抛 400，不产出任何结果', async () => {
-    const service = new OpportunitiesService(createFakePrisma().prisma);
+    const service = new OpportunitiesService(createFakePrisma().prisma, fakeProfileService);
     await expect(
       service.match({ ...PROFILE, regions: 'bad' }, 'user-1'),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('详情返回三层所需的逐条件/版本链数据；未知单元 404', async () => {
-    const service = new OpportunitiesService(createFakePrisma().prisma);
+    const service = new OpportunitiesService(createFakePrisma().prisma, fakeProfileService);
     const detail = await service.unitDetail(
       PROFILE,
       'user-1',
@@ -229,7 +234,7 @@ describe('OpportunitiesService：关注与状态流转', () => {
 
   beforeEach(() => {
     fake = createFakePrisma();
-    service = new OpportunitiesService(fake.prisma);
+    service = new OpportunitiesService(fake.prisma, fakeProfileService);
   });
 
   it('关注初始为 considering；重复关注幂等不重置状态', async () => {
@@ -298,7 +303,7 @@ describe('OpportunitiesService：关注与状态流转', () => {
 describe('OpportunitiesService：主要备考目标', () => {
   it('设新 primary 时旧 primary 事务内自动降 backup；未关注不能设角色', async () => {
     const fake = createFakePrisma();
-    const service = new OpportunitiesService(fake.prisma);
+    const service = new OpportunitiesService(fake.prisma, fakeProfileService);
     await service.follow('user-1', 'unit-hangzhou-01');
     await service.follow('user-1', 'unit-yinzhou-01');
 
@@ -322,7 +327,7 @@ describe('OpportunitiesService：主要备考目标', () => {
   });
 
   it('匹配响应返回 primaryTargetUnitId', async () => {
-    const service = new OpportunitiesService(createFakePrisma().prisma);
+    const service = new OpportunitiesService(createFakePrisma().prisma, fakeProfileService);
     await service.follow('user-1', 'unit-hangzhou-01');
     await service.setRole('user-1', 'unit-hangzhou-01', 'primary');
     const response = await service.match(PROFILE, 'user-1');
@@ -332,7 +337,7 @@ describe('OpportunitiesService：主要备考目标', () => {
 
 describe('OpportunitiesService：备考目标（模块 7）', () => {
   it('listGoals 聚合活跃关注与公告版本；abandoned 不出现；返回 primaryTargetUnitId', async () => {
-    const service = new OpportunitiesService(createFakePrisma().prisma);
+    const service = new OpportunitiesService(createFakePrisma().prisma, fakeProfileService);
     await service.follow('user-1', 'unit-hangzhou-01');
     await service.follow('user-1', 'unit-yinzhou-01');
     await service.setRole('user-1', 'unit-hangzhou-01', 'primary');
@@ -409,7 +414,7 @@ describe('OpportunitiesService：备考目标（模块 7）', () => {
 describe('OpportunitiesService：纠错留痕', () => {
   it('纠错绑定当前公告版本；内容过短或缺少位置时拒绝', async () => {
     const fake = createFakePrisma();
-    const service = new OpportunitiesService(fake.prisma);
+    const service = new OpportunitiesService(fake.prisma, fakeProfileService);
 
     const created = await service.submitCorrection(
       'user-1',
