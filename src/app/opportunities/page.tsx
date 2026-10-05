@@ -1,177 +1,216 @@
 "use client";
 
-import { useState } from "react";
-import { V61_NOW, V61_SEED_ANNOUNCEMENTS, V61_SEED_PROFILE } from "@/lib/seed/v61-opportunities";
-import { buildOpportunitiesView } from "@/lib/ia/opportunities-view";
-import { useV61SeedData } from "@/lib/ia/useV61SeedData";
-import type { OpportunityRow } from "@/lib/ia/opportunities-view";
 import { Hero } from "@/components/ia/Hero";
-import { OpportunityCard } from "@/components/ia/OpportunityCard";
 import { Disclosure, LayerHeading } from "@/components/ia/Layer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { dimensionLabel, daysUntil } from "@/lib/ia/labels";
+import { useOpportunities } from "@/lib/opportunities/useOpportunities";
+import {
+  buildListViewModel,
+  formatEvaluatedAt,
+} from "@/lib/opportunities/list-view";
+import { OpportunityListItem } from "@/components/opportunities/OpportunityListItem";
 
-function loadView() {
-  return buildOpportunitiesView(V61_SEED_ANNOUNCEMENTS, V61_SEED_PROFILE, V61_NOW);
-}
-
-const PRIORITY_ACTION_LABELS: Record<OpportunityRow["status"], string> = {
-  preliminary_eligible: "查看这个机会的依据与下一步",
-  need_more_info: "补充信息，判断这个机会",
-  manual_review: "查看需要向招聘单位确认的条件",
-  not_eligible: "查看不符合的原因",
+const NO_PROFILE_COPY: Record<string, { title: string; description: string }> = {
+  no_draft: {
+    title: "先完成基础画像，才能看到为你匹配的机会",
+    description:
+      "完成可接受地区、学历学位、专业、毕业与就业状态、教师资格五组基础信息后，系统会即时匹配已发布公告。",
+  },
+  incomplete: {
+    title: "基础画像还差几步",
+    description: "回到画像向导补全五组基础信息，机会列表会立即重新计算。",
+  },
+  subject_not_open: {
+    title: "当前只开放语文学科的机会匹配",
+    description:
+      "你的意向学科尚未开放。可以在画像向导中登记意向，开放后会优先评估。",
+  },
 };
 
 export default function OpportunitiesPage() {
-  const { data, loading, error, reload } = useV61SeedData(loadView);
-  // 优先卡默认展开（首屏的主要行动落点）；其余卡片默认收起
-  const [priorityOpen, setPriorityOpen] = useState(true);
-  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
+  const { state, reload, followBusyId, actionError, toggleFollow } =
+    useOpportunities();
 
-  if (loading) return <LoadingPage />;
-  if (error) {
-    return <ErrorState title="机会暂时加载失败" description={error} onRetry={reload} />;
-  }
-  if (!data) return null;
+  if (state.status === "loading") return <LoadingPage />;
 
-  const toggleRow = (unitId: string) => {
-    setOpenIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(unitId)) next.delete(unitId);
-      else next.add(unitId);
-      return next;
-    });
-  };
-
-  const focusPriority = () => {
-    setPriorityOpen(true);
-    document.getElementById("priority-opportunity")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  };
-
-  // 空数据：无任何有效机会（覆盖范围为空/全部不符合或已截止）
-  if (!data.priority) {
+  if (state.status === "no-profile") {
+    const copy = NO_PROFILE_COPY[state.reason] ?? NO_PROFILE_COPY.no_draft!;
     return (
-      <div className="mx-auto max-w-2xl space-y-6">
-        <p className="text-xs text-slate-500">{data.coverage}</p>
+      <div className="mx-auto max-w-2xl">
         <EmptyState
-          title="当前还没有可以推荐的机会"
-          description="完成基础画像后，新发布的官方公告会在这里按匹配程度排序；未覆盖地区不等于没有招聘。"
-          actionLabel="完善我的画像"
+          title={copy.title}
+          description={copy.description}
+          actionLabel="去完成基础画像"
           actionHref="/onboarding"
         />
       </div>
     );
   }
 
-  const priority = data.priority;
-  const otherPreliminary = data.preliminary.filter((row) => row.unitId !== priority.unitId);
+  if (state.status === "error") {
+    return (
+      <ErrorState
+        title="机会暂时加载失败"
+        description={`${state.error}。正式结果来自已登录的后端服务，不会用本地演示数据替代；请检查服务后重试。`}
+        onRetry={reload}
+      />
+    );
+  }
+
+  const view = buildListViewModel(state.data);
+  const evaluatedAt = view.meta.evaluatedAt;
+
+  // 最近的报名截止（只在初步符合中找）：7 天内给出必须级风险提示
+  let risk: { tone: "must" | "info"; text: string } | null = null;
+  const nearest = view.priority
+    ? daysUntil(
+        view.priority.version.timeline.registrationEnd,
+        evaluatedAt,
+      )
+    : null;
+  if (nearest !== null && nearest >= 0 && nearest <= 7) {
+    risk = {
+      tone: "must",
+      text: `优先机会报名还有 ${nearest} 天截止，请尽快完成关注与报名准备。`,
+    };
+  } else if (view.needInfoGroups.length > 0 || view.manualReview.length > 0) {
+    risk = {
+      tone: "info",
+      text: "部分机会需要补充信息或向招聘单位确认后才能判断，未确认前不要当作可报结论。",
+    };
+  } else if (view.excludedCount > 0) {
+    risk = {
+      tone: "info",
+      text: "已截止与明确不符合的机会不进入推荐，可在页面底部查看原因与公告留档。",
+    };
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-2">
-      {/* 第一层：一句结论、一个风险、一个主按钮 */}
       <Hero
-        meta={data.coverage}
-        conclusion={data.conclusion}
-        risk={data.risk}
-        action={{
-          label: PRIORITY_ACTION_LABELS[priority.status],
-          onClick: focusPriority,
-        }}
+        meta={`已发布公告即时匹配 · 有效机会 ${view.validCount} 个 · 评估于 ${formatEvaluatedAt(evaluatedAt)}`}
+        conclusion={view.conclusion}
+        risk={risk}
+        action={
+          view.priority
+            ? {
+                label: "查看优先机会的依据与下一步",
+                href: `/opportunities/${view.priority.unit.id}`,
+              }
+            : undefined
+        }
       />
 
-      {/* 优先机会（第一屏内可见） */}
-      <div id="priority-opportunity" className="scroll-mt-20 space-y-2">
-        <LayerHeading title="优先机会" />
-        <OpportunityCard
-          row={priority}
-          priority
-          expanded={priorityOpen}
-          onToggle={() => setPriorityOpen((v) => !v)}
-        />
-      </div>
+      {actionError && (
+        <p
+          role="alert"
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+        >
+          操作未完成：{actionError}
+        </p>
+      )}
 
-      {/* 第二层：其他初步符合 */}
-      {otherPreliminary.length > 0 && (
+      {view.priority && (
+        <div id="priority-opportunity" className="scroll-mt-20 space-y-2">
+          <LayerHeading
+            title={
+              view.priority.unit.id === view.primaryTargetUnitId
+                ? "主要备考目标"
+                : "优先机会"
+            }
+          />
+          <OpportunityListItem
+            unit={view.priority}
+            evaluatedAt={evaluatedAt}
+            priority
+            defaultExpanded
+            followBusy={followBusyId === view.priority.unit.id}
+            onToggleFollow={toggleFollow}
+          />
+        </div>
+      )}
+
+      {view.otherPreliminary.length > 0 && (
         <section className="space-y-3">
-          <LayerHeading title="其他初步符合" count={otherPreliminary.length} />
-          {otherPreliminary.map((row) => (
-            <OpportunityCard
-              key={row.unitId}
-              row={row}
-              expanded={openIds.has(row.unitId)}
-              onToggle={() => toggleRow(row.unitId)}
+          <LayerHeading title="其他初步符合" count={view.otherPreliminary.length} />
+          {view.otherPreliminary.map((unit) => (
+            <OpportunityListItem
+              key={unit.unit.id}
+              unit={unit}
+              evaluatedAt={evaluatedAt}
+              followBusy={followBusyId === unit.unit.id}
+              onToggleFollow={toggleFollow}
             />
           ))}
         </section>
       )}
 
-      {/* 第二层：补充信息后才能判断（按缺失条件分组） */}
-      {data.needInfoGroups.map((group) => (
+      {view.needInfoGroups.map((group) => (
         <section key={group.dimension} className="space-y-3">
           <LayerHeading
-            title={`补充${group.dimensionText}信息后判断`}
+            title={`补充${dimensionLabel(group.dimension)}信息后判断`}
             count={group.count}
           />
-          {group.rows.map((row) => (
-            <OpportunityCard
-              key={row.unitId}
-              row={row}
-              expanded={openIds.has(row.unitId)}
-              onToggle={() => toggleRow(row.unitId)}
+          {group.units.map((unit) => (
+            <OpportunityListItem
+              key={unit.unit.id}
+              unit={unit}
+              evaluatedAt={evaluatedAt}
+              followBusy={followBusyId === unit.unit.id}
+              onToggleFollow={toggleFollow}
             />
           ))}
         </section>
       ))}
 
-      {/* 第二层：建议人工确认 */}
-      {data.manualReview.length > 0 && (
+      {view.manualReview.length > 0 && (
         <section className="space-y-3">
-          <LayerHeading title="建议向招聘单位确认" count={data.manualReview.length} />
-          {data.manualReview.map((row) => (
-            <OpportunityCard
-              key={row.unitId}
-              row={row}
-              expanded={openIds.has(row.unitId)}
-              onToggle={() => toggleRow(row.unitId)}
+          <LayerHeading
+            title="建议向招聘单位确认"
+            count={view.manualReview.length}
+          />
+          {view.manualReview.map((unit) => (
+            <OpportunityListItem
+              key={unit.unit.id}
+              unit={unit}
+              evaluatedAt={evaluatedAt}
+              followBusy={followBusyId === unit.unit.id}
+              onToggleFollow={toggleFollow}
             />
           ))}
         </section>
       )}
 
-      {/* 二级分组：明确不符合 / 已截止，默认收起，原因可查 */}
-      {data.notEligible.length > 0 && (
-        <Disclosure title="明确不符合" count={data.notEligible.length}>
+      {view.notEligible.length > 0 && (
+        <Disclosure title="明确不符合" count={view.notEligible.length}>
           <div className="space-y-3">
-            {data.notEligible.map((row) => (
-              <OpportunityCard
-                key={row.unitId}
-                row={row}
-                expanded={openIds.has(row.unitId)}
-                onToggle={() => toggleRow(row.unitId)}
+            {view.notEligible.map((unit) => (
+              <OpportunityListItem
+                key={unit.unit.id}
+                unit={unit}
+                evaluatedAt={evaluatedAt}
               />
             ))}
           </div>
         </Disclosure>
       )}
 
-      {data.closed.length > 0 && (
-        <Disclosure title="已截止或不在收录范围" count={data.closed.length}>
+      {view.closed.length > 0 && (
+        <Disclosure title="已截止或不在收录范围" count={view.closed.length}>
           <div className="space-y-3">
-            {data.closed.map((row) => (
-              <OpportunityCard
-                key={row.unitId}
-                row={row}
-                expanded={openIds.has(row.unitId)}
-                onToggle={() => toggleRow(row.unitId)}
+            {view.closed.map((unit) => (
+              <OpportunityListItem
+                key={unit.unit.id}
+                unit={unit}
+                evaluatedAt={evaluatedAt}
               />
             ))}
           </div>
           <p className="mt-3 text-xs text-slate-400">
-            已截止机会不进入推荐；公告撤回或字段更正会保留版本记录，可在详情中追溯。
+            已截止机会不进入有效推荐；公告撤回或更正会保留版本记录，可在详情中追溯。
           </p>
         </Disclosure>
       )}
