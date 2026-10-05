@@ -53,11 +53,17 @@ export class HttpAuthProvider implements AuthService {
       throw new Error(body.message || "登录失败，请检查邮箱和密码");
     }
     const data = (await res.json()) as { user: User };
-      this.session = this.buildSession(data.user);
-      // 登录后幂等迁移访客画像到服务端（若服务端尚无该用户画像）
-      profileApi.migrateGuestProfileIfNeeded().catch(() => undefined);
-      this.emitChange();
-      return this.session;
+    this.session = this.buildSession(data.user);
+    // 登录后幂等迁移访客画像到服务端（若服务端尚无该用户画像）。
+    // 必须在通知"已登录"前完成：机会页首屏 match 依赖服务端已持久化的画像，
+    // 否则与迁移请求竞态导致首次匹配为空；迁移失败不阻塞登录本身。
+    try {
+      await profileApi.migrateGuestProfileIfNeeded();
+    } catch {
+      // 迁移失败不阻塞登录；用户可在机会页重新完善画像
+    }
+    this.emitChange();
+    return this.session;
   }
 
   async logout(): Promise<void> {

@@ -4,7 +4,7 @@
  * 调用后端 /api/announcements/* 接口，透传当前登录用户的身份头供后端权限校验。
  * 后端 AdminGuard / ReviewGuard 在服务端强制校验角色，前端仅做体验层隐藏。
  */
-import { authService } from "@/lib/auth";
+import { AUTH_MODE, authService } from "@/lib/auth";
 
 const API_BASE = "/api/announcements";
 
@@ -56,8 +56,10 @@ interface PublishedVersion {
   supersededAt: string | null;
 }
 
-/** 从当前会话读取用户身份，注入请求头 */
+/** 从当前会话读取用户身份，注入请求头。
+ * invited 模式：身份由 HttpOnly 会话 cookie 承载，绝不发送客户端可伪造的 x-user-*。 */
 function authHeaders(): Record<string, string> {
+  if (AUTH_MODE === "invited") return {};
   const session = authService.getSession();
   if (!session) return {};
   return {

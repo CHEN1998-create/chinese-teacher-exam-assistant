@@ -1,8 +1,9 @@
 /**
  * 报名日程与站内提醒 API 客户端（模块 6）。
- * 浏览器只调同源 /api/schedule/*，身份头只传 x-user-id。
+ * 浏览器只调同源 /api/schedule/*；demo 模式身份头传 x-user-id + x-user-role
+ * （后端两者缺一即 401，见 backend userFromHeaders），invited 模式不发送身份头。
  */
-import { authService } from "@/lib/auth";
+import { AUTH_MODE, authService } from "@/lib/auth";
 import type {
   NotificationDTO,
   ScheduleResponse,
@@ -11,9 +12,12 @@ import type {
 const API_BASE = "/api/schedule";
 
 function authHeaders(): Record<string, string> {
+  // invited 模式：身份由 HttpOnly 会话 cookie 承载，绝不发送客户端可伪造的 x-user-*；
+  // demo 模式：发送 x-user-id + x-user-role（后端两者缺一即 401，见 backend userFromHeaders）。
+  if (AUTH_MODE === "invited") return {};
   const session = authService.getSession();
   if (!session) return {};
-  return { "x-user-id": session.userId };
+  return { "x-user-id": session.userId, "x-user-role": session.role };
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
