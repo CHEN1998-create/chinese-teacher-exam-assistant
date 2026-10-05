@@ -7,6 +7,8 @@ import {
 import { CATALOG_VERSION } from '../matching/catalog.js';
 import type { UserRecruitmentProfile } from '../matching/types.js';
 import { OpportunitiesService } from './opportunities.service.js';
+import { buildGoals, type CatalogSnapshot } from './view.js';
+import type { FollowRecord } from './follow.domain.js';
 
 const PROFILE: UserRecruitmentProfile = {
   regions: [
@@ -325,6 +327,82 @@ describe('OpportunitiesService：主要备考目标', () => {
     await service.setRole('user-1', 'unit-hangzhou-01', 'primary');
     const response = await service.match(PROFILE, 'user-1');
     expect(response.primaryTargetUnitId).toBe('unit-hangzhou-01');
+  });
+});
+
+describe('OpportunitiesService：备考目标（模块 7）', () => {
+  it('listGoals 聚合活跃关注与公告版本；abandoned 不出现；返回 primaryTargetUnitId', async () => {
+    const service = new OpportunitiesService(createFakePrisma().prisma);
+    await service.follow('user-1', 'unit-hangzhou-01');
+    await service.follow('user-1', 'unit-yinzhou-01');
+    await service.setRole('user-1', 'unit-hangzhou-01', 'primary');
+    await service.follow('user-1', 'unit-suzhou-01');
+    await service.transition('user-1', 'unit-suzhou-01', 'abandoned', undefined, '竞争太大');
+
+    const response = await service.listGoals('user-1');
+    expect(response.primaryTargetUnitId).toBe('unit-hangzhou-01');
+    expect(response.goals.map((g) => g.unitId)).toEqual([
+      'unit-hangzhou-01',
+      'unit-yinzhou-01',
+    ]);
+
+    const primary = response.goals[0]!;
+    expect(primary.role).toBe('primary');
+    expect(primary.unitName).toContain('杭州');
+    expect(primary.announcement.officialUrl).toBeTruthy();
+    expect(primary.version.timeline.registrationStart).toBeTruthy();
+    expect(primary.followStatus).toBe('considering');
+    expect(primary.newerVersion).toBe(false);
+
+    // 其他用户的目标不受影响
+    expect((await service.listGoals('user-2')).goals).toEqual([]);
+  });
+
+  it('buildGoals：版本取代标记 newerVersion；closed 被排除；目录缺失单元跳过', () => {
+    const snap = (unitId: string): CatalogSnapshot => ({
+      announcementId: 'ann-x',
+      title: '测试公告',
+      publisher: '测试教育局',
+      officialUrl: 'https://example.gov.cn/ann',
+      versionId: 'ann-x-v2',
+      versionNumber: 2,
+      publishedAt: '2026-02-01',
+      timeline: { registrationStart: '2026-03-01', registrationEnd: '2026-03-10' },
+      unit: {
+        id: unitId,
+        code: 'U1',
+        name: '测试单元',
+        region: { code: '330100', province: '浙江省', city: '杭州市' },
+        subject: 'chinese',
+        stage: 'primary',
+        headcount: 3,
+      },
+    });
+    const follow = (unitId: string, versionId: string, status: FollowRecord['status']): FollowRecord => ({
+      id: `f-${unitId}`,
+      userId: 'user-1',
+      unitId,
+      announcementId: 'ann-x',
+      versionId,
+      status,
+      role: unitId === 'unit-a' ? 'primary' : null,
+      followedAt: '2026-02-10T00:00:00.000Z',
+      statusHistory: [],
+      abandonReason: null,
+      remindersMuted: false,
+    });
+
+    const response = buildGoals(
+      [
+        follow('unit-a', 'ann-x-v1', 'preparing'), // 关注在旧版本 → newerVersion
+        follow('unit-b', 'ann-x-v2', 'closed'), // 已关闭 → 不作为目标
+      ],
+      [snap('unit-a'), snap('unit-b'), snap('unit-c')],
+    );
+
+    expect(response.goals).toHaveLength(1);
+    expect(response.goals[0]?.newerVersion).toBe(true);
+    expect(response.primaryTargetUnitId).toBe('unit-a');
   });
 });
 

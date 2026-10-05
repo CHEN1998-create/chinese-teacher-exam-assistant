@@ -15,6 +15,7 @@ import {
   sortCandidates,
 } from '../matching/engine.js';
 import type {
+  AnnouncementTimeline,
   ApplicationUnit,
   EvidenceAnchor,
   OpportunityCandidate,
@@ -320,4 +321,105 @@ export function buildUnitDetail(
     unit: toUnitMatchDTO(candidate, follow),
     previousVersions,
   };
+}
+
+// ==================== 备考目标（模块 7：主要目标 → 备考闭环） ====================
+
+/** 当前目录下公告与版本的聚合快照（供目标视图装配） */
+export interface CatalogSnapshot {
+  announcementId: string;
+  title: string;
+  publisher: string;
+  officialUrl: string;
+  versionId: string;
+  versionNumber: number;
+  publishedAt: string;
+  timeline: AnnouncementTimeline;
+  unit: {
+    id: string;
+    code: string;
+    name: string;
+    region: ApplicationUnit['region'];
+    subject: ApplicationUnit['subject'];
+    stage: ApplicationUnit['stage'];
+    headcount: number;
+  } | null;
+}
+
+export interface GoalDTO {
+  unitId: string;
+  unitName: string;
+  unitCode: string;
+  region: ApplicationUnit['region'];
+  stage: ApplicationUnit['stage'];
+  subject: ApplicationUnit['subject'];
+  headcount: number;
+  announcement: {
+    id: string;
+    title: string;
+    publisher: string;
+    officialUrl: string;
+  };
+  version: {
+    id: string;
+    versionNumber: number;
+    publishedAt: string;
+    timeline: AnnouncementTimeline;
+  };
+  role: StudyTargetRole;
+  followStatus: FollowRecord['status'];
+  followedAt: string;
+  /** 关注时的公告版本是否已被新版本取代（考试内容确认随之失效） */
+  newerVersion: boolean;
+}
+
+export interface GoalsResponse {
+  goals: GoalDTO[];
+  primaryTargetUnitId: string | null;
+}
+
+/**
+ * 从活跃关注记录（considering/preparing/registered）装配备考目标视图。
+ * 已放弃/已关闭的机会不再作为备考目标；目录中找不到的单元跳过。
+ */
+export function buildGoals(
+  follows: readonly FollowRecord[],
+  catalog: readonly CatalogSnapshot[],
+): GoalsResponse {
+  const goals: GoalDTO[] = [];
+  for (const follow of follows) {
+    if (follow.status === 'abandoned' || follow.status === 'closed') continue;
+    const snap = catalog.find(
+      (c) => c.unit !== null && c.unit.id === follow.unitId,
+    );
+    if (!snap || !snap.unit) continue;
+    const { unit } = snap;
+    goals.push({
+      unitId: unit.id,
+      unitName: unit.name,
+      unitCode: unit.code,
+      region: unit.region,
+      stage: unit.stage,
+      subject: unit.subject,
+      headcount: unit.headcount,
+      announcement: {
+        id: snap.announcementId,
+        title: snap.title,
+        publisher: snap.publisher,
+        officialUrl: snap.officialUrl,
+      },
+      version: {
+        id: snap.versionId,
+        versionNumber: snap.versionNumber,
+        publishedAt: snap.publishedAt,
+        timeline: snap.timeline,
+      },
+      role: follow.role ?? 'backup',
+      followStatus: follow.status,
+      followedAt: follow.followedAt,
+      newerVersion: follow.versionId !== snap.versionId,
+    });
+  }
+  const primary = goals.find((g) => g.role === 'primary');
+  return { goals, primaryTargetUnitId: primary?.unitId ?? null };
 }

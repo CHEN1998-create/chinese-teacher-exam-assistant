@@ -51,6 +51,12 @@ export class OpportunitiesController {
     return this.service.listFollows(req.user!.id);
   }
 
+  /** 备考目标列表（模块 7）：活跃关注聚合公告版本，供 /study 页与主要目标选择 */
+  @Get('goals')
+  listGoals(@Req() req: AuthenticatedRequest) {
+    return this.service.listGoals(req.user!.id);
+  }
+
   /** 关注（初始恒为“考虑中”，收藏不自动等于准备报名） */
   @Post('units/:unitId/follow')
   follow(

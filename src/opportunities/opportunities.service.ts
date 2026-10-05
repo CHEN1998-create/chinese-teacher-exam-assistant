@@ -26,9 +26,12 @@ import {
   type StudyTargetRole,
 } from './follow.domain.js';
 import {
+  buildGoals,
   buildMatchResponse,
   buildUnitDetail,
+  type CatalogSnapshot,
   type FollowDTO,
+  type GoalsResponse,
   type MatchResponse,
   type UnitDetailResponse,
 } from './view.js';
@@ -110,6 +113,43 @@ export class OpportunitiesService {
         remindersMuted: follow.remindersMuted,
       };
     });
+  }
+
+  /** 备考目标列表（模块 7）：活跃关注 + 公告版本聚合，供主要目标选择与 /study 页使用 */
+  async listGoals(userId: string): Promise<GoalsResponse> {
+    const follows = await this.listFollowRecords(userId);
+    const catalog = this.buildCatalogSnapshot();
+    return buildGoals(follows, catalog);
+  }
+
+  /** 当前目录的全部公告/版本/单元聚合快照（goals 视图装配用） */
+  private buildCatalogSnapshot(): CatalogSnapshot[] {
+    const snapshots: CatalogSnapshot[] = [];
+    for (const announcement of CATALOG_ANNOUNCEMENTS) {
+      const version = currentVersion(announcement);
+      for (const unit of version.units) {
+        snapshots.push({
+          announcementId: announcement.id,
+          title: announcement.title,
+          publisher: announcement.publisher,
+          officialUrl: announcement.officialUrl,
+          versionId: version.id,
+          versionNumber: version.versionNumber,
+          publishedAt: version.publishedAt,
+          timeline: version.timeline,
+          unit: {
+            id: unit.id,
+            code: unit.code,
+            name: unit.name,
+            region: unit.region,
+            subject: unit.subject,
+            stage: unit.stage,
+            headcount: unit.headcount,
+          },
+        });
+      }
+    }
+    return snapshots;
   }
 
   /**
