@@ -1,0 +1,111 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { OpportunitiesService } from './opportunities.service.js';
+import { UserGuard } from './user.guard.js';
+
+interface AuthenticatedRequest {
+  user?: { id: string; role: string };
+}
+
+/**
+ * 机会发现与可解释资格匹配 API（模块 5）。
+ * 全部为登录后接口；匹配与详情用 POST 携带当前画像，按请求即时计算。
+ */
+@Controller('opportunities')
+@UseGuards(UserGuard)
+export class OpportunitiesController {
+  constructor(private readonly service: OpportunitiesService) {}
+
+  /** 机会列表：默认“初步符合”，其余结果在分组字段中二级展示 */
+  @Post('match')
+  match(
+    @Body() body: { profile?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.match(body.profile, req.user!.id);
+  }
+
+  /** 机会详情：三层结构所需的全部数据（结论/逐条件/证据与版本） */
+  @Post('units/:unitId/detail')
+  detail(
+    @Param('unitId') unitId: string,
+    @Body() body: { profile?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.unitDetail(body.profile, req.user!.id, unitId);
+  }
+
+  /** 当前用户的全部关注记录（含主要目标与版本过时标记） */
+  @Get('follows')
+  listFollows(@Req() req: AuthenticatedRequest) {
+    return this.service.listFollows(req.user!.id);
+  }
+
+  /** 关注（初始恒为“考虑中”，收藏不自动等于准备报名） */
+  @Post('units/:unitId/follow')
+  follow(
+    @Param('unitId') unitId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.follow(req.user!.id, unitId);
+  }
+
+  /** 状态流转：preparing / registered / abandoned / closed / considering */
+  @Patch('units/:unitId/follow')
+  transition(
+    @Param('unitId') unitId: string,
+    @Body()
+    body: { status?: unknown; note?: string; abandonReason?: string },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.transition(
+      req.user!.id,
+      unitId,
+      body.status,
+      typeof body.note === 'string' ? body.note : undefined,
+      typeof body.abandonReason === 'string'
+        ? body.abandonReason
+        : undefined,
+    );
+  }
+
+  /** 取消关注（仅删除该单元记录） */
+  @Delete('units/:unitId/follow')
+  unfollow(
+    @Param('unitId') unitId: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.unfollow(req.user!.id, unitId);
+  }
+
+  /** 设置主要/备选备考目标（主要目标全局唯一） */
+  @Put('units/:unitId/role')
+  setRole(
+    @Param('unitId') unitId: string,
+    @Body() body: { role?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.setRole(req.user!.id, unitId, body.role);
+  }
+
+  /** 详情第三层：提交证据/条件/版本纠错留痕 */
+  @Post('units/:unitId/corrections')
+  submitCorrection(
+    @Param('unitId') unitId: string,
+    @Body()
+    body: { fieldPath?: unknown; content?: unknown; contact?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.submitCorrection(req.user!.id, unitId, body);
+  }
+}

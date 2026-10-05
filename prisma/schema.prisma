@@ -21,6 +21,56 @@ model User {
   @@map("users")
 }
 
+/**
+ * 用户对报考单元的关注关系（v6.1 模块 5，PRD 7.5）。
+ *
+ * - 关注的是具体报考单元（unitId），不是抽象公告；
+ * - status：considering / preparing / registered / abandoned / closed；
+ * - role：primary（主要备考目标，同一用户至多一个）/ backup（备选）/ null（仅关注）；
+ * - statusHistory 只追加，记录每次状态变化的时间与备注；
+ * - 收藏（创建记录）不自动等于“准备报名”，初始状态恒为 considering。
+ * 画像与公告版本均不存冗余快照，只保留 versionId 指针，用于“有更新版本”提示。
+ */
+model FollowedOpportunity {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  unitId         String   @map("unit_id")
+  announcementId String   @map("announcement_id")
+  versionId      String   @map("version_id")
+  status         String   @default("considering")
+  role           String?
+  followedAt     DateTime @default(now()) @map("followed_at")
+  statusHistory  Json     @map("status_history")
+  abandonReason  String?  @map("abandon_reason")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, unitId])
+  @@index([userId, status])
+  @@map("followed_opportunities")
+}
+
+/**
+ * 机会详情纠错提交（v6.1 模块 5，PRD 7.10）。
+ * 用户在证据层发现公告原文/字段/版本有误时提交；受邀阶段只留痕与回复状态，
+ * 不做自动改判，改判必须走模块 2 审核发布新版本。
+ */
+model OpportunityCorrection {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  unitId         String   @map("unit_id")
+  announcementId String   @map("announcement_id")
+  versionId      String   @map("version_id")
+  fieldPath      String   @map("field_path")
+  content        String
+  contact        String?
+  status         String   @default("submitted")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([announcementId, versionId])
+  @@map("opportunity_corrections")
+}
+
 // ==================== 公告数据流水线（v6.1 数据管道文档） ====================
 
 /** 官方来源登记 */
