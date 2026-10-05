@@ -43,22 +43,23 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<{ id: string; email: string; name: string | null; role: string } | null> {
-    const credential = await this.prisma.credential.findUnique({
-      where: { userId: email.toLowerCase() },
-      include: { user: true },
+    // 按邮箱定位用户（User.id 是 uuid，凭证外键不是邮箱；邮箱唯一约束在 users 表）
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { credential: true },
     });
-    // 用户不存在也走一次哈希比较，保持耗时一致（弱防御时序攻击）
-    if (!credential) {
+    // 用户不存在或未设置凭证也走一次哈希比较，保持耗时一致（弱防御时序攻击）
+    if (!user?.credential) {
       await bcrypt.compare(password, '$2a$10$invalidhashinvalidhashinvalidhashinval').catch(() => undefined);
       return null;
     }
-    const ok = await bcrypt.compare(password, credential.passwordHash);
+    const ok = await bcrypt.compare(password, user.credential.passwordHash);
     if (!ok) return null;
     return {
-      id: credential.user.id,
-      email: credential.user.email,
-      name: credential.user.name,
-      role: credential.user.role,
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
     };
   }
 

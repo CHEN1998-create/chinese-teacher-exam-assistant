@@ -30,21 +30,25 @@ export class SessionAuthGuard implements CanActivate {
     const req = context
       .switchToHttp()
       .getRequest<AuthenticatedRequest>();
+
+    // 只要有有效会话就挂载 req.user（包括 /auth/session 这类公开路径——
+    // 会话恢复接口依赖 req.user 判断登录态）；公开路径在无会话时允许匿名通过。
+    const token = req.cookies?.['sid'] as string | undefined;
+    if (token) {
+      const session = await this.authService.getSessionByToken(token);
+      if (session) {
+        req.user = {
+          id: session.userId,
+          role: session.role,
+          email: session.email,
+          name: session.name,
+        };
+        return true;
+      }
+    }
+
     const path = req.route?.path ?? req.path;
     if (PUBLIC_PATHS.has(path)) return true;
-
-    const token = req.cookies?.['sid'] as string | undefined;
-    if (!token) return false;
-
-    const session = await this.authService.getSessionByToken(token);
-    if (!session) return false;
-
-    req.user = {
-      id: session.userId,
-      role: session.role,
-      email: session.email,
-      name: session.name,
-    };
-    return true;
+    return false;
   }
 }

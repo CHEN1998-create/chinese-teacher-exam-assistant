@@ -2,28 +2,41 @@
 
 “全国教师公开招聘与备考助手”的服务端。产品定位与需求见根目录 [`PRD-全国教师公开招聘与备考助手-v6.1.md`](../PRD-全国教师公开招聘与备考助手-v6.1.md)：当前只开放语文学科，主线为**机会发现 → 可解释资格匹配 → 关注与报名日程 → 主要目标 → 备考**。
 
-> **当前状态（2026-10-04）：只有启动骨架。** 业务接口、公告流水线、匹配、关注、日程、真实认证均未实现；本 README 中“v6.1 计划承担”一节描述的是目标，不是已有能力。
+> **当前状态（2026-10-05，v6.1 模块 1—9 代码已落地）：** 认证/会话、画像、公告流水线、匹配、关注、日程、计划等模块与 Prisma 模型/迁移均已提交并具备单元测试；**invited 模式已在真实 PostgreSQL 环境完成端到端联调**（Playwright 受邀全链路 29/29、demo 回归 23/23，2026-10-05）；真实 AI/OCR、对象存储（当前快照写服务端本地卷）、附件二进制上传未接入。本节其余内容描述的是代码现状，未验证项不宣称可用。
 
 ## 技术栈
 
 - NestJS 12（ESM，`"type": "module"`）
-- Prisma 6 + PostgreSQL
-- Vitest 4（单测 + e2e，supertest）
+- Prisma 6 + PostgreSQL（17 个模型，5 个迁移）
+- Vitest（单测；含公告门禁/版本、匹配、关注、日程幂等等领域回归）
 - Docker（多阶段构建，`node:24-alpine`）
 
 ## 当前实现
 
+### HTTP 与基础设施
+
 | 文件 | 内容 |
 |---|---|
-| `src/main.ts` | 应用启动；按 `CORS_ORIGINS`（逗号分隔）开启 CORS；监听 `PORT`（默认 3000） |
-| `src/health.controller.ts` | `GET /health`：执行 `SELECT 1`，返回 `{ status, db, time }`；数据库不可用时返回 `degraded` |
-| `src/app.controller.ts` / `app.service.ts` | Nest 模板遗留的 `GET /`（返回 `Hello World!`），后续业务模块接入后可移除 |
-| `src/internal-token.guard.ts` | 全局守卫：校验请求头 `x-internal-token` 与环境变量 `INTERNAL_TOKEN` 一致（`timingSafeEqual` 常量时间比较）；未设置该环境变量时放行，便于本地开发 |
-| `src/prisma.service.ts` | PrismaClient 封装 |
-| `prisma/schema.prisma` | 目前只有一张 `User` 表（id / email / name / role / 时间戳） |
-| `prisma/migrations/20261002062744_init` | 初始迁移 |
+| `src/main.ts` | 应用启动；按 `CORS_ORIGINS`（逗号分隔）开启 CORS；`TRUST_PROXY` 支持反代场景；监听 `PORT`（默认 3000）/`HOST`（裸进程可绑 `127.0.0.1`） |
+| `src/health.controller.ts` | `GET /health`：执行 `SELECT 1`，返回 `{ status, db, time }`；数据库不可用时返回 `degraded`，进程不崩溃 |
+| `src/internal-token.guard.ts` | 全局守卫：校验 `x-internal-token` 与 `INTERNAL_TOKEN`（`timingSafeEqual`）；未设置时放行，仅限本地开发 |
+| `src/prisma.service.ts` / `prisma.module.ts` | PrismaClient 封装 |
+| `prisma/schema.prisma` | 17 个模型：User/Credential/Session/UserProfile/FollowedOpportunity/OpportunityCorrection/Source/SourceSnapshot/ExtractionRun/EvidenceAnchor/ReviewRecord/PublishedAnnouncementVersion/TimelineEvent/NotificationRecord/WeeklyPlan/DailyPlan/TaskFeedback |
+| `prisma/migrations/` | init、announcements_pipeline、invited_auth、followed_opportunities、timeline_notifications |
 
-前端通过 Next.js 服务端同源反代（`/api/*`）调用本服务，由反代注入 `x-internal-token`；浏览器不直接访问后端端口。公开演示环境（纯 localStorage Mock）不依赖本服务。
+### 业务模块（`src/<module>/`）
+
+| 模块 | 主要能力 | 现状边界 |
+|---|---|---|
+| `auth/` | 预建账号 + 密码哈希凭据（`Credential`）、HttpOnly 会话（登录/登出/`GET session`）、管理员账号管理接口；`SessionGuard`/`AdminGuard` 服务端鉴权 | 无注册/找回密码/验证码（受邀首版不需要） |
+| `announcements/` | 提交来源（URL + 正文 JSON）→ 本地卷快照（SHA-256，`.data/snapshots`，内容哈希幂等）→ 确定性解析器生成候选 → 自动校验 → 人工审核（高影响字段无锚点不过审、只追加留痕）→ 发布不可变版本（新版本不覆盖旧版本、差异查询） | 解析器为确定性规则，**未接 AI/OCR**；无二进制附件上传与对象存储 |
+| `matching/` | 按画像即时计算四值（PASS/FAIL/UNKNOWN/MANUAL_REVIEW）与总结果，结论关联公告版本 | 仅语文学科 |
+| `opportunities/` | 机会列表/详情视图、关注状态机（considering/preparing/registered/abandoned/closed）、主要/备选目标、纠错提交 | 服务端用户守卫按会话隔离 |
+| `profile/` | 账户画像读写（五组基础画像 + 按需补充资格） | — |
+| `schedule/` | 从已发布版本派生时间线事件与站内通知；业务唯一键保证同一提醒不重复；时间未定不生成提醒 | 仅站内记录，不接短信/微信/邮件/Web Push |
+| `plans/` | 7 天计划、逐日任务与反馈的持久化接口 | 计划生成规则仍在前端纯函数引擎，服务端负责存储 |
+
+前端通过 Next.js 服务端同源反代（`/api/*`）调用本服务，由反代注入 `x-internal-token`；浏览器不直接访问后端端口。demo 模式（纯 localStorage Mock）不依赖本服务。
 
 ## 本地开发
 
@@ -49,38 +62,32 @@ curl http://localhost:3000/health
 | `TRUST_PROXY` | 反代部署时必填 | 设为 `true` 时信任一层反向代理的 `X-Forwarded-*`（Nginx 终止 TLS 场景） |
 | `CORS_ORIGINS` | 否 | 允许跨域来源，逗号分隔；默认 `http://localhost:3000`；受邀环境填备案产品域名 |
 | `INTERNAL_TOKEN` | 部署时必填 | 内部反代密钥；未设置时守卫放行，**仅限本地开发**，受邀/正式环境必须设置强随机值 |
+| `AUTH_MODE` | 受邀环境必填 | `demo`（默认，信任反代注入的演示身份头）/ `invited`（只认真实会话 cookie，忽略身份头）；必须与前端 `NEXT_PUBLIC_AUTH_MODE` 一致 |
+| `ADMIN_BOOTSTRAP_TOKEN` | 首次初始化必填 | 创建首个管理员账号的引导令牌；只在初始化时使用，完成后应撤销/更换 |
 
 真实密钥只能通过部署平台环境变量或 Secret 管理注入，不提交仓库、不写入日志、不进入前端。
 
 ## 测试与构建
 
 ```bash
-npm test          # 单元测试
-npm run test:e2e  # e2e（当前覆盖 GET / 返回 Hello World!）
-npm run lint      # oxlint
+npm test          # 单元/领域测试（公告门禁与版本、匹配引擎、关注状态机、日程事件与幂等、健康检查）
+npm run test:e2e  # e2e（vitest.config.e2e.ts；当前主要覆盖应用启动与基础路由）
+npm run lint      # oxlint --type-aware
 npm run build     # nest build
 ```
 
-Docker 构建：`docker build -t kaobian-backend .`，产物以 `node dist/main.js` 启动，暴露端口以 `PORT` 为准。
+领域测试覆盖的高风险不变量：高影响字段无证据锚点不能过审、发布版本只追加不被新版本覆盖、UNKNOWN 不自动转 FAIL、已截止机会退出、关注状态机合法迁移、同一时间线事件/提醒按业务唯一键只生成一条。
 
-## v6.1 计划承担的后端能力（尚未实现）
+Docker 构建：`docker build -t kaobian-backend .`，产物以 `node dist/main.js` 启动，暴露端口以 `PORT` 为准。`.data/snapshots` 目录在容器中应挂载持久卷（受邀环境正式方案是替换为境内私有对象存储）。
 
-下列模块按 [`docs/v6.1-migration-plan.md`](../docs/v6.1-migration-plan.md) 的阶段落地，字段与状态机细节见 [`docs/v6.1-data-pipeline.md`](../docs/v6.1-data-pipeline.md)。受邀验证阶段保持**模块化单体**，不拆微服务。
+## 尚未实现的后端能力（边界）
 
-1. **公告与报考单元**：招聘公告、公告版本（不可变发布）、报考单元（区县/岗位组/具体学校）、用工性质官方名称、分配方式、补充公告关系；当前只有 `User` 单表，需新增模型与迁移。
-2. **证据与版本留痕**：来源、原始快照（含 SHA-256 与对象存储地址）、字段级证据锚点（页码/工作表/单元格/原文片段）、审核记录；高影响字段经人工审核后才能进入 published 版本。
-3. **提取与审核**：管理员提交 URL/正文/附件 → 快照留档 → 确定性解析与 AI 候选提取（仅候选）→ 自动校验 → 人工审核 → 发布。首版用数据库任务表 + 手动触发/轮询，**不引入 Redis、BullMQ、Kafka**；AI/OCR 经后端适配器调用境内可访问服务，密钥不出服务端。
-4. **用户画像**：五组基础画像与按需补充条件（年龄、户籍、社保、经历仅在机会需要时收集）；访客可先体验，登录后幂等迁移。
-5. **资格匹配**：逐条件四值结果（PASS / FAIL / UNKNOWN / MANUAL_REVIEW）与四档总结果（初步符合 / 补充信息后判断 / 建议人工确认 / 明确不符合）；结论关联公告版本、规则版本与证据；规则集中在独立规则层，匹配按请求即时计算，不做批量队列。
-6. **关注与报名推进**：关注状态（考虑中 / 准备报名 / 已报名 / 已放弃 / 已结束）、报名材料清单、主要/备选目标标记。
-7. **时间线与提醒**：从已发布公告版本派生报名、审核、缴费、准考证、笔试、成绩等事件；唯一键防重复，时间待定显示“待官方通知”；首版只做站内事件，不接短信、微信、邮件或 Web Push。
-8. **备考（对接现有前端规则）**：主要目标确认后才允许生成 7 天计划；考试内容未确认时不生成伪精确计划。
-9. **受邀账号与权限**：管理员预建账号、安全哈希密码、HttpOnly 会话；所有管理权限在服务端校验，前端隐藏按钮不构成安全边界；正式模式不得静默回退 Mock。
+下列内容在 PRD/数据流水线文档中描述为目标，当前代码**未实现**，不得按已具备对外宣称：
 
-## 边界（本轮明确不做）
+1. **真实 AI/OCR 适配器**：`announcements/parser.ts` 为确定性解析器；Provider 接口、供应商接入、密钥管理未发生。
+2. **对象存储与二进制附件**：无 multipart 上传；原始快照写服务端本地卷 `.data/snapshots`（含 SHA-256 与幂等），只适合开发与极小规模，不是试用环境长期方案。
+3. **真实通知渠道**：短信、微信、邮件、Web Push 均未接入；`NotificationRecord` 只是站内记录。
+4. **计划生成的服务端化**：7 天计划/重排规则仍运行在前端纯函数引擎，后端 `plans/` 只做持久化。
+5. **数据删除的服务端全流程**：隐私删除申请的用户端流程在 demo 完成，服务端处置链路未全量验证。
 
-- 不做自动全国爬虫、定时采集调度平台；
-- 不引入 Redis/BullMQ、Kafka、Elasticsearch、向量数据库、Kubernetes；
-- 不做自动代报名、简历投递、招聘单位聊天；
-- 不用 AI 直接判定资格、推测缺失字段或预测录取概率；
-- 权限、输入校验、审计与数据隔离必须在服务端/数据库层执行。
+受邀验证阶段保持**模块化单体**，不拆微服务；明确不做：自动全国爬虫、Redis/BullMQ、Kafka、Elasticsearch、向量数据库、Kubernetes、自动代报名、AI 直接判定资格或预测录取概率。

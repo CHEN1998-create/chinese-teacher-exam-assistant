@@ -396,7 +396,7 @@ model TaskFeedback {
   status           String
   actualTime       Int?     @map("actual_time")
   incompleteReason String?  @map("incomplete_reason")
-  errorTypes       Json     @default("[]")
+  errorTypes       Json     @default("[]") @map("error_types")
   hasSecondPractice Boolean @default(false) @map("has_second_practice")
   notes            String?
   createdAt        DateTime @default(now()) @map("created_at")
