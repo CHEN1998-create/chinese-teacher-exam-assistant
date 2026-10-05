@@ -116,9 +116,44 @@ export interface TrackOptions {
   props?: Record<string, string | number | boolean>;
 }
 
+/** 登录前暂存的访客事件（缺少账号归属，登录后一次性补齐） */
+type PendingEvent = Omit<AnalyticsEvent, "userId" | "userRole" | "source">;
+
+function loadPending(): PendingEvent[] {
+  return loadFromStorage<PendingEvent[]>(STORAGE_KEYS.GUEST_ANALYTICS_PENDING, []);
+}
+
+/**
+ * 把访客暂存事件归属到刚登录的真实账号（幂等：无会话/无暂存时不做任何事）。
+ * 保留事件原始发生时间 at，使“画像完成→7 日内推进”的时间窗口口径不被登录时刻扭曲。
+ */
+function flushPendingEvents(): void {
+  if (typeof window === "undefined") return;
+  const session = authService.getSession();
+  if (!session) return;
+  const pending = loadPending();
+  if (pending.length === 0) return;
+  const events: AnalyticsEvent[] = pending.map((e) => ({
+    ...e,
+    userId: session.user.id,
+    userRole: session.user.role as UserRole,
+    source: "live",
+  }));
+  const all = listEvents();
+  all.push(...events);
+  persistEvents(all);
+  saveToStorage(STORAGE_KEYS.GUEST_ANALYTICS_PENDING, []);
+}
+
+// 会话从无到有（登录/刷新恢复）时自动迁移访客事件；只注册一次
+if (typeof window !== "undefined") {
+  authService.subscribe(flushPendingEvents);
+}
+
 /**
  * 记录一条真实操作事件。
- * 未登录（如登录页动作）直接忽略；任何存储异常都被吞掉，绝不影响业务流程。
+ * 未登录时进入访客暂存队列，登录成功后归属到真实账号（不丢弃画像阶段的动作）；
+ * 任何存储异常都被吞掉，绝不影响业务流程。
  */
 export function track(
   type: AnalyticsEventType,
@@ -127,24 +162,59 @@ export function track(
 ): void {
   if (typeof window === "undefined") return;
   try {
-    const session = authService.getSession();
-    if (!session) return;
-    const event: AnalyticsEvent = {
+    const base = {
       id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       type,
       at: nowIso(),
-      userId: session.user.id,
-      userRole: session.user.role as UserRole,
       module,
       targetId: options.targetId,
-      source: "live",
       props: options.props,
+    };
+    const session = authService.getSession();
+    if (!session) {
+      const pending = loadPending();
+      pending.push(base);
+      saveToStorage(STORAGE_KEYS.GUEST_ANALYTICS_PENDING, pending);
+      return;
+    }
+    const event: AnalyticsEvent = {
+      ...base,
+      userId: session.user.id,
+      userRole: session.user.role as UserRole,
+      source: "live",
     };
     const all = listEvents();
     all.push(event);
     persistEvents(all);
   } catch {
     // 埋点失败静默：不能让监控反过来影响主流程
+  }
+}
+
+/**
+ * 同一账号对某事件只记录一次（如基础画像完成、开始第一项学习任务）。
+ * 同时检查已落库事件与访客暂存队列，保证“访客完成一次、登录后不重复计”。
+ */
+export function trackOncePerUser(
+  type: AnalyticsEventType,
+  module: AnalyticsModule,
+  options: TrackOptions = {}
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const session = authService.getSession();
+    if (session) {
+      const already = listEvents().some(
+        (e) => e.type === type && e.userId === session.user.id
+      );
+      if (already) return;
+    } else {
+      const pendingAlready = loadPending().some((e) => e.type === type);
+      if (pendingAlready) return;
+    }
+    track(type, module, options);
+  } catch {
+    // 去重检查失败不阻断埋点
   }
 }
 
@@ -195,6 +265,17 @@ interface SeedSpec {
   viewDay?: number;
   materialDay?: number;
   diagnosisDay?: number;
+  // —— v6.1 P0 闭环种子（模块 9） ——
+  /** 关注机会距今天数 */
+  followDay?: number;
+  /** 补充资格信息距今天数 */
+  supplementDay?: number;
+  /** 报名意向推进到的状态 */
+  intention?: "preparing" | "registered";
+  /** 设为主要目标距今天数 */
+  primaryDay?: number;
+  /** 开始第一项学习任务距今天数 */
+  taskStartDay?: number;
   /** 计划：确认天数 / 起始日期距今天数（day1 对应 startDayAgo） */
   confirmDay?: number;
   startDayAgo?: number;
@@ -212,6 +293,8 @@ const SEED_USERS: SeedSpec[] = [
   // 5 个确认计划的用户：3 个走完全闭环，1 个进行到第 5 天，1 个首日中断未回归
   {
     user: "u-m01", targetDay: 18, ready: true, viewDay: 18, materialDay: 18, diagnosisDay: 18,
+    followDay: 18, supplementDay: 18, intention: "registered",
+    primaryDay: 18, taskStartDay: 16,
     confirmDay: 17, startDayAgo: 16,
     feedback: [
       [1, "completed"], [2, "completed"], [3, "not_completed"], [4, "completed"],
@@ -223,6 +306,8 @@ const SEED_USERS: SeedSpec[] = [
   },
   {
     user: "u-m02", targetDay: 13, ready: true, viewDay: 13, materialDay: 13, diagnosisDay: 13,
+    followDay: 13, supplementDay: 13, intention: "preparing",
+    primaryDay: 13, taskStartDay: 11,
     confirmDay: 12, startDayAgo: 11,
     feedback: [
       [1, "completed"], [2, "not_completed"], [3, "completed"], [4, "completed"],
@@ -233,6 +318,8 @@ const SEED_USERS: SeedSpec[] = [
   },
   {
     user: "u-m03", targetDay: 10, ready: true, viewDay: 10, materialDay: 10, diagnosisDay: 10,
+    followDay: 10, supplementDay: 10, intention: "preparing",
+    primaryDay: 10, taskStartDay: 8,
     confirmDay: 9, startDayAgo: 8,
     feedback: [
       [1, "completed"], [2, "completed"], [3, "completed"], [4, "completed"],
@@ -242,27 +329,31 @@ const SEED_USERS: SeedSpec[] = [
   },
   {
     user: "u-m04", targetDay: 7, ready: true, viewDay: 7,
+    followDay: 7, primaryDay: 7, taskStartDay: 5,
     confirmDay: 6, startDayAgo: 5,
     feedback: [
       [1, "completed"], [2, "not_completed"], [3, "completed"], [5, "completed"],
     ],
   },
   {
-    user: "u-m05", targetDay: 4, ready: true, viewDay: 4,
-    confirmDay: 3, startDayAgo: 2,
-    feedback: [[1, "not_completed"]],
+    // 首日中断：仅完成关注，未补充资格、未设主目标
+    user: "u-m05", targetDay: 4, ready: true, viewDay: 4, followDay: 4,
   },
-  // 停在资料/诊断阶段，计划生成时遭遇写入失败
+  // 补问了资格信息但未继续推进
   {
     user: "u-m06", targetDay: 13, ready: true, viewDay: 13, materialDay: 12, diagnosisDay: 12,
+    followDay: 13, supplementDay: 12,
     correctionDay: 4,
   },
-  // 看过证据卡后流失
+  // 看过匹配依据后流失
   { user: "u-m07", targetDay: 9, ready: true, viewDay: 9 },
-  // 仅创建草稿（信息不足，未达门禁）
+  // 仅创建草稿（信息不足，未达门禁，未完成画像）
   { user: "u-m08", targetDay: 1, ready: false },
-  // 已申请注销账号
-  { user: "u-m09", targetDay: 15, ready: true, deleteDay: 6 },
+  // 走完 P0 前半段后申请注销账号
+  {
+    user: "u-m09", targetDay: 15, ready: true, followDay: 15, supplementDay: 15,
+    intention: "registered", primaryDay: 15, deleteDay: 6,
+  },
   // 只浏览资源未加入计划
   { user: "u-m10", targetDay: 8, ready: true, viewDay: 7, resource: { views: [7] } },
 ];
@@ -299,6 +390,44 @@ function buildSeedEvents(): AnalyticsEvent[] {
       ready: s.ready ? 1 : 0,
       status: s.ready ? "confirmed" : "draft",
     }, targetId);
+    // —— v6.1 P0 闭环事件（画像完成才有后续；草稿用户是漏斗第一层流失） ——
+    if (s.ready) {
+      push(s.user, s.targetDay, "profile_completed", "profile", {
+        stepCount: 5,
+      }, undefined, 8);
+      push(s.user, s.targetDay, "opportunity_revealed", "opportunity", {
+        validCount: 2,
+      }, targetId, 8);
+      push(s.user, s.viewDay ?? s.targetDay, "match_basis_viewed", "opportunity", {
+        fieldCount: 6,
+      }, targetId, 10);
+    }
+    if (s.followDay !== undefined) {
+      push(s.user, s.followDay, "opportunity_followed", "opportunity", {
+        from: "preliminary",
+      }, targetId, 11);
+    }
+    if (s.supplementDay !== undefined) {
+      push(s.user, s.supplementDay, "qualification_supplemented", "profile", {
+        dimension: "hukou",
+        fieldCount: 1,
+      }, targetId, 12);
+    }
+    if (s.intention) {
+      push(s.user, s.followDay ?? s.targetDay, "follow_status_changed", "opportunity", {
+        from: "following",
+        to: s.intention,
+      }, targetId, 13);
+    }
+    if (s.primaryDay !== undefined) {
+      push(s.user, s.primaryDay, "primary_target_set", "opportunity", {}, targetId, 14);
+    }
+    if (s.taskStartDay !== undefined) {
+      push(s.user, s.taskStartDay, "task_started", "plan", {
+        planId: `wp-seed-${s.user}`,
+        taskIndex: 1,
+      }, targetId, 19);
+    }
     if (s.viewDay !== undefined) push(s.user, s.viewDay, "evidence_viewed", "evidence", {}, targetId);
     if (s.materialDay !== undefined) push(s.user, s.materialDay, "material_added", "material", { sourceType: "published" }, targetId);
     if (s.diagnosisDay !== undefined) push(s.user, s.diagnosisDay, "diagnosis_viewed", "material", {}, targetId);

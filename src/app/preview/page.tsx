@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { trackOncePerUser } from "@/lib/analytics/eventService";
 import type { GuestPreviewReady } from "@/lib/guest/previewEngine";
 
 /**
@@ -142,6 +143,18 @@ function NotOpenSubject({
 
 function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
   const { view, followUps, primaryAction } = preview;
+
+  // P0 漏斗②：访客看到至少一个有效（初步符合）机会；同用户只记一次
+  useEffect(() => {
+    if (view.validCount > 0) {
+      trackOncePerUser("opportunity_revealed", "opportunity", {
+        targetId: view.priority?.unitId,
+        props: { validCount: view.validCount },
+      });
+    }
+    // 仅在预览结果首次展示时记录
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // 优先卡默认展开，其余卡片默认收起（与机会页同一交互）
   const [priorityOpen, setPriorityOpen] = useState(true);
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());

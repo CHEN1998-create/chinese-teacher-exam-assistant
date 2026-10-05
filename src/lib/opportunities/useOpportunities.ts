@@ -8,6 +8,7 @@ import {
 } from "@/lib/profile/activeProfile";
 import type { UserRecruitmentProfile } from "@/lib/profile/types";
 import { opportunitiesApi } from "./api";
+import { trackOncePerUser } from "@/lib/analytics/eventService";
 import type {
   FollowStatus,
   MatchResponse,
@@ -17,6 +18,16 @@ import type {
 
 /** invited 模式占位画像：后端会忽略请求体，读取已持久化画像 */
 const INVITED_PLACEHOLDER_PROFILE = {} as UserRecruitmentProfile;
+
+/** P0 漏斗②：匹配成功且至少有一个初步符合（有效）机会；同用户只记一次 */
+function recordRevealed(data: MatchResponse): void {
+  const validCount = data.groups.preliminary.length;
+  if (validCount <= 0) return;
+  trackOncePerUser("opportunity_revealed", "opportunity", {
+    targetId: data.groups.preliminary[0]?.unit.id,
+    props: { validCount },
+  });
+}
 
 export type OpportunitiesLoadState =
   | { status: "loading" }
@@ -71,6 +82,7 @@ export function useOpportunities(): OpportunitiesApi {
     }
     try {
       const data = await opportunitiesApi.match(profile);
+      recordRevealed(data);
       setState({ status: "ready", data, profile });
     } catch (error) {
       const msg = error instanceof Error ? error.message : "机会加载失败";
@@ -98,6 +110,7 @@ export function useOpportunities(): OpportunitiesApi {
       .match(profile)
       .then((data) => {
         if (!cancelled) {
+          recordRevealed(data);
           setState({ status: "ready", data, profile });
         }
       })

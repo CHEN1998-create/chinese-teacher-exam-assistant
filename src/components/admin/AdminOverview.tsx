@@ -26,6 +26,8 @@ const RANGE_OPTIONS: { key: MetricsRangeKey; label: string }[] = [
 ];
 
 export const MODULE_LABELS: Record<AnalyticsModule, string> = {
+  profile: "基础画像",
+  opportunity: "机会匹配",
   target: "目标",
   evidence: "考情证据",
   review: "人工审核",

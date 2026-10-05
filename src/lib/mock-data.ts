@@ -920,6 +920,8 @@ export const STORAGE_KEYS = {
   RETRACTION_LOGS: "kb_retraction_logs",
   // —— 数据指标与异常监控：统一分析事件流（live 真实操作 + seed 演示种子） ——
   ANALYTICS_EVENTS: "kb_analytics_events",
+  // —— v6.1 模块 9：未登录访客在画像阶段产生的待迁移事件，登录后一次性归属到真实账号 ——
+  GUEST_ANALYTICS_PENDING: "kb_guest_analytics_pending",
   SETTINGS: "kb_settings",
   // —— v5.1 首次体验：未登录访客的三步问答进度与结果（仅本机浏览器，7 天过期） ——
   GUEST_SESSION: "kb_guest_session",

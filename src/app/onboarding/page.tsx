@@ -23,6 +23,7 @@ import {
   type GuestProfileDraft,
 } from "@/lib/guest/guestSession";
 import { profileApi } from "@/lib/profile/profileApi";
+import { trackOncePerUser } from "@/lib/analytics/eventService";
 import type { EmploymentNatureCode, SubjectCode } from "@/lib/announcements/types";
 import type {
   RegionPreference,
@@ -102,6 +103,10 @@ export default function OnboardingPage() {
       if (profile) profileApi.saveProfile(profile).catch(() => undefined);
     }
     if (finishedStep >= TOTAL_PROFILE_STEPS) {
+      // P0 漏斗①：基础画像完成（访客身份先暂存，登录后归属到真实账号；同用户只记一次）
+      trackOncePerUser("profile_completed", "profile", {
+        props: { stepCount: TOTAL_PROFILE_STEPS },
+      });
       router.push("/preview");
     } else {
       setView(finishedStep + 1);

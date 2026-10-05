@@ -3,7 +3,7 @@
  *
  * 不变量（docs/v6.1-information-architecture.md 第 1 节）：
  * - 主导航永远只有三个入口；设置/通知/资料/账号进入头像菜单或上下文页面；
- * - 高亮以新路由为准；旧路由 /exam /today /plan 经 proxy.ts 跳转，不参与高亮。
+ * - 高亮以新路由为准；旧路由 /exam /today /plan 经 middleware.ts 跳转，不参与高亮。
  */
 
 export type PrimaryNavId = "opportunities" | "schedule" | "study";
@@ -37,8 +37,8 @@ export function activeNavId(pathname: string): PrimaryNavId | null {
 
 /**
  * v5.2 → v6.1 旧路由跳转表。
- * 注意：src/proxy.ts 在 Edge 边界运行、不能可靠共享模块，此表只用于测试与
- * 页面内提示；修改时必须同步 proxy.ts 中的同名字典。
+ * 注意：src/middleware.ts 在 Edge 边界运行、不能可靠共享模块，此表只用于测试与
+ * 页面内提示；修改时必须同步 middleware.ts 中的同名字典。
  */
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
   "/exam": "/opportunities",

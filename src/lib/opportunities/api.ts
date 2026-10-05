@@ -19,12 +19,13 @@ const API_BASE = "/api/opportunities";
 
 function authHeaders(): Record<string, string> {
   // invited 模式：身份由 HttpOnly 会话 cookie 承载，绝不发送客户端可伪造的 x-user-id；
-  // demo 模式：保持现有 x-user-id 头链路。
+  // demo 模式：发送 x-user-id + x-user-role（后端两者缺一即 401）。
   if (AUTH_MODE === "invited") return {};
   const session = authService.getSession();
   if (!session) return {};
   return {
     "x-user-id": session.userId,
+    "x-user-role": session.role,
   };
 }
 

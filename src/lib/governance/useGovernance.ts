@@ -45,16 +45,6 @@ function useGovernanceSnapshot(extra = ""): string {
 
 // ==================== 用户端 ====================
 
-/** 我的纠错（只含当前用户，倒序） */
-export function useMyCorrections(): Correction[] {
-  useGovernanceSnapshot("my-corrections");
-  try {
-    return correctionService.listMine();
-  } catch {
-    return [];
-  }
-}
-
 /** 通知偏好（未登录返回 null） */
 export function useNotificationPreference(): NotificationPreference | null {
   useGovernanceSnapshot("notification-pref");

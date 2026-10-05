@@ -46,6 +46,7 @@ import { useTodayString } from "@/lib/plans/useToday";
 import type { NextStepSummary } from "@/lib/plans/replanEngine";
 import type { PlanTask, TaskFeedback } from "@/types";
 import { formatDateWithWeekday, formatTime, getGreeting } from "@/lib/utils";
+import { trackOncePerUser } from "@/lib/analytics/eventService";
 
 /** 任务使用的资料/资源名称（与 today 页同口径） */
 function sourceNameOf(task: PlanTask): string | null {
@@ -439,6 +440,25 @@ function ReadySection({
     }
   };
 
+  /**
+   * P0 漏斗⑧：开始第一项学习任务（同一用户只记一次）。
+   * 不新增交互：以用户对今日首任务的第一个真实动作计——打开任务资料入口，
+   * 或直接提交执行反馈（无资料入口的任务由此覆盖）。
+   */
+  const recordTaskStarted = (
+    task: PlanTask,
+    via: "open_source" | "feedback",
+  ): void => {
+    trackOncePerUser("task_started", "plan", {
+      targetId: goal.unitId,
+      props: {
+        planId: currentPlan?.id ?? "",
+        taskIndex: task.order,
+        via,
+      },
+    });
+  };
+
   /** “明天能学多久”：更新基线，后续任务总时长按它安排 */
   const handleAvailableTimeChange = (minutes: number) => {
     const baseline = materialService.getBaseline(targetId);
@@ -634,6 +654,7 @@ function ReadySection({
               href={sourceUrl}
               target="_blank"
               rel="noreferrer noopener"
+              onClick={() => recordTaskStarted(currentTask, "open_source")}
               className="text-sm text-blue-600 hover:underline"
             >
               打开「{source}」
@@ -645,7 +666,10 @@ function ReadySection({
             <QuickFeedbackPanel
               key={currentTask.id}
               task={currentTask}
-              onSubmitted={handleSubmitted}
+              onSubmitted={(status) => {
+                recordTaskStarted(currentTask, "feedback");
+                handleSubmitted(status);
+              }}
               onAvailableTimeChange={handleAvailableTimeChange}
             />
           </div>

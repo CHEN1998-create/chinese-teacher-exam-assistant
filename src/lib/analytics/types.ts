@@ -10,6 +10,8 @@ import { UserRole } from "@/types";
 
 /** 业务模块标识：异常定位到模块用，不携带用户内容 */
 export type AnalyticsModule =
+  | "profile"
+  | "opportunity"
   | "target"
   | "evidence"
   | "review"
@@ -24,10 +26,20 @@ export type AnalyticsModule =
 
 /**
  * 事件类型。
- * 前 13 个为需求规定的用户价值事件；其后为指标/异常所需的内部扩展事件，
+ * 前 8 个 profile_* / opportunity_* / follow_* / task_started 为 v6.1 P0 闭环事件；
+ * 其后 13 个为 v5.2 沿用的用户价值事件；再后为指标/异常所需的内部扩展事件。
  * 均在事件字典中登记，不允许出现“未登记的埋点”。
  */
 export type AnalyticsEventType =
+  // —— v6.1 P0 闭环事件（8 类；第 9 项“7 日内有效推进”为派生指标，见 metrics/domain） ——
+  | "profile_completed"
+  | "opportunity_revealed"
+  | "match_basis_viewed"
+  | "opportunity_followed"
+  | "qualification_supplemented"
+  | "follow_status_changed"
+  | "primary_target_set"
+  | "task_started"
   // —— 用户价值事件（13 类） ——
   | "target_created"
   | "evidence_viewed"

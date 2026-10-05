@@ -86,6 +86,9 @@ export interface UserValueMetrics {
   resourceUseRate: MetricValue;
   closedLoopUsers: number;
   closedLoopRate: MetricValue;
+  /** P0：完成画像后 7 日内有有效推进动作的去重用户数与比率 */
+  p0Progress7dUsers: number;
+  p0Progress7dRate: MetricValue;
   funnel: FunnelStage[];
 }
 
@@ -297,12 +300,66 @@ function computeUserValue(
   );
 
   const n = targetCreators.size;
+
+  // —— v6.1 P0 闭环漏斗（9 个去重用户阶段；口径见 METRIC_DICTIONARY.p0_funnel） ——
+  const profileEvents = byType("profile_completed");
+  const profileUserSet = unique(profileEvents.map((e) => e.userId));
+  const revealedUserSet = unique(
+    byType("opportunity_revealed")
+      .filter((e) => (propNum(e, "validCount") ?? 0) >= 1)
+      .map((e) => e.userId)
+  );
+  const basisUserSet = unique(byType("match_basis_viewed").map((e) => e.userId));
+  const followUserSet = unique(byType("opportunity_followed").map((e) => e.userId));
+  const supplementUserSet = unique(
+    byType("qualification_supplemented").map((e) => e.userId)
+  );
+  const isRegistrationEvent = (e: AnalyticsEvent): boolean => {
+    const to = propStr(e, "to");
+    return to === "preparing" || to === "registered";
+  };
+  const registerUserSet = unique(
+    byType("follow_status_changed").filter(isRegistrationEvent).map((e) => e.userId)
+  );
+  const primaryUserSet = unique(byType("primary_target_set").map((e) => e.userId));
+  const taskStartUserSet = unique(byType("task_started").map((e) => e.userId));
+
+  // 第 9 阶段：完成画像后 7×24h 内出现任意有效推进动作
+  const profileAtByUser = new Map<string, number>();
+  for (const e of profileEvents) {
+    const t = new Date(e.at).getTime();
+    if (Number.isNaN(t)) continue;
+    const cur = profileAtByUser.get(e.userId);
+    if (cur === undefined || t < cur) profileAtByUser.set(e.userId, t);
+  }
+  const progressEvents: AnalyticsEvent[] = [
+    ...byType("task_started"),
+    ...feedbackEvents,
+    ...initialConfirmEvents,
+    ...byType("follow_status_changed"),
+    ...byType("primary_target_set"),
+  ];
+  const progress7dSet = new Set<string>();
+  for (const e of progressEvents) {
+    const start = profileAtByUser.get(e.userId);
+    if (start === undefined) continue;
+    if (e.type === "follow_status_changed" && !isRegistrationEvent(e)) continue;
+    const t = new Date(e.at).getTime();
+    if (Number.isNaN(t)) continue;
+    if (t >= start && t - start <= 7 * DAY_MS) progress7dSet.add(e.userId);
+  }
+
+  const pn = profileUserSet.size;
   const funnel: FunnelStage[] = [
-    { key: "target", label: "创建目标", users: n, rateFromFirst: n > 0 ? 1 : null },
-    stage("evidence", "查看证据卡", evidenceViewers.size, n),
-    stage("plan", "确认首版计划", planConfirmedUsers.size, n),
-    stage("feedback", "提交执行反馈", [...planConfirmedUsers].filter((u) => feedbackUsers.has(u)).length, n),
-    stage("review", "完成周复盘（闭环）", closedLoop.length, n),
+    { key: "profile", label: "完成基础画像", users: pn, rateFromFirst: pn > 0 ? 1 : null },
+    stage("opportunity", "获得有效机会", revealedUserSet.size, pn),
+    stage("basis", "查看匹配依据", basisUserSet.size, pn),
+    stage("follow", "关注机会", followUserSet.size, pn),
+    stage("qualification", "补充资格信息", supplementUserSet.size, pn),
+    stage("registration", "标记准备报名/已报名", registerUserSet.size, pn),
+    stage("primary", "设为主要目标", primaryUserSet.size, pn),
+    stage("task", "开始第一项学习任务", taskStartUserSet.size, pn),
+    stage("progress7d", "7日内完成有效推进", progress7dSet.size, pn),
   ];
 
   return {
@@ -326,6 +383,8 @@ function computeUserValue(
     resourceUseRate: ratio(resourceUsers.size, resourceAdders.size),
     closedLoopUsers: closedLoop.length,
     closedLoopRate: ratio(closedLoop.length, n),
+    p0Progress7dUsers: progress7dSet.size,
+    p0Progress7dRate: ratio(progress7dSet.size, pn),
     funnel,
   };
 }
@@ -641,7 +700,7 @@ function buildAnomalies(
         at: e.at,
         title: ANOMALY_TITLES[e.type] ?? e.type,
         detail: `模块 ${e.module} · 错误码 ${propStr(e, "reasonCode") ?? "unknown"} · 用户 ${maskUserId(e.userId)}`,
-        href: e.module === "plan" ? "/plan" : undefined,
+        href: e.module === "plan" ? "/study" : undefined,
         source: e.source,
       });
     });

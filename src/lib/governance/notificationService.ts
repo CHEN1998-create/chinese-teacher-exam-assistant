@@ -202,7 +202,7 @@ export const notificationService = {
       title: content.title,
       body: content.body,
       severity: "info",
-      related: { href: "/today" },
+      related: { href: "/study" },
     });
     return item ? { outcome: "created", item } : { outcome: "suppressed" };
   },

@@ -390,7 +390,7 @@ export const correctionService = {
         (appliedToEvidence ? "考情结论已更新。" : "纠错已被采纳并记录。") +
         `处理说明：${note}`,
       severity: "important",
-      related: { correctionId: id, examTargetId: detail.correction.examTargetId, href: "/exam" },
+      related: { correctionId: id, examTargetId: detail.correction.examTargetId, href: "/opportunities" },
     });
     return updated;
   },
@@ -409,7 +409,7 @@ export const correctionService = {
       title: `纠错处理结果：${detail.correction.subject}`,
       body: `你提交的纠错未被采纳。原因：${note}`,
       severity: "important",
-      related: { correctionId: id, examTargetId: detail.correction.examTargetId, href: "/exam" },
+      related: { correctionId: id, examTargetId: detail.correction.examTargetId, href: "/opportunities" },
     });
     return updated;
   },
@@ -431,7 +431,7 @@ export const correctionService = {
       title: `纠错需要补充材料：${detail.correction.subject}`,
       body: `审核员需要你补充更多信息：${ask}`,
       severity: "important",
-      related: { correctionId: id, examTargetId: detail.correction.examTargetId, href: "/exam" },
+      related: { correctionId: id, examTargetId: detail.correction.examTargetId, href: "/opportunities" },
     });
     return updated;
   },
@@ -593,7 +593,7 @@ export const correctionService = {
         body: userNotice,
         severity: "important",
         nextSteps,
-        related: { examTargetId: seed.examTargetId, retractionId: recordId, href: "/exam" },
+        related: { examTargetId: seed.examTargetId, retractionId: recordId, href: "/opportunities" },
         createdAt: now,
       });
       if (examNotice) notifiedUserIds.push(userId);
@@ -605,7 +605,7 @@ export const correctionService = {
           body: `由于「${EVIDENCE_TYPE_LABELS[seed.field]}」结论撤回，计划中相关任务已标记为“待重新确认”，请确认后继续执行。`,
           severity: "important",
           nextSteps: ["查看标记任务，确认继续或调整安排"],
-          related: { weeklyPlanId, examTargetId: seed.examTargetId, retractionId: recordId, href: "/plan" },
+          related: { weeklyPlanId, examTargetId: seed.examTargetId, retractionId: recordId, href: "/study" },
           createdAt: now,
         });
       }

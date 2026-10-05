@@ -39,6 +39,7 @@ import { FollowControls } from "@/components/opportunities/FollowControls";
 import { SupplementForm } from "@/components/opportunities/SupplementForm";
 import { EvidenceSection } from "@/components/opportunities/EvidenceSection";
 import { CorrectionModal } from "@/components/opportunities/CorrectionModal";
+import { track, trackView } from "@/lib/analytics/eventService";
 
 function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({
@@ -76,6 +77,11 @@ export default function OpportunityDetailPage() {
       try {
         const response = await opportunitiesApi.unitDetail(unitId, profile);
         setDetail(response);
+        // P0 漏斗③：打开详情即看到逐项官方依据（同一会话每机会只记一次）
+        trackView(unitId, "match_basis_viewed", "opportunity", {
+          targetId: unitId,
+          props: { fieldCount: response.unit.dimensions.length },
+        });
       } catch (e) {
         setError(e instanceof Error ? e.message : "详情加载失败");
       } finally {
@@ -92,7 +98,14 @@ export default function OpportunityDetailPage() {
     opportunitiesApi
       .unitDetail(unitId, profileState.profile)
       .then((response) => {
-        if (!cancelled) setDetail(response);
+        if (!cancelled) {
+          setDetail(response);
+          // P0 漏斗③：打开详情即看到逐项官方依据（同一会话每机会只记一次）
+          trackView(unitId, "match_basis_viewed", "opportunity", {
+            targetId: unitId,
+            props: { fieldCount: response.unit.dimensions.length },
+          });
+        }
       })
       .catch((e) => {
         if (!cancelled) {
@@ -164,16 +177,15 @@ export default function OpportunityDetailPage() {
     if (action.kind === "follow") {
       return {
         ...base,
-        onClick: () => void runAction(() => opportunitiesApi.follow(unitId)),
+        onClick: () => void followUnit(),
       };
     }
     if (action.kind === "prepare") {
+      // 必须走 handleTransition：首屏主行动与下方跟进区共用同一条状态流转与
+      // P0 漏斗⑥埋点，不能只调 API 导致主行动路径漏记 follow_status_changed。
       return {
         ...base,
-        onClick: () =>
-          void runAction(() =>
-            opportunitiesApi.transition(unitId, "preparing"),
-          ),
+        onClick: () => void handleTransition("preparing"),
       };
     }
     // waiting / registered：滚动到跟进区（register/official 已在前面处理外链）
@@ -207,16 +219,39 @@ export default function OpportunityDetailPage() {
     }
   }
 
+  /** 关注成功后埋点（失败由 runAction 捕获，不会产生事件） */
+  const followUnit = () =>
+    runAction(async () => {
+      await opportunitiesApi.follow(unitId);
+      // P0 漏斗④：关注机会
+      track("opportunity_followed", "opportunity", {
+        targetId: unitId,
+        props: { from: detail?.unit.overall ?? "unknown" },
+      });
+    });
+
   const handleTransition = (
     status: FollowStatus,
     opts?: { note?: string; abandonReason?: string },
   ) =>
-    runAction(() =>
-      opportunitiesApi.transition(unitId, status, opts),
-    );
+    runAction(async () => {
+      const from = unit.follow?.status ?? "considering";
+      await opportunitiesApi.transition(unitId, status, opts);
+      // P0 漏斗⑥：标记准备报名/已报名（含其他报名状态流转）
+      track("follow_status_changed", "opportunity", {
+        targetId: unitId,
+        props: { from, to: status },
+      });
+    });
 
   const handleSetRole = (role: StudyTargetRole) =>
-    runAction(() => opportunitiesApi.setRole(unitId, role));
+    runAction(async () => {
+      await opportunitiesApi.setRole(unitId, role);
+      // P0 漏斗⑦：设为主要目标
+      if (role === "primary") {
+        track("primary_target_set", "opportunity", { targetId: unitId });
+      }
+    });
 
   const handleSaveFacts = async (next: SupplementFacts) => {
     setSavingFacts(true);
@@ -227,6 +262,28 @@ export default function OpportunityDetailPage() {
       // 必须重新装配画像：保存后的补充事实要参与后端重算，
       // 不能复用首屏缓存的 profile。
       await refreshDetail();
+      // P0 漏斗⑤：补充资格信息成功并触发重算（只记维度与字段数，不含答案）
+      const dims = {
+        age: saved.birthDate !== undefined,
+        hukou: saved.hukouProvinceCode !== undefined,
+        social_security: saved.socialSecurityMonths !== undefined,
+        work_experience: saved.workExperienceMonths !== undefined,
+        other: Object.keys(saved.extraAnswers ?? {}).length > 0,
+      };
+      const fieldCount = Object.values(dims).filter(Boolean).length;
+      if (fieldCount > 0) {
+        track("qualification_supplemented", "profile", {
+          targetId: unitId,
+          props: {
+            fieldCount,
+            age: dims.age ? 1 : 0,
+            hukou: dims.hukou ? 1 : 0,
+            social_security: dims.social_security ? 1 : 0,
+            work_experience: dims.work_experience ? 1 : 0,
+            other: dims.other ? 1 : 0,
+          },
+        });
+      }
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "保存失败");
     } finally {
@@ -326,9 +383,7 @@ export default function OpportunityDetailPage() {
           follow={unit.follow}
           unitName={unit.unit.name}
           busy={busy}
-          onFollow={() =>
-            void runAction(() => opportunitiesApi.follow(unitId))
-          }
+          onFollow={() => void followUnit()}
           onTransition={(status, opts) => void handleTransition(status, opts)}
           onSetRole={(role) => void handleSetRole(role)}
           onUnfollow={() =>

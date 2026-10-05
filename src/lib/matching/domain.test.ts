@@ -214,3 +214,47 @@ describe("单元字段完整性", () => {
     }
   });
 });
+
+describe("高风险回归（模块 9）：无官方来源不得进入主要推荐", () => {
+  it("官方来源未经人工核对（ai_extracted/pending_review）时 no_official_source 闸门失败，即使资格全过也不是有效机会", () => {
+    const base = candidateFor(V61_SCENARIO_IDS.eligible);
+    const unverifiedVersion: AnnouncementVersion = {
+      ...base.version,
+      officialSource: {
+        ...base.version.officialSource,
+        state: "ai_extracted",
+      },
+    };
+    const match = evaluateOpportunity(
+      base.announcement,
+      unverifiedVersion,
+      base.unit,
+      V61_SEED_PROFILE,
+      V61_NOW,
+    );
+    const gate = match.gates.find((g) => g.code === "no_official_source");
+    expect(gate?.passed).toBe(false);
+    expect(isValidOpportunity(match)).toBe(false);
+  });
+
+  it("官方来源为 url 但没有 URL 时闸门同样失败", () => {
+    const base = candidateFor(V61_SCENARIO_IDS.eligible);
+    const noUrlVersion: AnnouncementVersion = {
+      ...base.version,
+      officialSource: {
+        ...base.version.officialSource,
+        state: "official",
+        locator: { kind: "url" } as AnnouncementVersion["officialSource"]["locator"],
+      },
+    };
+    const match = evaluateOpportunity(
+      base.announcement,
+      noUrlVersion,
+      base.unit,
+      V61_SEED_PROFILE,
+      V61_NOW,
+    );
+    expect(match.gates.find((g) => g.code === "no_official_source")?.passed).toBe(false);
+    expect(isValidOpportunity(match)).toBe(false);
+  });
+});

@@ -38,7 +38,7 @@ export default function MaterialsPage() {
         title="先确认你准备的考试"
         description="资料怎么用只针对你准备的考试：先确定报考地区与考试，再整理资料。"
         actionLabel="去设置目标"
-        actionHref="/exam"
+        actionHref="/opportunities"
       />
     );
   }

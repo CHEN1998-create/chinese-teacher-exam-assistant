@@ -9,7 +9,4 @@ export { Modal, ConfirmModal } from "./Modal";
 export { Tabs, TabPanel } from "./Tabs";
 export { Progress } from "./Progress";
 export { Switch } from "./Switch";
-export { MaterialCard } from "./MaterialCard";
-export { ResourceCard } from "./ResourceCard";
 export { TaskCard } from "./TaskCard";
-export { FeedbackForm } from "./FeedbackForm";

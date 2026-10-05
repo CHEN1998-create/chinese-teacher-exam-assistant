@@ -19,6 +19,63 @@ export interface EventDictionaryEntry {
 }
 
 export const EVENT_DICTIONARY: EventDictionaryEntry[] = [
+  // —— v6.1 P0 闭环事件（9 项漏斗口径；第 9 项为派生指标 meaningful_progress_7d） ——
+  {
+    type: "profile_completed",
+    label: "完成基础画像",
+    trigger: "访客五组问答（地区/学历/专业/毕业状态/教资）走到最后一步并生成初步结果；同一用户只记一次",
+    properties: "问答步数 stepCount；不含任何画像正文",
+    core: false,
+  },
+  {
+    type: "opportunity_revealed",
+    label: "获得至少一个有效机会",
+    trigger: "画像/补问提交后匹配成功，且初步符合分组至少 1 个机会；同一用户同画像只记一次",
+    properties: "有效机会数 validCount、机会单元ID",
+    core: false,
+  },
+  {
+    type: "match_basis_viewed",
+    label: "查看匹配依据",
+    trigger: "机会详情/预览卡展开官方依据（同一会话每机会只记一次）",
+    properties: "机会单元ID、依据字段数",
+    core: false,
+  },
+  {
+    type: "opportunity_followed",
+    label: "关注机会",
+    trigger: "机会详情点击“关注/我在跟这个机会”且后端关注成功",
+    properties: "机会单元ID、关注前所在分组",
+    core: false,
+  },
+  {
+    type: "qualification_supplemented",
+    label: "补充资格信息",
+    trigger: "机会详情补问表单（年龄/户籍/社保/经历/特有条件）保存成功并触发重算",
+    properties: "机会单元ID、补问维度枚举、字段数；不记录答案正文",
+    core: false,
+  },
+  {
+    type: "follow_status_changed",
+    label: "标记报名状态",
+    trigger: "关注机会上标记准备报名/已报名（或其他报名状态流转）成功",
+    properties: "机会单元ID、流转前后状态枚举 from/to",
+    core: false,
+  },
+  {
+    type: "primary_target_set",
+    label: "设为主要目标",
+    trigger: "机会详情“设为主要目标”确认成功（含与旧主目标的替换）",
+    properties: "机会单元ID",
+    core: false,
+  },
+  {
+    type: "task_started",
+    label: "开始第一项学习任务",
+    trigger: "备考页首个任务点击“开始做”进入执行；同一用户只记一次",
+    properties: "计划ID、任务序号",
+    core: false,
+  },
   {
     type: "target_created",
     label: "创建目标考试",
@@ -169,6 +226,25 @@ export interface MetricDictionaryEntry {
 }
 
 export const METRIC_DICTIONARY: MetricDictionaryEntry[] = [
+  {
+    key: "p0_funnel",
+    label: "P0 闭环漏斗",
+    category: "user_value",
+    formula:
+      "9 个去重用户阶段：①完成基础画像 ②获得至少一个有效机会 ③查看匹配依据 ④关注机会 ⑤补充资格信息 ⑥标记准备报名/已报名 ⑦设为主要目标 ⑧开始第一项学习任务 ⑨7 日内完成有效推进动作；⑤⑥对同批用户不要求全部经过，⑥取 follow_status_changed 到达 preparing/registered，⑨=画像完成后 7 天内出现 任务反馈/计划确认/报名状态推进 的去重用户",
+    dataSource:
+      "profile_completed / opportunity_revealed / match_basis_viewed / opportunity_followed / qualification_supplemented / follow_status_changed / primary_target_set / task_started 事件 + 派生（task_feedback_submitted、plan_confirmed）",
+    timeFiltered: true,
+  },
+  {
+    key: "meaningful_progress_7d",
+    label: "7日内有效推进率",
+    category: "user_value",
+    formula:
+      "完成画像后 7×24 小时内出现任意有效推进动作（开始任务/提交任务反馈/确认计划/标记准备报名或已报名/设为主要目标）的去重用户数 ÷ 完成基础画像的去重用户数",
+    dataSource: "profile_completed 及上述推进类事件的 at 时间差",
+    timeFiltered: true,
+  },
   {
     key: "first_fill_rate",
     label: "首次填写完成率",
