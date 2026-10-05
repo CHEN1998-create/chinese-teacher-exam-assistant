@@ -32,7 +32,6 @@ import type {
   StageCode,
 } from "@/lib/announcements/types";
 import type { UserRecruitmentProfile } from "@/lib/profile/types";
-import type { FollowedOpportunity } from "@/lib/opportunities/types";
 
 /** 演示数据统一“当前时间” */
 export const V61_NOW = "2026-10-04T12:00:00+08:00";
@@ -708,17 +707,3 @@ export const V61_SCENARIO_IDS = {
   closed: "ann-wenzhou",
   supplemented: "ann-hefei",
 } as const;
-
-/** 一条示例关注记录（杭州 · 考虑中），供后续关注/主目标模块使用 */
-export const V61_SEED_FOLLOWS: FollowedOpportunity[] = [
-  {
-    id: "follow-001",
-    userId: "u-v61-demo",
-    unitId: "unit-hangzhou-01",
-    announcementId: "ann-hangzhou",
-    versionId: "ann-hangzhou-v1",
-    status: "considering",
-    followedAt: "2026-10-04T12:30:00+08:00",
-    statusHistory: [{ status: "considering", at: "2026-10-04T12:30:00+08:00" }],
-  },
-];

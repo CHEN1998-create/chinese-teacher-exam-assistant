@@ -9,6 +9,7 @@ import type { UserRecruitmentProfile } from "@/lib/profile/types";
 import type {
   FollowDTO,
   FollowStatus,
+  GoalsResponse,
   MatchResponse,
   StudyTargetRole,
   UnitDetailResponse,
@@ -65,6 +66,11 @@ export const opportunitiesApi = {
 
   listFollows(): Promise<FollowDTO[]> {
     return request<FollowDTO[]>("/follows");
+  },
+
+  /** 备考目标列表（模块 7）：活跃关注 + 公告版本聚合 */
+  getGoals(): Promise<GoalsResponse> {
+    return request<GoalsResponse>("/goals");
   },
 
   /** 关注：后端保证初始状态为 considering（收藏 ≠ 准备报名），重复关注幂等 */

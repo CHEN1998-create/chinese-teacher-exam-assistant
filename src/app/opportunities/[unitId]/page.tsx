@@ -324,6 +324,7 @@ export default function OpportunityDetailPage() {
       <div id="follow" className="scroll-mt-20">
         <FollowControls
           follow={unit.follow}
+          unitName={unit.unit.name}
           busy={busy}
           onFollow={() =>
             void runAction(() => opportunitiesApi.follow(unitId))

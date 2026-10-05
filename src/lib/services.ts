@@ -185,6 +185,32 @@ export const examTargetService = {
     return result;
   },
 
+  /**
+   * 固定 id 的 upsert（模块 7：主要目标桥接用）。
+   * 同一机会派生的目标 id 稳定（tgt-${unitId}）：已存在则原位更新
+   * （保留 createdAt 与 isCurrent，澄清任务按最新字段重算），
+   * 不存在则插入。不在此处改动当前主目标指针，由调用方决定。
+   */
+  upsertFixedId(target: ExamTarget): ExamTarget {
+    const all = this.getAllRaw();
+    const index = all.findIndex(
+      (t) => t.id === target.id && t.userId === target.userId,
+    );
+    if (index !== -1) {
+      all[index] = {
+        ...target,
+        createdAt: all[index].createdAt,
+        isCurrent: all[index].isCurrent,
+      };
+      this.persist(all);
+      this.attachGeneratedTasks(target.id);
+      return this.getById(target.id) ?? all[index];
+    }
+    all.push({ ...target, isCurrent: false });
+    this.persist(all);
+    return target;
+  },
+
   /** 编辑目标：重新派生名称/地区/生命周期与澄清任务 */
   update(id: string, input: ExamTargetInput): ExamTarget | null {
     const all = this.getAllRaw();

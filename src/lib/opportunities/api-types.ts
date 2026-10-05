@@ -179,5 +179,47 @@ export interface UnitDetailResponse {
   }[];
 }
 
+/** 备考目标（模块 7）：活跃关注 + 公告版本聚合，主要目标选择与 /study 页数据源 */
+export interface GoalDTO {
+  unitId: string;
+  unitName: string;
+  unitCode: string;
+  region: RegionRefDTO;
+  stage: string;
+  subject: string;
+  headcount: number;
+  announcement: {
+    id: string;
+    title: string;
+    publisher: string;
+    officialUrl: string;
+  };
+  version: {
+    id: string;
+    versionNumber: number;
+    publishedAt: string;
+    timeline: {
+      registrationStart: string;
+      registrationEnd: string;
+      paymentDeadline?: string;
+      admitTicketStart?: string;
+      writtenExamDate?: string;
+      scoreDate?: string;
+      interviewDate?: string;
+      pendingItems?: string[];
+    };
+  };
+  role: StudyTargetRole;
+  followStatus: FollowStatus;
+  followedAt: string;
+  /** 关注时的公告版本已被新版本取代（考试内容确认随之失效） */
+  newerVersion: boolean;
+}
+
+export interface GoalsResponse {
+  goals: GoalDTO[];
+  primaryTargetUnitId: string | null;
+}
+
 /** POST 请求体：前端只提交画像与补问答案，判定在后端完成 */
 export type ProfilePayload = { profile: UserRecruitmentProfile };

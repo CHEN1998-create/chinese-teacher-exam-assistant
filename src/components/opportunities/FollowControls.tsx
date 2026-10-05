@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
-import { ConfirmModal } from "@/components/ui/Modal";
+import { ConfirmModal, Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Input";
 import {
   canTransition,
@@ -11,6 +11,11 @@ import {
   type FollowStatus,
 } from "@/lib/opportunities";
 import type { FollowDTO } from "@/lib/opportunities/api-types";
+import { opportunitiesApi } from "@/lib/opportunities/api";
+import {
+  describePrimarySwitchImpact,
+  type PrimarySwitchImpact,
+} from "@/lib/goals/domain";
 import { cn } from "@/lib/utils";
 
 /**
@@ -31,6 +36,8 @@ const NEXT_BUTTONS: Array<{
 
 interface FollowControlsProps {
   follow: FollowDTO | null;
+  /** 当前机会单元名（设为主要目标前的影响说明用） */
+  unitName: string;
   busy: boolean;
   onFollow: () => void;
   onTransition: (
@@ -43,6 +50,7 @@ interface FollowControlsProps {
 
 export function FollowControls({
   follow,
+  unitName,
   busy,
   onFollow,
   onTransition,
@@ -52,6 +60,26 @@ export function FollowControls({
   const [showAbandon, setShowAbandon] = useState(false);
   const [abandonReason, setAbandonReason] = useState("");
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
+  const [primaryImpact, setPrimaryImpact] = useState<PrimarySwitchImpact | null>(null);
+  const [impactLoading, setImpactLoading] = useState(false);
+
+  /** 设为主要目标前：拉取当前主要目标并展示影响说明（模块 7） */
+  const handleSetPrimaryClick = async () => {
+    setImpactLoading(true);
+    let currentName: string | null = null;
+    try {
+      const res = await opportunitiesApi.getGoals();
+      const primary = res.goals.find(
+        (g) => g.role === "primary" && g.unitId !== follow?.unitId,
+      );
+      currentName = primary?.unitName ?? null;
+    } catch {
+      // 获取当前主要目标失败时仍展示通用影响说明
+    } finally {
+      setImpactLoading(false);
+    }
+    setPrimaryImpact(describePrimarySwitchImpact(currentName, unitName));
+  };
 
   if (!follow) {
     return (
@@ -185,8 +213,8 @@ export function FollowControls({
           <Button
             size="sm"
             variant="outline"
-            disabled={busy}
-            onClick={() => onSetRole("primary")}
+            disabled={busy || impactLoading}
+            onClick={() => void handleSetPrimaryClick()}
           >
             ★ 设为主要备考目标
           </Button>
@@ -215,6 +243,39 @@ export function FollowControls({
         confirmLabel="取消关注"
         variant="danger"
       />
+
+      {/* 设为主要目标前的影响说明（模块 7）：确认后才真正切换 */}
+      <Modal
+        isOpen={primaryImpact !== null}
+        onClose={() => setPrimaryImpact(null)}
+        title={primaryImpact?.title ?? ""}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPrimaryImpact(null)}>
+              再想想
+            </Button>
+            <Button
+              variant="primary"
+              disabled={busy}
+              onClick={() => {
+                setPrimaryImpact(null);
+                onSetRole("primary");
+              }}
+            >
+              确认设为主要目标
+            </Button>
+          </>
+        }
+      >
+        <ul className="space-y-2 text-sm">
+          {primaryImpact?.points.map((p, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span aria-hidden="true" className="mt-0.5 text-slate-400">·</span>
+              <span>{p}</span>
+            </li>
+          ))}
+        </ul>
+      </Modal>
     </section>
   );
 }

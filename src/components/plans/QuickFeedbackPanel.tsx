@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PlanTask, TaskFeedback, IncompleteReason, INCOMPLETE_REASON_LABELS } from "@/types";
 import { feedbackService, DuplicateFeedbackError } from "@/lib/plans/feedbackService";
+import { resolveFeedbackConflict } from "@/lib/plans/feedbackConflict";
 
 interface QuickFeedbackPanelProps {
   task: PlanTask;
@@ -33,34 +34,24 @@ export function QuickFeedbackPanel({ task, onSubmitted, onAvailableTimeChange }:
   ): void => {
     setSaving(true);
     setError(null);
+    const input = {
+      status,
+      actualTime: status === "completed" ? task.estimatedTime : undefined,
+      incompleteReason,
+      errorTypes: [],
+      hasSecondPractice: false,
+    };
     try {
-      const result = feedbackService.submit(task.id, {
-        status,
-        actualTime: status === "completed" ? task.estimatedTime : undefined,
-        incompleteReason,
-        errorTypes: [],
-        hasSecondPractice: false,
-      });
+      const result = feedbackService.submit(task.id, input);
       onSubmitted(result.status);
     } catch (e) {
       if (e instanceof DuplicateFeedbackError) {
-        const existing = e.existing;
-        const reason = status === "completed" ? undefined : incompleteReason;
-        // 同一条反馈重复进入（快速连点/跨渲染重复点击）：不再次触发重排，防止版本增殖
-        if (
-          existing.status === status &&
-          (existing.incompleteReason ?? undefined) === (reason ?? undefined)
-        ) {
+        // 纯函数消解：同一反馈重复提交忽略（防版本增殖）；结论确实改变才修改已有反馈
+        const resolved = resolveFeedbackConflict(e.existing, { status, incompleteReason, input });
+        if (resolved.action === "ignore") {
           return;
         }
-        // 反馈结论确实改变（如部分完成→做完了）：修改已有反馈，而不是新建
-        const updated = feedbackService.update(existing.id, {
-          status,
-          actualTime: status === "completed" ? task.estimatedTime : undefined,
-          incompleteReason,
-          errorTypes: [],
-          hasSecondPractice: false,
-        });
+        const updated = feedbackService.update(resolved.feedbackId, resolved.input);
         onSubmitted(updated.status);
       } else {
         // 保存失败：保留当前选择，可点重试

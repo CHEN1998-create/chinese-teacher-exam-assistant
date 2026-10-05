@@ -104,14 +104,11 @@ function buildInput(target: ExamTarget): PlanGenerationInput {
   const dailyMinutes = baseline?.dailyAvailableMinutes ?? authService.getSession()?.user.dailyAvailableTime ?? 120;
   const weeklyHours = baseline?.weeklyAvailableHours ?? Math.round((dailyMinutes * 7) / 60);
 
-  // 计划从下一个周一开始（若今天是周一则从今天开始），保证 7 天是完整一周
+  // 首个计划从今天开始、覆盖 7 天（模块 7）：
+  // 从“本周一”起算会在周中生成时产生已过去的日期，今日任务卡直接落在过去日
   const today = new Date();
-  const day = today.getDay(); // 0=周日
-  const diff = day === 0 ? -6 : 1 - day; // 本周一
-  const start = new Date(today);
-  start.setDate(today.getDate() + diff);
-  const startDate = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(
-    start.getDate()
+  const startDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+    today.getDate()
   ).padStart(2, "0")}`;
 
   // 周序号：基于开始日期与目标创建日的周差
