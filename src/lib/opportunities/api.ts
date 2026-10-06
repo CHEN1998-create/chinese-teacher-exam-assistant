@@ -11,6 +11,7 @@ import type {
   FollowStatus,
   GoalsResponse,
   MatchResponse,
+  MaterialStatus,
   StudyTargetRole,
   UnitDetailResponse,
 } from "./api-types";
@@ -40,7 +41,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(body.message || body.error || `请求失败 (${res.status})`);
+    const err = new Error(body.message || body.error || `请求失败 (${res.status})`);
+    // 携带原始响应，便于调用方处理 VERSION_CONFLICT 等结构化错误
+    (err as Error & { status?: number; body?: unknown }).status = res.status;
+    (err as Error & { status?: number; body?: unknown }).body = body;
+    throw err;
   }
   return res.json() as Promise<T>;
 }
@@ -71,6 +76,19 @@ export const opportunitiesApi = {
     return request<FollowDTO[]>("/follows");
   },
 
+  /** 登录后合并访客本机暂存的关注（服务端已有则跳过） */
+  mergeGuestFollows(items: {
+    unitId: string;
+    status?: string;
+    materialStatuses?: Record<string, string>;
+    consultationNotes?: Record<string, string>;
+  }[]): Promise<{ merged: number; skipped: number }> {
+    return request<{ merged: number; skipped: number }>("/follows/merge", {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    });
+  },
+
   /** 备考目标列表（模块 7）：活跃关注 + 公告版本聚合 */
   getGoals(): Promise<GoalsResponse> {
     return request<GoalsResponse>("/goals");
@@ -87,7 +105,7 @@ export const opportunitiesApi = {
   transition(
     unitId: string,
     status: FollowStatus,
-    options?: { note?: string; abandonReason?: string },
+    options?: { note?: string; abandonReason?: string; version?: number },
   ): Promise<FollowDTO> {
     return request<FollowDTO>(
       `/units/${encodeURIComponent(unitId)}/follow`,
@@ -97,7 +115,40 @@ export const opportunitiesApi = {
           status,
           note: options?.note,
           abandonReason: options?.abandonReason,
+          version: options?.version,
         }),
+      },
+    );
+  },
+
+  /** 设置某报名材料项的完成状态（带 version 乐观锁） */
+  setMaterialStatus(
+    unitId: string,
+    itemId: string,
+    status: MaterialStatus,
+    version: number,
+  ): Promise<FollowDTO> {
+    return request<FollowDTO>(
+      `/units/${encodeURIComponent(unitId)}/materials`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ itemId, status, version }),
+      },
+    );
+  },
+
+  /** 记录用户自行填写的官方咨询结论（带 version 乐观锁，不影响匹配） */
+  saveConsultationNote(
+    unitId: string,
+    dimensionKey: string,
+    note: string,
+    version: number,
+  ): Promise<FollowDTO> {
+    return request<FollowDTO>(
+      `/units/${encodeURIComponent(unitId)}/consultation`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ dimensionKey, note, version }),
       },
     );
   },

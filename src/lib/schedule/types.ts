@@ -46,6 +46,16 @@ export interface ScheduleResponse {
   events: TimelineEventDTO[];
   /** 已关闭提醒的机会 */
   mutedUnitIds: string[];
+  /** 首屏「当前最重要的一个动作」 */
+  nextAction: NextActionDTO | null;
+}
+
+export interface NextActionDTO {
+  unitId: string;
+  unitName: string;
+  kind: "register" | "materials" | "review" | "timeline";
+  label: string;
+  href: string;
 }
 
 export type NotificationSeverity = "must_handle" | "suggest_handle" | "info";

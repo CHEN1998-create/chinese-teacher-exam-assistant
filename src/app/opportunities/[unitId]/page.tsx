@@ -19,6 +19,7 @@ import { MATCH_STATUS_LABELS } from "@/lib/matching/types";
 import { opportunitiesApi } from "@/lib/opportunities/api";
 import type {
   FollowStatus,
+  MaterialStatus,
   StudyTargetRole,
   UnitDetailResponse,
 } from "@/lib/opportunities/api-types";
@@ -43,6 +44,9 @@ import {
   VerificationSection,
 } from "@/components/opportunities/EvidenceSection";
 import { CorrectionModal } from "@/components/opportunities/CorrectionModal";
+import { ActionChain } from "@/components/opportunities/ActionChain";
+import { MaterialsList } from "@/components/opportunities/MaterialsList";
+import { ConsultationPanel } from "@/components/opportunities/ConsultationPanel";
 import { track, trackView } from "@/lib/analytics/eventService";
 import { gateStateMeta } from "@/lib/gate-states";
 
@@ -219,7 +223,14 @@ export default function OpportunityDetailPage() {
       }
       await refreshDetail();
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "操作失败");
+      const err = e as Error & { status?: number; body?: { error?: string; current?: unknown } };
+      // 乐观锁冲突：服务端已有更新版本，拉取最新状态后提示用户，不丢进度
+      if (err.body?.error === "VERSION_CONFLICT") {
+        setActionError("状态已在其他设备更新，已同步最新状态，请重试。");
+        await refreshDetail();
+      } else {
+        setActionError(err.message || "操作失败");
+      }
     } finally {
       setBusy(false);
     }
@@ -242,7 +253,10 @@ export default function OpportunityDetailPage() {
   ) =>
     runAction(async () => {
       const from = unit.follow?.status ?? "considering";
-      await opportunitiesApi.transition(unitId, status, opts);
+      await opportunitiesApi.transition(unitId, status, {
+        ...opts,
+        version: unit.follow?.version,
+      });
       // P0 漏斗⑥：标记准备报名/已报名（含其他报名状态流转）
       track("follow_status_changed", "opportunity", {
         targetId: unitId,
@@ -257,6 +271,30 @@ export default function OpportunityDetailPage() {
       if (role === "primary") {
         track("primary_target_set", "opportunity", { targetId: unitId });
       }
+    });
+
+  /** 标记某报名材料项完成状态（带乐观锁） */
+  const handleMaterialStatus = (itemId: string, status: MaterialStatus) =>
+    runAction(async () => {
+      if (!unit.follow) return;
+      await opportunitiesApi.setMaterialStatus(
+        unitId,
+        itemId,
+        status,
+        unit.follow.version,
+      );
+    });
+
+  /** 保存用户自行记录的官方咨询结论（带乐观锁，不影响匹配） */
+  const handleConsultationNote = (dimensionKey: string, note: string) =>
+    runAction(async () => {
+      if (!unit.follow) return;
+      await opportunitiesApi.saveConsultationNote(
+        unitId,
+        dimensionKey,
+        note,
+        unit.follow.version,
+      );
     });
 
   const handleSaveFacts = async (next: SupplementFacts) => {
@@ -488,6 +526,53 @@ export default function OpportunityDetailPage() {
         )}
       </section>
 
+      {/* 报名材料清单（关注后可标记进度；来源可追溯到官方公告） */}
+      {unit.follow && unit.unit.materials && unit.unit.materials.length > 0 && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">报名材料清单</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              按公告要求生成；每项可追溯到官方来源。只记录准备进度，不采集证件号码或扫描件。
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4">
+            <MaterialsList
+              materials={unit.unit.materials}
+              statuses={unit.follow.materialStatuses}
+              busy={busy}
+              onStatusChange={(itemId, status) =>
+                void handleMaterialStatus(itemId, status)
+              }
+            />
+          </div>
+        </section>
+      )}
+
+      {/* 官方联系信息与咨询模板（仅对需官方确认维度） */}
+      {unit.follow && unit.consultationTemplates && (
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">官方咨询</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              复制问题向招聘单位确认；你记录的结论仅自己可见，不会变成官方事实或影响匹配。
+            </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <ConsultationPanel
+              templates={unit.consultationTemplates}
+              contact={{
+                publisher: unit.announcement.publisher,
+                officialUrl: unit.announcement.officialUrl,
+                contactInfo: unit.announcement.contactInfo ?? null,
+              }}
+              notes={unit.follow.consultationNotes}
+              busy={busy}
+              onSaveNote={(key, note) => void handleConsultationNote(key, note)}
+            />
+          </div>
+        </section>
+      )}
+
       {/* 第三段：官方原文与岗位表位置 */}
       <OfficialSourceSection detail={detail} />
 
@@ -501,7 +586,7 @@ export default function OpportunityDetailPage() {
       />
 
       {/* 第五段：我的跟进（关注 / 准备报名 / 主要备考目标） */}
-      <div id="follow" className="scroll-mt-20">
+      <div id="follow" className="scroll-mt-20 space-y-3">
         <FollowControls
           follow={unit.follow}
           unitName={unit.unit.name}
@@ -516,6 +601,22 @@ export default function OpportunityDetailPage() {
             )
           }
         />
+
+        {unit.follow && (
+          <ActionChain
+            follow={unit.follow}
+            missingInfoCount={groups.missingInfo.length}
+            confirmOfficialCount={groups.confirmOfficial.length}
+            materials={unit.unit.materials ?? []}
+            deadlineText={deadline.text}
+            officialUrl={unit.unit.registerUrl ?? unit.announcement.officialUrl}
+            busy={busy}
+            onGoMissingInfo={() => scrollToId("missing-info")}
+            onGoConfirm={() => scrollToId("to-confirm")}
+            onPrepare={() => void handleTransition("preparing")}
+            onMarkRegistered={() => void handleTransition("registered")}
+          />
+        )}
       </div>
 
       <CorrectionModal

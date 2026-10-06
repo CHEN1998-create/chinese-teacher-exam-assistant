@@ -99,6 +99,9 @@ function follow(overrides: Partial<FollowDTO> = {}): FollowDTO {
     ],
     abandonReason: null,
     newerVersion: false,
+    version: 0,
+    materialStatuses: null,
+    consultationNotes: null,
     ...overrides,
   };
 }

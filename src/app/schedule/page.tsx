@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSchedule } from "@/lib/schedule/useSchedule";
 import { buildScheduleView } from "@/lib/ia/schedule-view";
 import { Hero } from "@/components/ia/Hero";
@@ -8,6 +9,7 @@ import { LayerHeading } from "@/components/ia/Layer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { cn } from "@/lib/utils";
 
 export default function SchedulePage() {
   const { state, reload, toggleMute } = useSchedule();
@@ -40,9 +42,30 @@ export default function SchedulePage() {
     );
   }
 
+  // 首屏只突出一个当前最重要的动作：优先行动链 nextAction，其次最近时间线节点
+  const nextAction = state.data.nextAction;
+
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-2">
-      {view.next ? (
+      {nextAction ? (
+        <section className="rounded-2xl border border-blue-200 bg-gradient-to-b from-blue-50 to-white p-5 shadow-sm">
+          <p className="text-xs font-medium uppercase tracking-wide text-blue-600">
+            当前最重要的一个动作
+          </p>
+          <h1 className="mt-2 text-xl font-semibold text-slate-900">
+            {nextAction.unitName}
+          </h1>
+          <p className="mt-1 text-base text-slate-700">{nextAction.label}</p>
+          <Link
+            href={nextAction.href}
+            className={cn(
+              "mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+            )}
+          >
+            {nextAction.label}
+          </Link>
+        </section>
+      ) : view.next ? (
         <Hero
           meta="下一件不能错过的事"
           conclusion={`${view.next.groupTitle} · ${view.next.event.kindLabel}`}

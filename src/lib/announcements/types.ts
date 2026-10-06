@@ -200,6 +200,24 @@ export interface ApplicationUnit {
   /** 官方报名入口（版本级或单元级） */
   registerUrl?: string;
   requirements: Requirement[];
+  /** 报名材料清单（按公告要求，每项必须有可追溯来源） */
+  materials?: MaterialItem[];
+}
+
+/** 报名材料完成状态 */
+export type MaterialStatus =
+  | "not_started"
+  | "in_progress"
+  | "done"
+  | "not_applicable";
+
+/** 报名材料项（来源必须可追溯到官方公告） */
+export interface MaterialItem {
+  id: string;
+  label: string;
+  source: EvidenceAnchor;
+  applicableAudience: string;
+  required: boolean;
 }
 
 /** 公告版本来源类型：原始公告 / 补充公告 / 更正公告 */

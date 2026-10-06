@@ -1,11 +1,15 @@
 "use client";
 
-import { useId } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { DimensionView, OpportunityRow } from "@/lib/ia/opportunities-view";
 import { guestCardNextStep } from "@/lib/ia/opportunities-view";
-import { GUEST_FOLLOW_LOGIN_HREF } from "@/lib/guest/previewEngine";
+import {
+  isGuestFollowing,
+  upsertGuestFollow,
+  removeGuestFollow,
+} from "@/lib/guest/guestFollows";
 import { GateTag, MatchStatusTag } from "./MatchStatusTag";
 
 /**
@@ -45,13 +49,31 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
   const panelId = useId();
   const closed = row.gateCode !== null;
   const step = guestCardNextStep(row);
+  const [guestFollowed, setGuestFollowed] = useState(() =>
+    isGuestFollowing(row.unitId),
+  );
+
+  const toggleGuestFollow = () => {
+    if (guestFollowed) {
+      removeGuestFollow(row.unitId);
+      setGuestFollowed(false);
+    } else {
+      upsertGuestFollow(row.unitId, { status: "considering" });
+      setGuestFollowed(true);
+    }
+  };
 
   const primaryAction = (() => {
     if (step.kind === "login") {
       return (
-        <Link href={GUEST_FOLLOW_LOGIN_HREF} className={PRIMARY_ACTION_CLASS}>
-          {step.label}
-        </Link>
+        <button
+          type="button"
+          onClick={toggleGuestFollow}
+          className={PRIMARY_ACTION_CLASS}
+          aria-pressed={guestFollowed}
+        >
+          {guestFollowed ? "已关注（本机保存）" : step.label}
+        </button>
       );
     }
     if (step.kind === "onboarding") {

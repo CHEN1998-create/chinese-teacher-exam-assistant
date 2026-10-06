@@ -20,6 +20,13 @@ export type FollowStatus =
   | "abandoned"
   | "closed";
 
+/** 报名材料完成状态（只存进度，不存证件内容） */
+export type MaterialStatus =
+  | "not_started"
+  | "in_progress"
+  | "done"
+  | "not_applicable";
+
 export type StudyTargetRole = "primary" | "backup";
 
 export interface EvidenceLocatorDTO {
@@ -102,6 +109,35 @@ export interface FollowDTO {
   statusHistory: FollowStatusEventDTO[];
   abandonReason: string | null;
   newerVersion: boolean;
+  /** 乐观锁版本号：每次状态/材料/咨询变更递增 */
+  version: number;
+  /** 报名材料完成状态：{ [materialItemId]: MaterialStatus } */
+  materialStatuses: Record<string, MaterialStatus> | null;
+  /** 用户自行记录的官方咨询结论：{ [dimensionKey]: note } */
+  consultationNotes: Record<string, string> | null;
+}
+
+/** 报名材料项（来源必须可追溯到官方公告） */
+export interface MaterialItemDTO {
+  id: string;
+  label: string;
+  source: EvidenceAnchorDTO;
+  applicableAudience: string;
+  required: boolean;
+}
+
+/** 可复制的官方咨询问题模板（针对需官方确认的维度） */
+export interface ConsultationTemplateDTO {
+  dimensionKey: string;
+  dimensionLabel: string;
+  question: string;
+}
+
+/** 官方联系信息（优先取来源登记，其次发布主体+公告链接） */
+export interface ContactInfoDTO {
+  publisher: string;
+  officialUrl: string;
+  contactInfo?: string | null;
 }
 
 export interface UnitMatchDTO {
@@ -119,6 +155,8 @@ export interface UnitMatchDTO {
     registerUrl?: string;
     /** 岗位表行级证据锚点（附件 + 工作表/序号/行 + 摘录） */
     sourceRow?: EvidenceAnchorDTO;
+    /** 报名材料清单（按公告要求，每项带来源） */
+    materials?: MaterialItemDTO[];
   };
   announcement: {
     id: string;
@@ -131,6 +169,8 @@ export interface UnitMatchDTO {
     reviewStatus: "ai_reviewed_pending" | "human_reviewed";
     reviewedBy: string | null;
     reviewedAt: string | null;
+    /** 官方联系信息 */
+    contactInfo?: string | null;
   };
   version: {
     id: string;
@@ -156,6 +196,8 @@ export interface UnitMatchDTO {
   overall: OpportunityMatchStatus;
   summary: string;
   follow: FollowDTO | null;
+  /** 需官方确认维度的咨询问题模板 */
+  consultationTemplates?: ConsultationTemplateDTO[];
 }
 
 export interface MetaDTO {

@@ -5,6 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { useCurrentUser, DEMO_ACCOUNTS } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/config";
+import { opportunitiesApi } from "@/lib/opportunities/api";
+import {
+  listGuestFollows,
+  clearGuestFollows,
+} from "@/lib/guest/guestFollows";
 
 function LoginForm() {
   const router = useRouter();
@@ -35,12 +40,35 @@ function LoginForm() {
     return value;
   };
 
-  // 已登录用户访问登录页时直接跳转。
-  // v6.1 访客画像的登录后持久化在后续模块接入后端时实现，本轮不做本地迁移。
+  // 已登录用户访问登录页时直接跳转；登录成功后先合并访客本机关注，再跳转。
   useEffect(() => {
-    if (status === "authenticated") {
+    if (status !== "authenticated") return;
+    let cancelled = false;
+    (async () => {
+      const guestItems = listGuestFollows();
+      let merged = guestItems.length === 0;
+      if (guestItems.length > 0) {
+        try {
+          await opportunitiesApi.mergeGuestFollows(
+            guestItems.map((g) => ({
+              unitId: g.unitId,
+              status: g.status,
+              materialStatuses: g.materialStatuses,
+              consultationNotes: g.consultationNotes,
+            })),
+          );
+          merged = true;
+        } catch {
+          // 合并失败不阻塞登录：保留本地记录，下次登录再试
+        }
+      }
+      if (cancelled) return;
+      if (merged) clearGuestFollows();
       router.replace(safeNext(nextParam) ?? "/opportunities");
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
