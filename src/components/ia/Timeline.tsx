@@ -3,7 +3,7 @@ import type {
   ScheduleEvent,
   ScheduleGroup,
 } from "@/lib/ia/schedule-view";
-import type { ScheduleUrgency } from "@/lib/schedule/types";
+import type { ScheduleUrgency, UnitTrustDTO } from "@/lib/schedule/types";
 
 /**
  * 日程时间线（IA 第 5 节）：按关注机会分组的纵向时间线，不默认展示月历。
@@ -19,12 +19,41 @@ const URGENCY_META: Record<ScheduleUrgency, { text: string; className: string }>
 
 function ChangeBadge({ event }: { event: ScheduleEvent }) {
   if (!event.changedFromPrevious) return null;
-  const { field, oldValue, newValue } = event.changedFromPrevious;
+  const { field, oldValue, newValue, impact, nextStep } = event.changedFromPrevious;
   const label = field === "dateIso" ? "时间" : "内容";
   return (
-    <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-medium text-blue-700">
-      {label}变更：{oldValue} → {newValue}
-    </span>
+    <div className="mt-1 w-full rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-[11px] text-blue-700">
+      <p className="font-medium">
+        {label}变更：{oldValue} → {newValue}
+      </p>
+      {impact && <p className="mt-0.5 text-blue-600">影响：{impact}</p>}
+      {nextStep && <p className="mt-0.5 text-blue-600">下一步：{nextStep}</p>}
+    </div>
+  );
+}
+
+/** 可信状态降级徽标：ok 不展示，降级状态用文字+颜色表达 */
+const TRUST_META: Record<
+  Exclude<UnitTrustDTO["state"], "ok">,
+  { className: string }
+> = {
+  withdrawn: { className: "border-red-200 bg-red-50 text-red-700" },
+  source_unavailable: { className: "border-amber-200 bg-amber-50 text-amber-700" },
+  pending_review: { className: "border-slate-200 bg-slate-50 text-slate-600" },
+};
+
+function TrustBadge({ trust }: { trust: UnitTrustDTO }) {
+  if (trust.state === "ok") return null;
+  return (
+    <div
+      className={cn(
+        "mt-2 rounded-md border px-2 py-1.5 text-xs",
+        TRUST_META[trust.state].className,
+      )}
+    >
+      <p className="font-medium">{trust.label}</p>
+      <p className="mt-0.5 opacity-90">{trust.detail}</p>
+    </div>
   );
 }
 
@@ -127,6 +156,7 @@ export function TimelineGroup({
           该机会的站内通知已关闭，日程节点仍会展示。
         </p>
       )}
+      {group.trust && <TrustBadge trust={group.trust} />}
       <ol className="mt-3">
         {group.events.map((event, index) => (
           <EventRow

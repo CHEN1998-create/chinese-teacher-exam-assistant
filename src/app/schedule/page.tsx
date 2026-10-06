@@ -26,7 +26,7 @@ export default function SchedulePage() {
     );
   }
 
-  const view = buildScheduleView(state.data.events);
+  const view = buildScheduleView(state.data.events, state.data.unitTrust);
 
   // 空态 1：没有关注任何机会——不制造虚假紧迫感
   if (view.groups.length === 0) {

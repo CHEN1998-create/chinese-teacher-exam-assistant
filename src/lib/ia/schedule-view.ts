@@ -11,6 +11,7 @@ import type {
   ScheduleUrgency,
   TimelineEventDTO,
   TimelineEventKind,
+  UnitTrustDTO,
 } from "@/lib/schedule/types";
 
 /** 日程事件 = 后端 DTO（视图层不重新派生强度/日期） */
@@ -21,6 +22,8 @@ export interface ScheduleGroup {
   title: string;
   regionText: string;
   events: ScheduleEvent[];
+  /** 机会可信状态（模块 7）：降级时组头展示，事件行动已在后端降级 */
+  trust: UnitTrustDTO | null;
 }
 
 export interface NextScheduleItem {
@@ -63,6 +66,7 @@ const URGENCY_RANK: Record<ScheduleUrgency, number> = {
 
 export function buildScheduleView(
   events: ScheduleEvent[],
+  unitTrust: Record<string, UnitTrustDTO> = {},
 ): ScheduleView {
   // 按机会分组（后端已保证每个 unitId 对应同一公告版本的事件）
   const groupMap = new Map<string, ScheduleGroup>();
@@ -74,6 +78,7 @@ export function buildScheduleView(
         title: event.unitName,
         regionText: event.regionText,
         events: [],
+        trust: unitTrust[event.unitId] ?? null,
       };
       groupMap.set(event.unitId, group);
     }

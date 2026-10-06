@@ -38,7 +38,19 @@ export interface TimelineEventDTO {
     field: "dateIso" | "title";
     oldValue: string;
     newValue: string;
+    /** 对当前用户的影响（模块 7） */
+    impact?: string;
+    /** 下一步建议动作（模块 7） */
+    nextStep?: string;
   } | null;
+}
+
+/** 机会可信状态（模块 7）：来源失效/公告取消/待人工复核时降级为可理解状态 */
+export interface UnitTrustDTO {
+  state: "ok" | "source_unavailable" | "withdrawn" | "pending_review";
+  label: string;
+  detail: string;
+  checkedAt?: string;
 }
 
 export interface ScheduleResponse {
@@ -48,6 +60,8 @@ export interface ScheduleResponse {
   mutedUnitIds: string[];
   /** 首屏「当前最重要的一个动作」 */
   nextAction: NextActionDTO | null;
+  /** 各机会的可信状态（模块 7） */
+  unitTrust: Record<string, UnitTrustDTO>;
 }
 
 export interface NextActionDTO {
