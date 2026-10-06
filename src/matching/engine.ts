@@ -33,8 +33,11 @@ import {
   type UserRecruitmentProfile,
 } from './types.js';
 
-/** 规则集版本：逐条件结果随响应返回，结论可追溯到具体规则版本 */
-export const MATCH_RULE_VERSION = 'kb-match-rules-1.1.0';
+/**
+ * 规则集版本：逐条件结果随响应返回，结论可追溯到具体规则版本。
+ * 1.2.0：新增报名时间未确定、证据未人工复核、核对超期、来源失效四个降级闸门。
+ */
+export const MATCH_RULE_VERSION = 'kb-match-rules-1.2.0';
 
 /**
  * 已审核专业别名表版本。别名只能由人工审核后维护，
@@ -314,7 +317,28 @@ function degreeToLevel(degree: string): CredentialLevel {
   return 'secondary';
 }
 
-/** 前置闸门（学科开放、时效、收录范围、官方来源） */
+/**
+ * 高影响资格维度（与 announcements/domain.ts 的 HIGH_IMPACT_FIELDS 同口径）：
+ * 这些条件的证据只要未经人工核对（state !== 'official'），该机会就不得进入
+ * 「初步符合」主要推荐——缺证据 ≠ 不符合，但必须先降级为待复核。
+ */
+export const HIGH_IMPACT_DIMENSIONS: ReadonlySet<string> = new Set([
+  'education',
+  'major',
+  'graduate_status',
+  'teacher_cert',
+  'age',
+]);
+
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+/** 在报机会常规复核频率：核对时间距今超过 72 小时即视为超期 */
+export const FRESHNESS_MAX_AGE_HOURS = 72;
+/** 距报名截止 ≤72 小时的窗口内，复核频率提高到每 24 小时一次 */
+export const NEAR_DEADLINE_WINDOW_HOURS = 72;
+export const FRESHNESS_NEAR_DEADLINE_MAX_AGE_HOURS = 24;
+
+/** 前置闸门（学科开放、时效、收录范围、来源与证据可信度） */
 export function evaluateGates(
   announcement: RecruitmentAnnouncement,
   version: AnnouncementVersion,
@@ -334,16 +358,37 @@ export function evaluateGates(
       : '该学科当前尚未开放匹配',
   });
 
-  const closed =
-    new Date(version.timeline.registrationEnd).getTime() <
-    new Date(nowIso).getTime();
-  gates.push({
-    code: 'registration_closed',
-    passed: !closed,
-    reason: closed
-      ? `报名已于 ${version.timeline.registrationEnd} 截止`
-      : `报名进行中，截止 ${version.timeline.registrationEnd}`,
-  });
+  // 报名时间闸门分两层：官方未给具体日期（预告/「另行通知」）→ unconfirmed；
+  // 已给日期且早于当前时间 → closed。绝不把「初定 X 月」臆造成具体截止日。
+  const registrationEnd = version.timeline.registrationEnd;
+  if (!registrationEnd) {
+    gates.push({
+      code: 'registration_unconfirmed',
+      passed: false,
+      reason:
+        '官方尚未公布具体报名时间（公告为预告或注明“另行通知”），暂不能进入推荐，时间以官方后续通知为准',
+    });
+    gates.push({
+      code: 'registration_closed',
+      passed: true,
+      reason: '报名时间未公布，暂无法判断截止状态',
+    });
+  } else {
+    const closed =
+      new Date(registrationEnd).getTime() < new Date(nowIso).getTime();
+    gates.push({
+      code: 'registration_unconfirmed',
+      passed: true,
+      reason: '报名起止日期已由官方公告明确',
+    });
+    gates.push({
+      code: 'registration_closed',
+      passed: !closed,
+      reason: closed
+        ? `报名已于 ${registrationEnd} 截止`
+        : `报名进行中，截止 ${registrationEnd}`,
+    });
+  }
 
   const inScope = (
     IN_SCOPE_EMPLOYMENT_NATURES as readonly EmploymentNatureCode[]
@@ -365,18 +410,97 @@ export function evaluateGates(
         : '公告处于有效状态',
   });
 
-  const hasOfficial =
+  // 来源失效：只采信人工巡检确认的故障（404/撤稿/域名失效），
+  // 网络抖动等偶发问题不登记为 sourceHealth.ok=false。
+  const health = announcement.sourceHealth;
+  gates.push({
+    code: 'source_unavailable',
+    passed: !health || health.ok,
+    reason:
+      health && !health.ok
+        ? `官方来源最近巡检不可用（${health.failReason ?? '原因未登记'}，巡检于 ${health.checkedAt}），暂不进入推荐`
+        : '官方来源巡检正常',
+  });
+
+  const sourceOfficial =
     version.officialSource.state === 'official' &&
     (version.officialSource.locator.kind === 'url'
       ? Boolean(version.officialSource.locator.url)
       : true);
   gates.push({
     code: 'no_official_source',
-    passed: hasOfficial,
-    reason: hasOfficial
+    passed: sourceOfficial,
+    reason: sourceOfficial
       ? '依据已从官方公告核对'
       : '缺少已核对的官方来源，不能进入主要推荐',
   });
+
+  // 高影响条件证据必须全部人工核对到官方原文（含岗位表行级锚点）。
+  const unreviewed = unit.requirements.filter(
+    (req) =>
+      HIGH_IMPACT_DIMENSIONS.has(req.dimension) &&
+      req.evidence.state !== 'official',
+  );
+  const rowUnreviewed =
+    unit.sourceRow !== undefined && unit.sourceRow.state !== 'official';
+  const reviewed =
+    unreviewed.length === 0 &&
+    !rowUnreviewed &&
+    (!announcement.reviewStatus ||
+      announcement.reviewStatus === 'human_reviewed');
+  gates.push({
+    code: 'evidence_not_reviewed',
+    passed: reviewed,
+    reason: reviewed
+      ? '高影响字段证据均已人工核对到官方原文'
+      : announcement.reviewStatus === 'ai_reviewed_pending'
+        ? '该记录为 AI 初核、尚未经人工复核，不进入「初步符合」主要推荐'
+        : '存在未核对到官方原文的高影响字段，不能进入主要推荐',
+  });
+
+  // 新鲜度：只约束「报名窗口已公布且尚未截止」的机会。
+  // 已截止的历史公告留档即可；预告类按来源栏目巡检节奏另行监测。
+  if (!registrationEnd) {
+    gates.push({
+      code: 'evidence_stale',
+      passed: true,
+      reason: '报名时间待官方通知，按预告巡检频率监测来源栏目',
+    });
+  } else if (
+    new Date(registrationEnd).getTime() < new Date(nowIso).getTime()
+  ) {
+    gates.push({
+      code: 'evidence_stale',
+      passed: true,
+      reason: '报名已截止，按历史公告留档，不再按在报频率复核',
+    });
+  } else {
+    const checkedAts = [
+      version.officialSource.checkedAt,
+      ...unit.requirements
+        .filter((req) => HIGH_IMPACT_DIMENSIONS.has(req.dimension))
+        .map((req) => req.evidence.checkedAt),
+      ...(unit.sourceRow ? [unit.sourceRow.checkedAt] : []),
+    ].map((iso) => new Date(iso).getTime());
+    const oldest = Math.min(...checkedAts);
+    const ageHours = (new Date(nowIso).getTime() - oldest) / MS_PER_HOUR;
+    const nearDeadline =
+      new Date(registrationEnd).getTime() - new Date(nowIso).getTime() <=
+      NEAR_DEADLINE_WINDOW_HOURS * MS_PER_HOUR;
+    const maxAge = nearDeadline
+      ? FRESHNESS_NEAR_DEADLINE_MAX_AGE_HOURS
+      : FRESHNESS_MAX_AGE_HOURS;
+    gates.push({
+      code: 'evidence_stale',
+      passed: ageHours <= maxAge,
+      reason:
+        ageHours <= maxAge
+          ? nearDeadline
+            ? `距截止不足 ${NEAR_DEADLINE_WINDOW_HOURS} 小时，按 ${FRESHNESS_NEAR_DEADLINE_MAX_AGE_HOURS} 小时内已核对的依据推荐`
+            : `核对记录在 ${FRESHNESS_MAX_AGE_HOURS} 小时有效期内`
+          : `依据最近核对已超过 ${maxAge} 小时，需重新核对官方来源后再推荐`,
+    });
+  }
 
   return gates;
 }

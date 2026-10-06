@@ -5,6 +5,10 @@ import {
   MATCH_RULE_VERSION,
 } from '../matching/engine.js';
 import { CATALOG_VERSION } from '../matching/catalog.js';
+import {
+  REAL_ANNOUNCEMENT_IDS,
+  REAL_CATALOG_VERSION,
+} from '../matching/real-catalog.js';
 import type { UserRecruitmentProfile } from '../matching/types.js';
 import { OpportunitiesService } from './opportunities.service.js';
 import { buildGoals, type CatalogSnapshot } from './view.js';
@@ -152,7 +156,7 @@ const fakeProfileService = {
 } as never;
 
 describe('OpportunitiesService：匹配响应', () => {
-  it('六场景全部出现且每条结论携带规则版本、公告版本与证据锚点', async () => {
+  it('六场景演示数据全部出现且每条结论携带规则版本、公告版本与证据锚点', async () => {
     const fake = createFakePrisma();
     const service = new OpportunitiesService(fake.prisma, fakeProfileService);
     const response = await service.match(PROFILE, 'user-1');
@@ -160,7 +164,11 @@ describe('OpportunitiesService：匹配响应', () => {
     expect(response.meta.ruleVersion).toBe(MATCH_RULE_VERSION);
     expect(response.meta.majorAliasVersion).toBe(MAJOR_ALIAS_VERSION);
     expect(response.meta.catalogVersion).toBe(CATALOG_VERSION);
+    expect(response.meta.realCatalogVersion).toBe(REAL_CATALOG_VERSION);
     expect(response.meta.evaluatedAt).toBeTruthy();
+    // 真实监测覆盖随响应返回：0 在报、最近核对时间可展示
+    expect(response.coverage.openOpportunityCount).toBe(0);
+    expect(response.coverage.lastCheckedAt).toMatch(/^2026-10-06/);
 
     const all = [
       ...response.groups.preliminary,
@@ -169,13 +177,20 @@ describe('OpportunitiesService：匹配响应', () => {
       ...response.groups.notEligible,
       ...response.groups.closed,
     ];
-    // 6 条公告当前版本各一个报考单元（合肥 v1 被 v2 取代，不出现 v1）
-    expect(all).toHaveLength(6);
-    const unitIds = all.map((u) => u.unit.id);
-    expect(unitIds).toContain('unit-hefei-01-v2');
-    expect(unitIds).not.toContain('unit-hefei-01-v1');
+    // 6 个演示报考单元 + 4 个真实监测单元（鄞州1、杭州2、宁波1）
+    expect(all).toHaveLength(10);
 
-    for (const dto of all) {
+    const demo = all.filter((u) => u.announcement.dataset === 'demo');
+    const real = all.filter((u) => u.announcement.dataset === 'real');
+    expect(demo).toHaveLength(6);
+    expect(real).toHaveLength(4);
+
+    // 6 条演示公告当前版本各一个报考单元（合肥 v1 被 v2 取代，不出现 v1）
+    const demoIds = demo.map((u) => u.unit.id);
+    expect(demoIds).toContain('unit-hefei-01-v2');
+    expect(demoIds).not.toContain('unit-hefei-01-v1');
+
+    for (const dto of demo) {
       expect(dto.version.id).toMatch(/^ann-.+-v\d+$/);
       expect(dto.version.officialSource.state).toBe('official');
       expect(dto.gates.length).toBeGreaterThan(0);
@@ -191,6 +206,30 @@ describe('OpportunitiesService：匹配响应', () => {
         }
       }
     }
+
+    // 真实记录：全部 AI 初核待复核、落在 closed（截止/预告），证据为 ai_extracted
+    const realIds = real.map((u) => u.unit.id);
+    expect(realIds).toEqual(
+      expect.arrayContaining([
+        'real-yz-2026-chinese-01',
+        'real-hz-202604-fuchun-chinese',
+        'real-hz-202604-gaoxin-chinese',
+        'real-nb-202607-nwsis-chinese',
+      ]),
+    );
+    for (const dto of real) {
+      expect(dto.announcement.reviewStatus).toBe('ai_reviewed_pending');
+      expect(dto.version.officialSource.state).toBe('ai_extracted');
+      expect(dto.gates.some((g) => !g.passed)).toBe(true);
+      expect(dto.unit.sourceRow?.locator).toBeTruthy();
+    }
+    expect(real.every((u) => response.groups.closed.includes(u))).toBe(true);
+  });
+
+  it('真实公告 id 常量与台账一致（防止台账 id 漂移）', () => {
+    expect(REAL_ANNOUNCEMENT_IDS.yinzhouPreview).toBe(
+      'real-yinzhou-2026-autumn',
+    );
   });
 
   it('画像结构非法时抛 400，不产出任何结果', async () => {
@@ -297,6 +336,15 @@ describe('OpportunitiesService：关注与状态流转', () => {
     await service.unfollow('user-1', 'unit-hangzhou-01');
     const follows = await service.listFollows('user-1');
     expect(follows.map((f) => f.unitId)).toEqual(['unit-yinzhou-01']);
+  });
+
+  it('真实台账单元同样可关注（findCatalogUnit 覆盖 real 数据集）', async () => {
+    const dto = await service.follow(
+      'user-1',
+      'real-nb-202607-nwsis-chinese',
+    );
+    expect(dto.announcementId).toBe(REAL_ANNOUNCEMENT_IDS.ningbo202607);
+    expect(dto.versionId).toBe('real-ningbo-2026-07-v1');
   });
 });
 

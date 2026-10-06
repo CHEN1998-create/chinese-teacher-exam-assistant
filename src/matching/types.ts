@@ -155,13 +155,23 @@ export interface ApplicationUnit {
   allocation: AllocationMethod;
   registerUrl?: string;
   requirements: Requirement[];
+  /**
+   * 岗位表行级证据锚点（附件文件名 + 工作表/序号/行 + 原文摘录）。
+   * 真实台账中人数、学历、专业等结构化字段以此定位到官方岗位表具体行。
+   */
+  sourceRow?: EvidenceAnchor;
 }
 
 export type AnnouncementSourceKind = 'original' | 'supplement' | 'correction';
 
 export interface AnnouncementTimeline {
-  registrationStart: string;
-  registrationEnd: string;
+  /**
+   * 报名起止日期 YYYY-MM-DD。
+   * 官方公告只给「初定 X 月，具体时间另行通知」而未给具体日期时必须留空，
+   * 并在 pendingItems 中登记待明确事项——绝不臆造具体日期。
+   */
+  registrationStart?: string;
+  registrationEnd?: string;
   paymentDeadline?: string;
   admitTicketStart?: string;
   writtenExamDate?: string;
@@ -185,6 +195,22 @@ export interface AnnouncementVersion {
 
 export type AnnouncementLifecycle = 'active' | 'withdrawn';
 
+/** 人工复核状态：真实台账记录未人工复核前一律为 ai_reviewed_pending */
+export type AnnouncementReviewStatus =
+  | 'ai_reviewed_pending'
+  | 'human_reviewed';
+
+/**
+ * 官方来源健康度（人工巡检登记）。
+ * ok=false 表示最近一次巡检确认来源失效（404/撤稿/域名失效等），
+ * failReason 记录现象；不记录「暂时打不开」的网络抖动。
+ */
+export interface SourceHealth {
+  ok: boolean;
+  checkedAt: string;
+  failReason?: string | null;
+}
+
 export interface RecruitmentAnnouncement {
   id: string;
   title: string;
@@ -196,6 +222,17 @@ export interface RecruitmentAnnouncement {
   lifecycle: AnnouncementLifecycle;
   firstPublishedAt: string;
   versions: AnnouncementVersion[];
+  /**
+   * 数据集合：demo=演示数据（example.gov.cn 占位来源）；
+   * real=真实监测台账数据（人工维护，附官方锚点）。缺省视为 demo。
+   */
+  dataset?: 'demo' | 'real';
+  /** 人工复核状态与复核人；real 记录未复核不进入主要推荐 */
+  reviewStatus?: AnnouncementReviewStatus;
+  reviewedBy?: string | null;
+  reviewedAt?: string | null;
+  /** 官方来源巡检健康度；缺省视为正常（未登记异常） */
+  sourceHealth?: SourceHealth;
 }
 
 // ==================== 用户画像 ====================
@@ -263,10 +300,14 @@ export interface MatchDimensionResult {
 
 export type GateCode =
   | 'subject_not_open'
+  | 'registration_unconfirmed'
   | 'registration_closed'
   | 'out_of_scope_nature'
   | 'announcement_withdrawn'
-  | 'no_official_source';
+  | 'source_unavailable'
+  | 'no_official_source'
+  | 'evidence_not_reviewed'
+  | 'evidence_stale';
 
 export interface GateResult {
   code: GateCode;

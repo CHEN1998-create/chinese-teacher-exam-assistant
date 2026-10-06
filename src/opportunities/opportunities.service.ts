@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service.js';
 import { ProfileService } from '../profile/profile.service.js';
 import { CATALOG_ANNOUNCEMENTS } from '../matching/catalog.js';
+import { REAL_ANNOUNCEMENTS } from '../matching/real-catalog.js';
 import { buildCandidates, currentVersion } from '../matching/engine.js';
 import type {
   CredentialLevel,
@@ -36,6 +37,16 @@ import {
   type MatchResponse,
   type UnitDetailResponse,
 } from './view.js';
+
+/**
+ * 当前已发布公告目录 = 演示场景（catalog.ts，example.gov.cn）+
+ * 真实监测台账（real-catalog.ts，杭州/宁波，人工维护）。
+ * 两者通过 dataset 字段区分；真实记录未人工复核不进主要推荐。
+ */
+const PUBLISHED_ANNOUNCEMENTS = [
+  ...CATALOG_ANNOUNCEMENTS,
+  ...REAL_ANNOUNCEMENTS,
+] as const;
 
 /**
  * 机会发现服务（PRD 7.4/7.5/7.7/7.10）。
@@ -73,7 +84,7 @@ export class OpportunitiesService {
   async match(profile: unknown, userId: string): Promise<MatchResponse> {
     const valid = await this.resolveProfile(profile, userId);
     const candidates = buildCandidates(
-      CATALOG_ANNOUNCEMENTS,
+      PUBLISHED_ANNOUNCEMENTS,
       valid,
       new Date().toISOString(),
     );
@@ -87,7 +98,7 @@ export class OpportunitiesService {
   ): Promise<UnitDetailResponse> {
     const valid = await this.resolveProfile(profile, userId);
     const candidates = buildCandidates(
-      CATALOG_ANNOUNCEMENTS,
+      PUBLISHED_ANNOUNCEMENTS,
       valid,
       new Date().toISOString(),
     );
@@ -113,7 +124,7 @@ export class OpportunitiesService {
   async listFollows(userId: string): Promise<FollowDTO[]> {
     const follows = await this.listFollowRecords(userId);
     return follows.map((follow) => {
-      const announcement = CATALOG_ANNOUNCEMENTS.find(
+      const announcement = PUBLISHED_ANNOUNCEMENTS.find(
         (a) => a.id === follow.announcementId,
       );
       return {
@@ -144,7 +155,7 @@ export class OpportunitiesService {
   /** 当前目录的全部公告/版本/单元聚合快照（goals 视图装配用） */
   private buildCatalogSnapshot(): CatalogSnapshot[] {
     const snapshots: CatalogSnapshot[] = [];
-    for (const announcement of CATALOG_ANNOUNCEMENTS) {
+    for (const announcement of PUBLISHED_ANNOUNCEMENTS) {
       const version = currentVersion(announcement);
       for (const unit of version.units) {
         snapshots.push({
@@ -344,7 +355,7 @@ export class OpportunitiesService {
     announcementId: string;
     versionId: string;
   } {
-    for (const announcement of CATALOG_ANNOUNCEMENTS) {
+    for (const announcement of PUBLISHED_ANNOUNCEMENTS) {
       const version = currentVersion(announcement);
       const unit = version.units.find((u) => u.id === unitId);
       if (unit) return { announcementId: announcement.id, versionId: version.id };
@@ -389,7 +400,7 @@ export class OpportunitiesService {
   }
 
   private toDTO(follow: FollowRecord): FollowDTO {
-    const announcement = CATALOG_ANNOUNCEMENTS.find(
+    const announcement = PUBLISHED_ANNOUNCEMENTS.find(
       (a) => a.id === follow.announcementId,
     );
     const currentVersionId = announcement

@@ -7,6 +7,13 @@
  * 前端不再复制任何判定逻辑（PRD 7.4）。
  */
 import { CATALOG_VERSION } from '../matching/catalog.js';
+import { REAL_CATALOG_VERSION } from '../matching/real-catalog.js';
+import {
+  COVERAGE_VERSION,
+  REAL_COVERAGE,
+  type MonitoredRegion,
+  type MonitoringStatus,
+} from '../matching/coverage.js';
 import {
   MAJOR_ALIAS_VERSION,
   MATCH_RULE_VERSION,
@@ -32,7 +39,22 @@ export interface MetaDTO {
   ruleVersion: string;
   majorAliasVersion: string;
   catalogVersion: string;
+  /** 真实监测台账数据版本 */
+  realCatalogVersion: string;
   evaluatedAt: string;
+}
+
+/** 真实监测覆盖说明（前台如实展示覆盖地区/核对时间/在报数量） */
+export interface CoverageDTO {
+  version: string;
+  subject: string;
+  subjectLabel: string;
+  status: MonitoringStatus;
+  regions: MonitoredRegion[];
+  lastCheckedAt: string;
+  openOpportunityCount: number;
+  nextWindowNote: string;
+  scopeNote: string;
 }
 
 export interface FollowDTO {
@@ -76,6 +98,7 @@ export interface UnitMatchDTO {
     | 'allocation'
     | 'teachingScope'
     | 'registerUrl'
+    | 'sourceRow'
   >;
   announcement: {
     id: string;
@@ -83,6 +106,11 @@ export interface UnitMatchDTO {
     publisher: string;
     organizationType: string;
     officialUrl: string;
+    /** demo=演示数据；real=真实监测台账数据 */
+    dataset: 'demo' | 'real';
+    reviewStatus: 'ai_reviewed_pending' | 'human_reviewed';
+    reviewedBy: string | null;
+    reviewedAt: string | null;
   };
   version: {
     id: string;
@@ -111,6 +139,8 @@ export interface MatchGroupsDTO {
 
 export interface MatchResponse {
   meta: MetaDTO;
+  /** 真实监测覆盖说明（地区、最近核对时间、当前在报数） */
+  coverage: CoverageDTO;
   primaryTargetUnitId: string | null;
   groups: MatchGroupsDTO;
   follows: FollowDTO[];
@@ -135,7 +165,22 @@ export function buildMeta(now: Date): MetaDTO {
     ruleVersion: MATCH_RULE_VERSION,
     majorAliasVersion: MAJOR_ALIAS_VERSION,
     catalogVersion: CATALOG_VERSION,
+    realCatalogVersion: REAL_CATALOG_VERSION,
     evaluatedAt: now.toISOString(),
+  };
+}
+
+export function buildCoverage(): CoverageDTO {
+  return {
+    version: COVERAGE_VERSION,
+    subject: REAL_COVERAGE.subject,
+    subjectLabel: REAL_COVERAGE.subjectLabel,
+    status: REAL_COVERAGE.status,
+    regions: REAL_COVERAGE.regions,
+    lastCheckedAt: REAL_COVERAGE.lastCheckedAt,
+    openOpportunityCount: REAL_COVERAGE.openOpportunityCount,
+    nextWindowNote: REAL_COVERAGE.nextWindowNote,
+    scopeNote: REAL_COVERAGE.scopeNote,
   };
 }
 
@@ -199,6 +244,7 @@ export function toUnitMatchDTO(
       allocation: unit.allocation,
       teachingScope: unit.teachingScope,
       registerUrl: unit.registerUrl,
+      sourceRow: unit.sourceRow,
     },
     announcement: {
       id: announcement.id,
@@ -206,6 +252,10 @@ export function toUnitMatchDTO(
       publisher: announcement.publisher,
       organizationType: announcement.organizationType,
       officialUrl: announcement.officialUrl,
+      dataset: announcement.dataset ?? 'demo',
+      reviewStatus: announcement.reviewStatus ?? 'human_reviewed',
+      reviewedBy: announcement.reviewedBy ?? null,
+      reviewedAt: announcement.reviewedAt ?? null,
     },
     version: {
       id: version.id,
@@ -283,6 +333,7 @@ export function buildMatchResponse(
 
   return {
     meta: buildMeta(now),
+    coverage: buildCoverage(),
     primaryTargetUnitId: primary?.unitId ?? null,
     groups,
     follows: followsDTO,
