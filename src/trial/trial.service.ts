@@ -4,12 +4,15 @@ import { PrismaService } from '../prisma.service.js';
 import { getAuthMode } from '../auth/auth.service.js';
 import { CATALOG_ANNOUNCEMENTS } from '../matching/catalog.js';
 import { REAL_ANNOUNCEMENTS } from '../matching/real-catalog.js';
+import { REAL_COVERAGE } from '../matching/coverage.js';
 import {
   TRIAL_EVENT_TYPES,
   TRIAL_MODULES,
+  computeSupplySnapshot,
   computeTrialDashboard,
   dedupKeyFor,
   sanitizeProps,
+  type SupplySnapshot,
   type TrialDashboard,
   type TrialEventRecord,
 } from './trial.domain.js';
@@ -149,7 +152,10 @@ export class TrialService {
       props: (row.props ?? null) as Record<string, unknown> | null,
       occurredAt: row.occurredAt,
     }));
-    return computeTrialDashboard(records, new Date());
+    return {
+      ...computeTrialDashboard(records, new Date()),
+      supply: computeSupplySnapshot(REAL_ANNOUNCEMENTS, REAL_COVERAGE, new Date()),
+    };
   }
 
   /**

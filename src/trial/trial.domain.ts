@@ -11,6 +11,12 @@
  * - 事件只允许白名单类型与标量维度；资格原文、证件信息在摄取前被拒绝。
  */
 import { STAFF_ROLES } from '../auth/admin.guard.js';
+import type {
+  AnnouncementReviewStatus,
+  AnnouncementTimeline,
+  RecruitmentAnnouncement,
+} from '../matching/types.js';
+import type { MonitoringCoverage } from '../matching/coverage.js';
 
 // ==================== 事件白名单（服务端只接受已登记的必需事件） ====================
 
@@ -221,6 +227,8 @@ export interface TrialCohortReport {
 export interface TrialDashboard {
   generatedAt: string;
   cohorts: Record<TrialCohortKey, TrialCohortReport>;
+  /** 机会供给快照（市场侧存量，来自人工巡检与真实公告台账，非用户行为事件） */
+  supply: SupplySnapshot;
 }
 
 const OBSERVE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -434,7 +442,7 @@ function computeCohort(
 export function computeTrialDashboard(
   events: readonly TrialEventRecord[],
   now: Date = new Date(),
-): TrialDashboard {
+): Omit<TrialDashboard, 'supply'> {
   const grouped: Record<TrialCohortKey, TrialEventRecord[]> = {
     invited: [],
     invited_staff: [],
@@ -449,4 +457,150 @@ export function computeTrialDashboard(
     cohorts[key] = computeCohort(grouped[key], now);
   }
   return { generatedAt: now.toISOString(), cohorts };
+}
+
+// ==================== 机会供给快照（市场侧存量，非用户行为事件） ====================
+
+/**
+ * 公告报名相位（按报名日历日划分；日期只取官方公告明确给出的，缺省即「待官方通知」）：
+ * - open：报名开始日 ≤ 今天 ≤ 报名截止日（或已开始且官方未给截止日）；
+ * - preview：未到开始日，或官方未给具体报名日期（时间待官方通知）；
+ * - closed：已过报名截止日；
+ * - withdrawn：公告已撤回/批次取消。
+ */
+export type AnnouncementPhase = 'open' | 'preview' | 'closed' | 'withdrawn';
+
+export interface SupplySnapshot {
+  generatedAt: string;
+  /** 人工巡检覆盖（coverage.ts 单一事实源） */
+  coverage: {
+    subjectLabel: string;
+    status: MonitoringCoverage['status'];
+    monitoredRegions: number;
+    monitoredSources: number;
+    /** 巡检登记为不可用（ok=false）的官方栏目数 */
+    sourcesUnhealthy: number;
+    lastCheckedAt: string;
+    /** 人工巡检登记的「当前在报语文岗位数」（报考单元口径） */
+    openOpportunityCount: number;
+  };
+  announcements: {
+    /** 真实监测台账公告总数（含历史批次） */
+    total: number;
+    active: number;
+    withdrawn: number;
+    /** active 公告按报名相位计数 */
+    open: number;
+    preview: number;
+    closed: number;
+    /** 最近巡检确认来源失效的公告数（sourceHealth.ok=false） */
+    sourceFailed: number;
+    review: {
+      /** 已人工复核（human_reviewed） */
+      humanReviewed: number;
+      /** AI 初核待人工复核（或缺省未复核） */
+      pending: number;
+    };
+  };
+  /** 报考单元（岗位）口径：每个公告只取最新版本 */
+  units: {
+    /** 全部公告最新版本的岗位单元总数（含历史批次，用于台账总量核对） */
+    total: number;
+    /** 在报公告（phase=open）最新版本下的岗位单元数 */
+    open: number;
+  };
+  /**
+   * 交叉核对：人工巡检登记数（coverage）vs 按公告报名时间计算的在报单元数。
+   * 不一致必须人工排查（巡检未更新 / 延期取消未录入），不得静默取其一当作供给事实。
+   */
+  crossCheck: {
+    manualOpenCount: number;
+    computedOpenUnits: number;
+    consistent: boolean;
+  };
+}
+
+/** 北京时间日历日（YYYY-MM-DD）；公告报名日期按中国大陆运营日历核对 */
+export function cnDateString(now: Date): string {
+  const shifted = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  return shifted.toISOString().slice(0, 10);
+}
+
+function latestVersion(a: RecruitmentAnnouncement): RecruitmentAnnouncement['versions'][number] {
+  return a.versions.reduce((acc, v) => (v.versionNumber > acc.versionNumber ? v : acc), a.versions[0]);
+}
+
+export function phaseOf(timeline: AnnouncementTimeline, lifecycle: string, today: string): AnnouncementPhase {
+  if (lifecycle === 'withdrawn') return 'withdrawn';
+  const { registrationStart: start, registrationEnd: end } = timeline;
+  if (end && today > end) return 'closed';
+  if (!end) {
+    // 官方未给截止日：已给开始日且已开始 → 在报；开始日未到或日期全缺 → 预告（待官方通知）
+    if (start && today >= start) return 'open';
+    return 'preview';
+  }
+  if (start && today < start) return 'preview';
+  return 'open';
+}
+
+/**
+ * 计算机会供给快照（模块 8 每日台账的「机会供给」行取此）。
+ * 只统计 dataset='real' 的真实监测台账；演示公告永远不构成真实供给。
+ */
+export function computeSupplySnapshot(
+  announcements: readonly RecruitmentAnnouncement[],
+  coverage: MonitoringCoverage,
+  now: Date = new Date(),
+): SupplySnapshot {
+  const today = cnDateString(now);
+  const real = announcements.filter((a) => a.dataset === 'real');
+
+  const counts = { total: real.length, active: 0, withdrawn: 0, open: 0, preview: 0, closed: 0, sourceFailed: 0 };
+  const review: { humanReviewed: number; pending: number } = { humanReviewed: 0, pending: 0 };
+  let unitsTotal = 0;
+  let unitsOpen = 0;
+
+  for (const a of real) {
+    const status: AnnouncementReviewStatus | undefined = a.reviewStatus;
+    if (status === 'human_reviewed') review.humanReviewed += 1;
+    else review.pending += 1;
+    if (a.sourceHealth && a.sourceHealth.ok === false) counts.sourceFailed += 1;
+
+    const version = latestVersion(a);
+    unitsTotal += version.units.length;
+
+    const phase = phaseOf(version.timeline, a.lifecycle, today);
+    if (phase === 'withdrawn') {
+      counts.withdrawn += 1;
+    } else {
+      counts.active += 1;
+      counts[phase] += 1;
+      if (phase === 'open') unitsOpen += version.units.length;
+    }
+  }
+
+  const sourcesUnhealthy = coverage.regions.reduce(
+    (sum, r) => sum + r.sources.filter((s) => !s.ok).length,
+    0,
+  );
+
+  return {
+    generatedAt: now.toISOString(),
+    coverage: {
+      subjectLabel: coverage.subjectLabel,
+      status: coverage.status,
+      monitoredRegions: coverage.regions.length,
+      monitoredSources: coverage.regions.reduce((sum, r) => sum + r.sources.length, 0),
+      sourcesUnhealthy,
+      lastCheckedAt: coverage.lastCheckedAt,
+      openOpportunityCount: coverage.openOpportunityCount,
+    },
+    announcements: { ...counts, review },
+    units: { total: unitsTotal, open: unitsOpen },
+    crossCheck: {
+      manualOpenCount: coverage.openOpportunityCount,
+      computedOpenUnits: unitsOpen,
+      consistent: coverage.openOpportunityCount === unitsOpen,
+    },
+  };
 }
