@@ -7,11 +7,13 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
 import { OpportunitiesService } from './opportunities.service.js';
 import { UserGuard } from './user.guard.js';
+import { AdminGuard, ReviewGuard } from '../auth/admin.guard.js';
 
 interface AuthenticatedRequest {
   user?: { id: string; role: string };
@@ -177,5 +179,38 @@ export class OpportunitiesController {
     @Req() req: AuthenticatedRequest,
   ) {
     return this.service.submitCorrection(req.user!.id, unitId, body);
+  }
+
+  /** 当前用户提交过的纠错与员工处理状态（我的页） */
+  @Get('corrections/mine')
+  listMyCorrections(@Req() req: AuthenticatedRequest) {
+    return this.service.listMyCorrections(req.user!.id);
+  }
+
+  /** 员工纠错队列：STAFF_ROLES 可读（resource_reviewer 只读浏览） */
+  @Get('admin/corrections')
+  @UseGuards(AdminGuard)
+  listStaffCorrections(
+    @Query('status') status: string | undefined,
+    @Req() _req: AuthenticatedRequest,
+  ) {
+    const normalized =
+      typeof status === 'string' && status.trim() ? status.trim() : null;
+    return this.service.listCorrectionsForStaff(normalized);
+  }
+
+  /** 员工处理纠错：仅 exam_reviewer/admin；终态通知提交人 */
+  @Patch('admin/corrections/:id')
+  @UseGuards(ReviewGuard)
+  reviewCorrection(
+    @Param('id') id: string,
+    @Body() body: { status?: unknown; reviewNote?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.reviewCorrection(
+      { id: req.user!.id, role: req.user!.role },
+      id,
+      body,
+    );
   }
 }

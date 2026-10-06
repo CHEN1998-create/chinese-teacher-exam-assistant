@@ -130,18 +130,25 @@ model FollowedOpportunity {
  * 不做自动改判，改判必须走模块 2 审核发布新版本。
  */
 model OpportunityCorrection {
-  id             String   @id @default(uuid())
-  userId         String   @map("user_id")
-  unitId         String   @map("unit_id")
-  announcementId String   @map("announcement_id")
-  versionId      String   @map("version_id")
-  fieldPath      String   @map("field_path")
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  unitId         String    @map("unit_id")
+  announcementId String    @map("announcement_id")
+  versionId      String    @map("version_id")
+  fieldPath      String    @map("field_path")
   content        String
   contact        String?
-  status         String   @default("submitted")
-  createdAt      DateTime @default(now()) @map("created_at")
+  status         String    @default("submitted")
+  /** 员工处理说明（不采纳时必填，随站内通知发给提交人） */
+  reviewNote     String?   @map("review_note")
+  /** 最近一次处理人（员工账号 id） */
+  reviewerId     String?   @map("reviewer_id")
+  /** 最近一次处理时间（开始核对/终态均记录） */
+  reviewedAt     DateTime? @map("reviewed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
 
   @@index([announcementId, versionId])
+  @@index([status, createdAt])
   @@map("opportunity_corrections")
 }
 

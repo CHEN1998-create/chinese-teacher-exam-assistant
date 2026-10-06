@@ -32,6 +32,14 @@ import {
   type StudyTargetRole,
 } from './follow.domain.js';
 import {
+  CORRECTION_STATUSES,
+  fieldPathLabel,
+  isTerminalStatus,
+  validateReview,
+  type CorrectionDTO,
+  type StaffCorrectionDTO,
+} from './corrections.domain.js';
+import {
   buildGoals,
   buildMatchResponse,
   buildUnitDetail,
@@ -479,6 +487,127 @@ export class OpportunitiesService {
     return { id: row.id, status: row.status };
   }
 
+  // ==================== 纠错处理闭环（P0-F / 模块 8） ====================
+
+  /** 用户查看自己提交过的纠错及员工处理状态 */
+  async listMyCorrections(userId: string): Promise<CorrectionDTO[]> {
+    const rows = await this.prisma.opportunityCorrection.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return rows.map((row) => this.toCorrectionDTO(row));
+  }
+
+  /** 员工跨用户纠错队列；status 为空时返回全部 */
+  async listCorrectionsForStaff(
+    status: string | null,
+  ): Promise<StaffCorrectionDTO[]> {
+    if (
+      status !== null &&
+      !(CORRECTION_STATUSES as readonly string[]).includes(status)
+    ) {
+      throw new BadRequestException('纠错状态筛选值无效');
+    }
+    const rows = await this.prisma.opportunityCorrection.findMany({
+      where: status === null ? {} : { status },
+      orderBy: [{ createdAt: 'desc' }],
+      take: 200,
+    });
+    const submitterIds = [...new Set(rows.map((r) => r.userId))];
+    const submitters = await this.prisma.user.findMany({
+      where: { id: { in: submitterIds } },
+      select: { id: true, email: true, name: true },
+    });
+    const submitterMap = new Map(submitters.map((u) => [u.id, u]));
+    return rows.map((row) => {
+      const submitterRow = submitterMap.get(row.userId) ?? null;
+      return {
+        ...this.toCorrectionDTO(row),
+        submitter: submitterRow
+          ? {
+              id: submitterRow.id,
+              email: submitterRow.email,
+              name: submitterRow.name,
+            }
+          : { id: row.userId, email: '', name: null },
+      };
+    });
+  }
+
+  /**
+   * 员工处理纠错：
+   * - 状态机校验见 corrections.domain（终态不可改、不采纳必须写说明）；
+   * - resolved/rejected 时给提交人发一条站内通知，通知只含结论与说明，
+   *   不含联系方式等其他用户信息；
+   * - 纠错记录不物理删除，处理人/处理时间/说明全部留痕。
+   */
+  async reviewCorrection(
+    reviewer: { id: string; role: string },
+    correctionId: string,
+    body: { status?: unknown; reviewNote?: unknown },
+  ): Promise<CorrectionDTO> {
+    const row = await this.prisma.opportunityCorrection.findUnique({
+      where: { id: correctionId },
+    });
+    if (!row) {
+      throw new NotFoundException('未找到该纠错记录');
+    }
+    const result = validateReview({
+      from: row.status,
+      to: body.status,
+      reviewNote: body.reviewNote,
+    });
+    if (!result.ok) {
+      throw new ConflictException(result.message);
+    }
+    const now = new Date();
+    const updated = await this.prisma.opportunityCorrection.update({
+      where: { id: row.id },
+      data: {
+        status: result.status,
+        reviewNote: result.note ?? row.reviewNote,
+        reviewerId: reviewer.id,
+        reviewedAt: now,
+      },
+    });
+
+    if (isTerminalStatus(result.status)) {
+      const meta = this.findCatalogUnitMeta(row.unitId);
+      const unitName = meta?.unitName ?? '该机会';
+      const noteLine = result.note ? `处理说明：${result.note}` : '';
+      if (result.status === 'resolved') {
+        await this.prisma.notificationRecord.create({
+          data: {
+            userId: row.userId,
+            severity: 'info',
+            title: `你提交的「${unitName}」纠错已采纳并修正`,
+            body:
+              `我们已核对官方原文，确认你反馈的「${fieldPathLabel(row.fieldPath)}」问题，` +
+              `并在新版本中完成更正，感谢你的反馈。${noteLine}`,
+            eventKey: null,
+            relatedUnitId: row.unitId,
+          },
+        });
+      } else {
+        await this.prisma.notificationRecord.create({
+          data: {
+            userId: row.userId,
+            severity: 'info',
+            title: `你提交的「${unitName}」纠错已核对完成`,
+            body:
+              `我们核对官方原文后暂未采纳这条「${fieldPathLabel(row.fieldPath)}」纠错。` +
+              noteLine,
+            eventKey: null,
+            relatedUnitId: row.unitId,
+          },
+        });
+      }
+    }
+
+    return this.toCorrectionDTO(updated);
+  }
+
   // ==================== 内部工具 ====================
 
   private findCatalogUnit(unitId: string): {
@@ -491,6 +620,62 @@ export class OpportunitiesService {
       if (unit) return { announcementId: announcement.id, versionId: version.id };
     }
     throw new NotFoundException('未找到该报考单元，它可能不属于当前已发布公告');
+  }
+
+  /** 纠错展示用：跨全部版本查找单元名与公告标题（旧版本单元也要能显示） */
+  private findCatalogUnitMeta(unitId: string): {
+    unitName: string;
+    announcementTitle: string;
+  } | null {
+    for (const announcement of PUBLISHED_ANNOUNCEMENTS) {
+      for (const version of announcement.versions) {
+        const unit = version.units.find((u) => u.id === unitId);
+        if (unit) {
+          return {
+            unitName: unit.name,
+            announcementTitle: announcement.title,
+          };
+        }
+      }
+    }
+    return null;
+  }
+
+  private toCorrectionDTO(
+    row: {
+      id: string;
+      userId: string;
+      unitId: string;
+      announcementId: string;
+      versionId: string;
+      fieldPath: string;
+      content: string;
+      contact: string | null;
+      status: string;
+      reviewNote: string | null;
+      reviewerId: string | null;
+      reviewedAt: Date | null;
+      createdAt: Date;
+    },
+  ): CorrectionDTO {
+    const meta = this.findCatalogUnitMeta(row.unitId);
+    return {
+      id: row.id,
+      unitId: row.unitId,
+      unitName: meta?.unitName ?? null,
+      announcementId: row.announcementId,
+      announcementTitle: meta?.announcementTitle ?? null,
+      versionId: row.versionId,
+      fieldPath: row.fieldPath,
+      fieldLabel: fieldPathLabel(row.fieldPath),
+      content: row.content,
+      contact: row.contact,
+      status: row.status,
+      reviewNote: row.reviewNote,
+      reviewerId: row.reviewerId,
+      reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
+      createdAt: row.createdAt.toISOString(),
+    };
   }
 
   private async listFollowRecords(userId: string): Promise<FollowRecord[]> {

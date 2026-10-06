@@ -140,8 +140,64 @@ function createFakePrisma() {
 
   const opportunityCorrection = {
     create: async ({ data }: { data: Record<string, unknown> }) => {
-      const row = { id: `cor-${++seq}`, status: 'submitted', ...data };
+      const row = {
+        id: `cor-${++seq}`,
+        status: 'submitted',
+        reviewNote: null,
+        reviewerId: null,
+        reviewedAt: null,
+        createdAt: new Date(),
+        ...data,
+      };
       corrections.push(row);
+      return row;
+    },
+    findUnique: async ({ where }: { where: { id: string } }) =>
+      corrections.find((r) => r.id === where.id) ?? null,
+    findMany: async ({
+      where,
+      take,
+    }: {
+      where?: { userId?: string; status?: string };
+      take?: number;
+    }) => {
+      let list = [...corrections];
+      if (where?.userId) list = list.filter((r) => r.userId === where.userId);
+      if (where?.status) list = list.filter((r) => r.status === where.status);
+      list.sort(
+        (a: { createdAt: Date }, b: { createdAt: Date }) =>
+          b.createdAt.getTime() - a.createdAt.getTime(),
+      );
+      return typeof take === 'number' ? list.slice(0, take) : list;
+    },
+    update: async ({
+      where,
+      data,
+    }: {
+      where: { id: string };
+      data: Record<string, unknown>;
+    }) => {
+      const row = corrections.find((r) => r.id === where.id);
+      if (!row) throw new Error('not found');
+      Object.assign(row, data);
+      return row;
+    },
+  };
+
+  const users = new Map<string, { id: string; email: string; name: string | null }>([
+    ['user-1', { id: 'user-1', email: 'u1@example.com', name: '学生一' }],
+  ]);
+  const notifications: Array<Record<string, unknown>> = [];
+
+  const user = {
+    findMany: async ({ where }: { where: { id: { in: string[] } } }) =>
+      where.id.in.map((id) => users.get(id)).filter(Boolean),
+  };
+
+  const notificationRecord = {
+    create: async ({ data }: { data: Record<string, unknown> }) => {
+      const row = { id: `notif-${++seq}`, readAt: null, createdAt: new Date(), ...data };
+      notifications.push(row);
       return row;
     },
   };
@@ -150,10 +206,13 @@ function createFakePrisma() {
     prisma: {
       followedOpportunity,
       opportunityCorrection,
+      notificationRecord,
+      user,
       $transaction: async (ops: Array<Promise<unknown>>) => Promise.all(ops),
     } as never,
     rows,
     corrections,
+    notifications,
   };
 }
 
@@ -570,6 +629,119 @@ describe('OpportunitiesService：纠错留痕', () => {
         fieldPath: '',
         content: '这里是足够长的纠错说明文字',
       }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+});
+
+describe('OpportunitiesService：纠错处理闭环（P0-F / 模块 8）', () => {
+  const REVIEWER = { id: 'staff-1', role: 'admin' };
+
+  async function seedCorrection(fake: ReturnType<typeof createFakePrisma>) {
+    const service = new OpportunitiesService(fake.prisma, fakeProfileService);
+    const created = await service.submitCorrection(
+      'user-1',
+      'unit-hefei-01-v2',
+      { fieldPath: 'headcount', content: '岗位人数与补充公告不一致' },
+    );
+    return { service, created };
+  }
+
+  it('submitted → reviewing → resolved：记录处理人/时间，并给提交人发一条站内通知', async () => {
+    const fake = createFakePrisma();
+    const { service, created } = await seedCorrection(fake);
+
+    const reviewing = await service.reviewCorrection(REVIEWER, created.id, {
+      status: 'reviewing',
+    });
+    expect(reviewing.status).toBe('reviewing');
+    expect(reviewing.reviewerId).toBe('staff-1');
+    expect(reviewing.reviewedAt).toBeTruthy();
+    expect(fake.notifications).toHaveLength(0); // 核对中不通知
+
+    const resolved = await service.reviewCorrection(REVIEWER, created.id, {
+      status: 'resolved',
+      reviewNote: '已按补充公告修正为 12 人',
+    });
+    expect(resolved.status).toBe('resolved');
+    expect(resolved.reviewNote).toBe('已按补充公告修正为 12 人');
+    expect(fake.notifications).toHaveLength(1);
+    const notice = fake.notifications[0] as Record<string, unknown>;
+    expect(notice.userId).toBe('user-1');
+    expect(String(notice.title)).toContain('已采纳并修正');
+    expect(String(notice.body)).toContain('已按补充公告修正为 12 人');
+  });
+
+  it('rejected 必须附处理说明；终态后任何再次处理都被拒绝', async () => {
+    const fake = createFakePrisma();
+    const { service, created } = await seedCorrection(fake);
+
+    await expect(
+      service.reviewCorrection(REVIEWER, created.id, { status: 'rejected' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    const rejected = await service.reviewCorrection(REVIEWER, created.id, {
+      status: 'rejected',
+      reviewNote: '官方原文确为 8 人，补充公告未调整该岗位',
+    });
+    expect(rejected.status).toBe('rejected');
+    expect(fake.notifications).toHaveLength(1);
+
+    await expect(
+      service.reviewCorrection(REVIEWER, created.id, { status: 'resolved' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(fake.notifications).toHaveLength(1); // 被拒绝的推进不产生新通知
+  });
+
+  it('允许 submitted 直接 resolved/rejected；非法状态值拒绝', async () => {
+    const fake = createFakePrisma();
+    const { service, created } = await seedCorrection(fake);
+
+    await expect(
+      service.reviewCorrection(REVIEWER, created.id, { status: 'submitted' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      service.reviewCorrection(REVIEWER, created.id, { status: 'unknown' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    const done = await service.reviewCorrection(REVIEWER, created.id, {
+      status: 'resolved',
+    });
+    expect(done.status).toBe('resolved');
+  });
+
+  it('处理不存在的纠错返回 404', async () => {
+    const fake = createFakePrisma();
+    const service = new OpportunitiesService(fake.prisma, fakeProfileService);
+    await expect(
+      service.reviewCorrection(REVIEWER, 'cor-missing', { status: 'reviewing' }),
+    ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('我的纠错列表只返回本人记录，并带字段中文标签与单元名', async () => {
+    const fake = createFakePrisma();
+    const { service, created } = await seedCorrection(fake);
+
+    const mine = await service.listMyCorrections('user-1');
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.id).toBe(created.id);
+    expect(mine[0]?.fieldLabel).toBe('招聘人数 / 岗位信息');
+    expect(mine[0]?.unitName).toBeTruthy();
+    expect(await service.listMyCorrections('user-other')).toHaveLength(0);
+  });
+
+  it('员工队列支持按状态过滤并附带提交人账号信息；非法状态值 400', async () => {
+    const fake = createFakePrisma();
+    const { service, created } = await seedCorrection(fake);
+    await service.reviewCorrection(REVIEWER, created.id, { status: 'reviewing' });
+
+    const reviewingList = await service.listCorrectionsForStaff('reviewing');
+    expect(reviewingList).toHaveLength(1);
+    expect(reviewingList[0]?.submitter.email).toBe('u1@example.com');
+
+    expect(await service.listCorrectionsForStaff('submitted')).toHaveLength(0);
+    expect(await service.listCorrectionsForStaff(null)).toHaveLength(1);
+    await expect(
+      service.listCorrectionsForStaff('not-a-status'),
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 });
