@@ -42,7 +42,7 @@ function eduRequirement(checkedAt: string): Requirement {
   };
 }
 
-function makeUnit(versionId: string, end: string | undefined): ApplicationUnit {
+function makeUnit(versionId: string): ApplicationUnit {
   return {
     id: `unit-${versionId}`,
     code: 'X-1',
@@ -69,7 +69,7 @@ function makeVersion(
   extra: Partial<AnnouncementVersion> = {},
 ): AnnouncementVersion {
   const id = `ann-x-v${versionNumber}`;
-  const unit = makeUnit(id, end);
+  const unit = makeUnit(id);
   return {
     id,
     announcementId: 'ann-x',

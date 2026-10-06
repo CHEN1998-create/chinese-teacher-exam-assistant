@@ -8,6 +8,29 @@ import { PrismaService } from '../prisma.service.js';
  * 服务端删除该用户+目标下的旧周计划并重建（级联日计划与反馈）。
  * 所有读写均按 userId + examTargetId 强过滤，杜绝跨用户读取。
  */
+/**
+ * JSON 快照字段安全转换（不可信请求体 → 数据库值）：
+ * 仅接受 JSON 原始类型，其余一律按缺省处理，绝不产生 "[object Object]" 或 Invalid Date 脏数据。
+ */
+function toText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return '';
+}
+
+function toTextOrNull(value: unknown): string | null {
+  const text = toText(value);
+  return text === '' ? null : text;
+}
+
+function toDateOrNow(value: unknown): Date {
+  if (typeof value === 'string' || typeof value === 'number') {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+  return new Date();
+}
+
 @Injectable()
 export class PlansService {
   constructor(private readonly prisma: PrismaService) {}
@@ -66,12 +89,12 @@ export class PlansService {
             focus: String(w.focus),
             status: String(w.status),
             version: Number(w.version),
-            previousVersionId: w.previousVersionId ? String(w.previousVersionId) : null,
-            generationReason: String(w.generationReason ?? ''),
+            previousVersionId: toTextOrNull(w.previousVersionId),
+            generationReason: toText(w.generationReason),
             adjustments: (w.adjustments ?? []) as never,
             reviews: (w.reviews ?? []) as never,
-            createdAt: w.createdAt ? new Date(String(w.createdAt)) : new Date(),
-            updatedAt: w.updatedAt ? new Date(String(w.updatedAt)) : new Date(),
+            createdAt: toDateOrNow(w.createdAt),
+            updatedAt: toDateOrNow(w.updatedAt),
           },
         }),
       ),
@@ -88,9 +111,9 @@ export class PlansService {
             totalEstimatedTime: Number(d.totalEstimatedTime),
             isMinimumViable: Boolean(d.isMinimumViable),
             availableMinutes: Number(d.availableMinutes),
-            adjustmentNote: d.adjustmentNote ? String(d.adjustmentNote) : null,
-            createdAt: d.createdAt ? new Date(String(d.createdAt)) : new Date(),
-            updatedAt: d.updatedAt ? new Date(String(d.updatedAt)) : new Date(),
+            adjustmentNote: toTextOrNull(d.adjustmentNote),
+            createdAt: toDateOrNow(d.createdAt),
+            updatedAt: toDateOrNow(d.updatedAt),
           },
         }),
       ),
@@ -107,12 +130,12 @@ export class PlansService {
             date: String(f.date),
             status: String(f.status),
             actualTime: f.actualTime != null ? Number(f.actualTime) : null,
-            incompleteReason: f.incompleteReason ? String(f.incompleteReason) : null,
+            incompleteReason: toTextOrNull(f.incompleteReason),
             errorTypes: (f.errorTypes ?? []) as never,
             hasSecondPractice: Boolean(f.hasSecondPractice),
-            notes: f.notes ? String(f.notes) : null,
-            createdAt: f.createdAt ? new Date(String(f.createdAt)) : new Date(),
-            updatedAt: f.updatedAt ? new Date(String(f.updatedAt)) : new Date(),
+            notes: toTextOrNull(f.notes),
+            createdAt: toDateOrNow(f.createdAt),
+            updatedAt: toDateOrNow(f.updatedAt),
           },
         }),
       ),

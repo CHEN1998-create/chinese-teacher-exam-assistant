@@ -10,7 +10,7 @@ import { PrismaService } from '../prisma.service.js';
 export class ProfileService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getProfile(userId: string): Promise<unknown | null> {
+  async getProfile(userId: string): Promise<unknown> {
     const row = await this.prisma.userProfile.findUnique({ where: { userId } });
     return row?.profile ?? null;
   }

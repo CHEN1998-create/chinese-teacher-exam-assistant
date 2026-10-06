@@ -76,7 +76,7 @@ describe('真实台账：3 条杭州/宁波公告的结构与证据', () => {
 
   it('杭州 4 月批次：2 个高中语文单元（4 人/1 人），报名已截止，岗位表序号 5/6', () => {
     const list = of(REAL_ANNOUNCEMENT_IDS.hangzhou202604);
-    expect(list.map((c) => c.unit.headcount).sort()).toEqual([1, 4]);
+    expect(list.map((c) => c.unit.headcount).sort((a, b) => a - b)).toEqual([1, 4]);
     for (const c of list) {
       expect(
         c.match.gates.find((g) => g.code === 'registration_closed')?.passed,

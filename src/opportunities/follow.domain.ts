@@ -114,7 +114,7 @@ export function applyMaterialStatus(
   if (current === status) return follow;
   return {
     ...follow,
-    materialStatuses: { ...(follow.materialStatuses ?? {}), [itemId]: status },
+    materialStatuses: { ...follow.materialStatuses, [itemId]: status },
     version: follow.version + 1,
   };
 }
@@ -125,7 +125,7 @@ export function applyConsultationNote(
   dimensionKey: string,
   note: string,
 ): FollowRecord {
-  const notes = { ...(follow.consultationNotes ?? {}) };
+  const notes = { ...follow.consultationNotes };
   if (note.trim() === '') {
     if (!(dimensionKey in notes)) return follow;
     delete notes[dimensionKey];

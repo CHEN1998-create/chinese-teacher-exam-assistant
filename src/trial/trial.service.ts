@@ -12,7 +12,6 @@ import {
   computeTrialDashboard,
   dedupKeyFor,
   sanitizeProps,
-  type SupplySnapshot,
   type TrialDashboard,
   type TrialEventRecord,
 } from './trial.domain.js';

@@ -18,7 +18,6 @@ import type {
   AnnouncementVersion,
   ApplicationUnit,
   RecruitmentAnnouncement,
-  Requirement,
   UserRecruitmentProfile,
 } from '../matching/types.js';
 
