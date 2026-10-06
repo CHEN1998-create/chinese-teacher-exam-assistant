@@ -33,47 +33,33 @@ function EvidenceLink({ url }: { url?: string }) {
 }
 
 /**
- * 详情第三层：官方原文锚点、逐条件证据、版本链、规则版本与纠错入口。
- * 每个结论都能在此追溯到公告版本 + 证据 + 评估所用规则版本。
+ * 详情第三段：官方原文与岗位表位置。
+ * 只放「官方事实在哪里」：当前依据版本、官方来源链接、报名时间口径、
+ * 岗位表行级锚点与逐项条件原文摘录。核对/复核状态与版本变化在第四段。
  */
-export function EvidenceSection({
+export function OfficialSourceSection({
   detail,
-  onOpenCorrection,
 }: {
   detail: UnitDetailResponse;
-  onOpenCorrection: () => void;
 }) {
-  const { unit, previousVersions, meta } = detail;
+  const { unit } = detail;
   const evidences = unit.dimensions.filter((d) => d.evidence);
   const source = unit.version.officialSource;
 
   return (
     <section className="space-y-3">
       <div className="rounded-xl border border-slate-200 bg-white p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold text-slate-800">
-              官方依据与版本
-            </h3>
-            <p className="mt-0.5 text-xs text-slate-500">
-              当前依据：
-              {SOURCE_KIND_LABELS[unit.version.sourceKind] ??
-                unit.version.sourceKind}{" "}
-              v{unit.version.versionNumber} ·{" "}
-              {formatDateTime(unit.version.publishedAt)} 发布 ·{" "}
-              {unit.announcement.publisher}
-            </p>
-          </div>
-          <Button size="sm" variant="outline" onClick={onOpenCorrection}>
-            提交纠错
-          </Button>
-        </div>
-
-        {unit.version.changeNote && (
-          <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
-            版本说明：{unit.version.changeNote}
-          </p>
-        )}
+        <h3 className="text-sm font-semibold text-slate-800">
+          官方原文与岗位表位置
+        </h3>
+        <p className="mt-0.5 text-xs text-slate-500">
+          当前依据：
+          {SOURCE_KIND_LABELS[unit.version.sourceKind] ??
+            unit.version.sourceKind}{" "}
+          v{unit.version.versionNumber} ·{" "}
+          {formatDateTime(unit.version.publishedAt)} 发布 ·{" "}
+          {unit.announcement.publisher}
+        </p>
 
         <dl className="mt-3 space-y-2 text-xs text-slate-600">
           <div>
@@ -83,30 +69,7 @@ export function EvidenceSection({
             </dd>
           </div>
           <div className="flex gap-2">
-            <dt className="shrink-0 font-medium text-slate-500">核对状态</dt>
-            <dd>
-              {source.state === "official"
-                ? "已与官方公告核对"
-                : "待人工核对（不作为正式依据）"}
-              ，核对时间 {formatDateTime(source.checkedAt)}
-            </dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="shrink-0 font-medium text-slate-500">复核状态</dt>
-            <dd>
-              {unit.announcement.reviewStatus === "human_reviewed"
-                ? "已人工复核"
-                : "AI 初核 · 待人工复核（不作为正式推荐依据）"}
-              {unit.announcement.reviewedBy
-                ? ` · 复核人 ${unit.announcement.reviewedBy}`
-                : ""}
-              {unit.announcement.reviewedAt
-                ? ` · 复核于 ${formatDateTime(unit.announcement.reviewedAt)}`
-                : ""}
-            </dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="shrink-0 font-medium text-slate-500">报名时间</dt>
+            <dt className="shrink-0 font-medium text-slate-500">报名时间（公告口径）</dt>
             <dd>
               {unit.version.timeline.registrationStart &&
               unit.version.timeline.registrationEnd
@@ -143,11 +106,7 @@ export function EvidenceSection({
               </p>
             )}
             <p className="mt-1.5 text-[11px] text-slate-400">
-              <EvidenceLink url={unit.unit.sourceRow.locator.url} /> ·{" "}
-              {unit.unit.sourceRow.state === "official"
-                ? "已核对"
-                : "AI 初核待人工核对"}{" "}
-              · {formatDateTime(unit.unit.sourceRow.checkedAt)}
+              <EvidenceLink url={unit.unit.sourceRow.locator.url} />
             </p>
           </div>
         )}
@@ -161,7 +120,9 @@ export function EvidenceSection({
               className="rounded-lg border border-slate-100 p-3"
             >
               <p className="text-xs font-semibold text-slate-700">
-                {dimensionLabel(dim.dimension)}
+                {dim.dimension === "region"
+                  ? "就业地区"
+                  : dimensionLabel(dim.dimension)}
                 {dim.requirementDescription
                   ? `：${dim.requirementDescription}`
                   : ""}
@@ -172,13 +133,75 @@ export function EvidenceSection({
                 </p>
               )}
               <p className="mt-1.5 text-[11px] text-slate-400">
-                <EvidenceLink url={dim.evidence?.locator.url} /> ·{" "}
-                {dim.evidence ? formatDateTime(dim.evidence.checkedAt) : ""}
+                <EvidenceLink url={dim.evidence?.locator.url} />
               </p>
             </li>
           ))}
         </ul>
       </Disclosure>
+    </section>
+  );
+}
+
+/**
+ * 详情第四段：核对时间与变化。
+ * 说明「这条依据什么时候核对过、是否人工复核、与上一版差在哪」，
+ * 并保留纠错出口与规则版本脚注（结论可复算、变化可追溯）。
+ */
+export function VerificationSection({
+  detail,
+  onOpenCorrection,
+}: {
+  detail: UnitDetailResponse;
+  onOpenCorrection: () => void;
+}) {
+  const { unit, previousVersions, meta } = detail;
+  const source = unit.version.officialSource;
+
+  return (
+    <section className="space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex items-start justify-between gap-3">
+          <h3 className="text-sm font-semibold text-slate-800">
+            核对时间与变化
+          </h3>
+          <Button size="sm" variant="outline" onClick={onOpenCorrection}>
+            提交纠错
+          </Button>
+        </div>
+
+        {unit.version.changeNote && (
+          <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-800">
+            本次版本变化：{unit.version.changeNote}
+          </p>
+        )}
+
+        <dl className="mt-3 space-y-2 text-xs text-slate-600">
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-medium text-slate-500">官方来源核对</dt>
+            <dd>
+              {source.state === "official"
+                ? "已与官方公告核对"
+                : "待人工核对（不作为正式依据）"}
+              ，核对时间 {formatDateTime(source.checkedAt)}
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="shrink-0 font-medium text-slate-500">人工复核</dt>
+            <dd>
+              {unit.announcement.reviewStatus === "human_reviewed"
+                ? "已人工复核"
+                : "AI 初核 · 待人工复核（不作为正式推荐依据）"}
+              {unit.announcement.reviewedBy
+                ? ` · 复核人 ${unit.announcement.reviewedBy}`
+                : ""}
+              {unit.announcement.reviewedAt
+                ? ` · 复核于 ${formatDateTime(unit.announcement.reviewedAt)}`
+                : ""}
+            </dd>
+          </div>
+        </dl>
+      </div>
 
       {previousVersions.length > 0 && (
         <Disclosure title="历史版本" count={previousVersions.length}>

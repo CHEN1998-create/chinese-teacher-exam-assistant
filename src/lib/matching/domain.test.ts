@@ -230,7 +230,7 @@ describe("单元字段完整性", () => {
     const units: ApplicationUnit[] = V61_SEED_ANNOUNCEMENTS.flatMap((a) =>
       a.versions.flatMap((v) => v.units),
     );
-    expect(units.length).toBe(7); // 5 个单版本场景 + 合肥 v1/v2
+    expect(units.length).toBe(8); // 6 个单版本场景 + 合肥 v1/v2
     expect(units.every((u) => u.subject === "chinese")).toBe(true);
     for (const announcement of V61_SEED_ANNOUNCEMENTS) {
       for (const v of announcement.versions) {
@@ -281,5 +281,39 @@ describe("高风险回归（模块 9）：无官方来源不得进入主要推�
     );
     expect(match.gates.find((g) => g.code === "no_official_source")?.passed).toBe(false);
     expect(isValidOpportunity(match)).toBe(false);
+  });
+});
+
+describe("模块 5：source_unavailable 闸门（官方来源巡检不可用）", () => {
+  it("嘉兴 seed：报名窗口名义开放，但 sourceHealth.ok=false 时闸门失败并带上原因与巡检时间", () => {
+    const base = candidateFor(V61_SCENARIO_IDS.sourceUnavailable);
+    const match = evaluateOpportunity(
+      base.announcement,
+      base.version,
+      base.unit,
+      V61_SEED_PROFILE,
+      V61_NOW,
+    );
+    const gate = match.gates.find((g) => g.code === "source_unavailable");
+    expect(gate?.passed).toBe(false);
+    expect(gate?.reason).toContain("404");
+    expect(gate?.reason).toContain("2026-10-04");
+    expect(isValidOpportunity(match)).toBe(false);
+  });
+
+  it("sourceHealth.ok=true（健康）时不阻断推荐", () => {
+    const base = candidateFor(V61_SCENARIO_IDS.eligible);
+    const healthy: typeof base.announcement = {
+      ...base.announcement,
+      sourceHealth: { ok: true, checkedAt: "2026-10-04T09:00:00+08:00" },
+    };
+    const match = evaluateOpportunity(
+      healthy,
+      base.version,
+      base.unit,
+      V61_SEED_PROFILE,
+      V61_NOW,
+    );
+    expect(match.gates.find((g) => g.code === "source_unavailable")?.passed).toBe(true);
   });
 });

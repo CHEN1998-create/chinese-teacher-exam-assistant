@@ -34,6 +34,7 @@ export type GateCode =
   | "registration_closed" // 报名已截止
   | "out_of_scope_nature" // 用工性质不在收录范围
   | "announcement_withdrawn" // 公告已取消/失效
+  | "source_unavailable" // 官方来源巡检确认不可访问（撤稿/404/域名失效）
   | "no_official_source"; // 没有已核对的官方来源
 
 export interface GateResult {

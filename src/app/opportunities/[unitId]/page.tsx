@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Hero } from "@/components/ia/Hero";
-import { LayerHeading } from "@/components/ia/Layer";
-import { MatchStatusTag, ClosedTag } from "@/components/ia/MatchStatusTag";
+import { Disclosure, LayerHeading } from "@/components/ia/Layer";
+import { GateTag, MatchStatusTag } from "@/components/ia/MatchStatusTag";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
@@ -23,9 +23,10 @@ import type {
   UnitDetailResponse,
 } from "@/lib/opportunities/api-types";
 import {
-  failedGates,
+  failedGateViews,
   groupDimensions,
   nextAction,
+  primaryGate,
 } from "@/lib/opportunities/detail-view";
 import { useActiveProfile } from "@/lib/opportunities/useOpportunities";
 import {
@@ -37,9 +38,13 @@ import type { UserRecruitmentProfile } from "@/lib/profile/types";
 import { ConditionRows } from "@/components/opportunities/ConditionRows";
 import { FollowControls } from "@/components/opportunities/FollowControls";
 import { SupplementForm } from "@/components/opportunities/SupplementForm";
-import { EvidenceSection } from "@/components/opportunities/EvidenceSection";
+import {
+  OfficialSourceSection,
+  VerificationSection,
+} from "@/components/opportunities/EvidenceSection";
 import { CorrectionModal } from "@/components/opportunities/CorrectionModal";
 import { track, trackView } from "@/lib/analytics/eventService";
+import { gateStateMeta } from "@/lib/gate-states";
 
 function scrollToId(id: string) {
   document.getElementById(id)?.scrollIntoView({
@@ -152,8 +157,9 @@ export default function OpportunityDetailPage() {
 
   const unit = detail.unit;
   const groups = groupDimensions(unit.dimensions);
-  const failed = failedGates(unit.gates);
-  const closed = failed.length > 0;
+  const primaryClosedGate = primaryGate(unit.gates);
+  const gateViews = failedGateViews(unit.gates);
+  const closed = gateViews.length > 0;
   const action = nextAction(unit);
   const deadline = deadlineText(
     unit.version.timeline.registrationEnd,
@@ -320,13 +326,17 @@ export default function OpportunityDetailPage() {
         </Link>
       </nav>
 
-      {/* 标题区 */}
+      {/* 标题区（报考单元基础事实） */}
       <header className="space-y-1.5">
         <div className="flex items-start justify-between gap-3">
           <h1 className="text-lg font-semibold leading-snug text-slate-900">
             {unit.unit.name}
           </h1>
-          {closed ? <ClosedTag /> : <MatchStatusTag status={unit.overall} />}
+          {primaryClosedGate ? (
+            <GateTag code={primaryClosedGate.code} />
+          ) : (
+            <MatchStatusTag status={unit.overall} />
+          )}
         </div>
         <p className="text-sm text-slate-500">
           {regionLabel(unit.unit.region)} ·{" "}
@@ -338,6 +348,11 @@ export default function OpportunityDetailPage() {
           {unit.announcement.publisher} · 报名
           {closed ? "" : deadline.text}
         </p>
+        {unit.announcement.dataset === "real" && (
+          <p className="text-xs text-amber-700">
+            真实监测记录 · AI 初核待人工复核，不作为正式推荐依据
+          </p>
+        )}
         {unit.follow?.newerVersion && (
           <p className="rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
             你关注时依据的公告版本已有更新，当前展示的是最新已发布版本。
@@ -345,18 +360,30 @@ export default function OpportunityDetailPage() {
         )}
       </header>
 
-      {/* 第一层：结论 + 唯一下一步 */}
+      {/* 第一段：结论 + 唯一下一步 */}
       <Hero
-        meta={`${MATCH_STATUS_LABELS[unit.overall]} · 依据规则 ${detail.meta.ruleVersion}`}
+        meta={`${
+          primaryClosedGate
+            ? gateStateMeta(primaryClosedGate.code).label
+            : MATCH_STATUS_LABELS[unit.overall]
+        } · 依据规则 ${detail.meta.ruleVersion}`}
         conclusion={unit.summary}
         action={busy ? { ...heroAction, disabled: true, label: "处理中…" } : heroAction}
       >
-        {failed.length > 0 && (
-          <ul className="space-y-1 text-sm text-slate-500">
-            {failed.map((gate) => (
-              <li key={gate.code}>· {gate.reason}</li>
-            ))}
-          </ul>
+        {closed && (
+          <div className="space-y-1.5 rounded-lg border border-red-100 bg-red-50/60 p-2.5">
+            <p className="text-xs font-semibold text-red-700">
+              不进入推荐的原因（历史留档已保留，不会当作资格不符合）
+            </p>
+            <ul className="space-y-1 text-sm text-slate-600">
+              {gateViews.map(({ gate, meta }) => (
+                <li key={gate.code}>
+                  <span className="font-medium text-slate-700">· {meta.label}：</span>
+                  {gate.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </Hero>
 
@@ -377,7 +404,103 @@ export default function OpportunityDetailPage() {
         </p>
       )}
 
-      {/* 跟进与备考目标 */}
+      {/* 第二段：关键依据与不确定项（官方事实 vs 系统预筛判断分行展示） */}
+      <section className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">
+            关键依据与不确定项
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">
+            每条都分「公告怎么写（官方事实）」与「系统预筛判断」；缺少信息不是不符合，向招聘单位确认前系统不自动下结论。
+          </p>
+        </div>
+
+        {groups.missingInfo.length > 0 && (
+          <div
+            id="missing-info"
+            className="scroll-mt-20 rounded-xl border border-amber-200 bg-white"
+          >
+            <div className="border-b border-amber-100 px-4 py-2.5">
+              <LayerHeading
+                title="需要补充的信息（补充后重新判断，不是不符合）"
+                count={groups.missingInfo.length}
+              />
+            </div>
+            <div className="px-4 py-2">
+              <ConditionRows dimensions={groups.missingInfo} showDescription />
+            </div>
+          </div>
+        )}
+
+        {groups.confirmOfficial.length > 0 && (
+          <div
+            id="to-confirm"
+            className="scroll-mt-20 rounded-xl border border-amber-200 bg-white"
+          >
+            <div className="border-b border-amber-100 px-4 py-2.5">
+              <LayerHeading
+                title="需要向招聘单位确认的歧义项（系统不能自动判定）"
+                count={groups.confirmOfficial.length}
+              />
+            </div>
+            <div className="px-4 py-2">
+              <ConditionRows
+                dimensions={groups.confirmOfficial}
+                showDescription
+              />
+            </div>
+          </div>
+        )}
+
+        {groups.unsatisfied.length > 0 && (
+          <div
+            id="unsatisfied"
+            className="scroll-mt-20 rounded-xl border border-red-200 bg-white"
+          >
+            <div className="border-b border-red-100 px-4 py-2.5">
+              <LayerHeading title="明确不符合项（依据公告原文）" count={groups.unsatisfied.length} />
+            </div>
+            <div className="px-4 py-2">
+              <ConditionRows
+                dimensions={groups.unsatisfied}
+                showDescription
+              />
+            </div>
+          </div>
+        )}
+
+        {groups.satisfied.length > 0 && (
+          <Disclosure title="已满足的条件" count={groups.satisfied.length}>
+            <ConditionRows dimensions={groups.satisfied} showDescription />
+          </Disclosure>
+        )}
+
+        {/* 补充信息只影响当前画像，提交后即时重算；闸门失败（截止/来源失效等）时不引导补充 */}
+        {!closed && groups.missingInfo.length > 0 && (
+          <div id="supplement" className="scroll-mt-20">
+            <SupplementForm
+              dimensions={groups.missingInfo}
+              initial={facts}
+              saving={savingFacts}
+              onSave={(next) => void handleSaveFacts(next)}
+            />
+          </div>
+        )}
+      </section>
+
+      {/* 第三段：官方原文与岗位表位置 */}
+      <OfficialSourceSection detail={detail} />
+
+      {/* 第四段：核对时间与变化 */}
+      <VerificationSection
+        detail={detail}
+        onOpenCorrection={() => {
+          setCorrectionDone(false);
+          setCorrectionOpen(true);
+        }}
+      />
+
+      {/* 第五段：我的跟进（关注 / 准备报名 / 主要备考目标） */}
       <div id="follow" className="scroll-mt-20">
         <FollowControls
           follow={unit.follow}
@@ -394,80 +517,6 @@ export default function OpportunityDetailPage() {
           }
         />
       </div>
-
-      {/* 第二层：已满足 / 待确认 / 不满足 */}
-      <section className="space-y-4">
-        <h2 className="text-base font-semibold text-slate-900">
-          逐项资格核对
-        </h2>
-
-        {groups.toConfirm.length > 0 && (
-          <div
-            id="to-confirm"
-            className="scroll-mt-20 rounded-xl border border-amber-200 bg-white"
-          >
-            <div className="border-b border-amber-100 px-4 py-2.5">
-              <LayerHeading
-                title="待确认（信息不足或需人工确认）"
-                count={groups.toConfirm.length}
-              />
-            </div>
-            <div className="px-4 py-2">
-              <ConditionRows
-                dimensions={groups.toConfirm}
-                showDescription
-              />
-            </div>
-          </div>
-        )}
-
-        {groups.unsatisfied.length > 0 && (
-          <div
-            id="unsatisfied"
-            className="scroll-mt-20 rounded-xl border border-red-200 bg-white"
-          >
-            <div className="border-b border-red-100 px-4 py-2.5">
-              <LayerHeading title="不满足" count={groups.unsatisfied.length} />
-            </div>
-            <div className="px-4 py-2">
-              <ConditionRows
-                dimensions={groups.unsatisfied}
-                showDescription
-              />
-            </div>
-          </div>
-        )}
-
-        {groups.satisfied.length > 0 && (
-          <div className="rounded-xl border border-slate-200 bg-white">
-            <div className="border-b border-slate-100 px-4 py-2.5">
-              <LayerHeading title="已满足" count={groups.satisfied.length} />
-            </div>
-            <div className="px-4 py-2">
-              <ConditionRows dimensions={groups.satisfied} showDescription />
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* 补充信息（只影响当前画像，提交后即时重算） */}
-      <div id="supplement" className="scroll-mt-20">
-        <SupplementForm
-          dimensions={groups.toConfirm}
-          initial={facts}
-          saving={savingFacts}
-          onSave={(next) => void handleSaveFacts(next)}
-        />
-      </div>
-
-      {/* 第三层：官方原文 / 证据 / 版本 / 纠错 */}
-      <EvidenceSection
-        detail={detail}
-        onOpenCorrection={() => {
-          setCorrectionDone(false);
-          setCorrectionOpen(true);
-        }}
-      />
 
       <CorrectionModal
         isOpen={correctionOpen}

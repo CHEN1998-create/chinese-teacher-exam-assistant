@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Hero } from "@/components/ia/Hero";
 import { Disclosure, LayerHeading } from "@/components/ia/Layer";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -61,7 +62,7 @@ export default function OpportunitiesPage() {
     );
   }
 
-  const view = buildListViewModel(state.data);
+  const view = buildListViewModel(state.data, state.profile);
   const evaluatedAt = view.meta.evaluatedAt;
 
   // 最近的报名截止（只在初步符合中找）：7 天内给出必须级风险提示
@@ -103,6 +104,46 @@ export default function OpportunitiesPage() {
       />
 
       <CoverageBanner coverage={view.coverage} />
+
+      {view.uncoveredRegions.length > 0 && (
+        <div
+          data-testid="uncovered-regions"
+          className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4"
+        >
+          <p className="text-sm font-semibold text-slate-700">
+            这些地区当前暂未收录官方公告
+          </p>
+          <p className="mt-1 flex flex-wrap gap-1.5 text-xs">
+            {view.uncoveredRegions.map((region) => (
+              <span
+                key={region.code}
+                className="inline-flex items-center rounded-full bg-white px-2 py-0.5 font-medium text-slate-600 ring-1 ring-slate-200"
+              >
+                {region.label}
+              </span>
+            ))}
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            暂未收录不等于当地没有招聘：可能公告尚未发布，或还没进入我们的监测范围。
+            结果是预筛而非官方资格认定，报名前请以当地教育局/人社局官网为准。
+          </p>
+          <Link
+            href="/onboarding"
+            className="mt-2 inline-block text-xs font-medium text-blue-700 underline underline-offset-2"
+          >
+            修改画像地区
+          </Link>
+        </div>
+      )}
+
+      {view.emptyResult && (
+        <EmptyState
+          title="当前已核对范围内没有可展示的机会"
+          description={`已核对范围见上方监测说明（${view.coverage.scopeNote || "未覆盖地区不等于没有招聘"}）。你可以修改画像条件后重新评估，或稍后回来查看新公告。`}
+          actionLabel="修改我的画像"
+          actionHref="/onboarding"
+        />
+      )}
 
       {actionError && (
         <p
@@ -210,8 +251,30 @@ export default function OpportunitiesPage() {
         </section>
       )}
 
+      {view.regionOutOfScope.length > 0 && (
+        <Disclosure
+          title="岗位地区不在你选择的范围（不是资格不符合）"
+          count={view.regionOutOfScope.length}
+        >
+          <div className="space-y-3">
+            <p className="text-xs leading-5 text-slate-500">
+              这些岗位只是地点不在你画像勾选的可接受地区内，学历、专业等条件并未判定为不符合。
+              调整画像地区后会重新评估。
+            </p>
+            {view.regionOutOfScope.map((unit) => (
+              <OpportunityListItem
+                key={unit.unit.id}
+                unit={unit}
+                evaluatedAt={evaluatedAt}
+                regionOutOfScope
+              />
+            ))}
+          </div>
+        </Disclosure>
+      )}
+
       {view.notEligible.length > 0 && (
-        <Disclosure title="明确不符合" count={view.notEligible.length}>
+        <Disclosure title="明确不符合（资格条件本身不满足）" count={view.notEligible.length}>
           <div className="space-y-3">
             {view.notEligible.map((unit) => (
               <OpportunityListItem
@@ -224,10 +287,10 @@ export default function OpportunitiesPage() {
         </Disclosure>
       )}
 
-      {view.closed.length > 0 && (
-        <Disclosure title="已截止或不在收录范围" count={view.closed.length}>
+      {view.closedBuckets.map((bucket) => (
+        <Disclosure key={bucket.key} title={bucket.label} count={bucket.units.length}>
           <div className="space-y-3">
-            {view.closed.map((unit) => (
+            {bucket.units.map((unit) => (
               <OpportunityListItem
                 key={unit.unit.id}
                 unit={unit}
@@ -236,10 +299,10 @@ export default function OpportunitiesPage() {
             ))}
           </div>
           <p className="mt-3 text-xs text-slate-400">
-            已截止机会不进入有效推荐；公告撤回或更正会保留版本记录，可在详情中追溯。
+            该状态只表示当前不进入推荐，历史留档与官方依据仍可追溯；它不是资格不符合结论。
           </p>
         </Disclosure>
-      )}
+      ))}
     </div>
   );
 }

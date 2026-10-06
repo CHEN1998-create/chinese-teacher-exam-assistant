@@ -4,13 +4,14 @@
  * 与 v5.2 的 lib/mock-data.ts 并存：旧页面继续使用旧 seed，新领域模型只读本文件。
  * 全部示例机会均为语文学科（当前唯一开放学科），类型本身不限制学科扩展。
  *
- * 六个场景（对应 PRD 7.4 四档结果 + 时效/版本治理）：
+ * 七个场景（对应 PRD 7.4 四档结果 + 时效/版本治理/来源失效异常态）：
  * 1. hangzhou 杭州市直属初中   → 初步符合
  * 2. yinzhou 宁波鄞州岗位组    → 缺户籍，补充信息后判断
  * 3. suzhou  苏州高新区岗位组  → 专业目录歧义，建议人工确认
  * 4. nanjing 南京市直属高中    → 明确学历不符（要求硕士）
  * 5. wenzhou 温州龙湾区岗位组  → 报名已截止，不进入有效推荐
  * 6. hefei   合肥市直初中      → 补充公告产生 v2（延期+扩招），v1 保留
+ * 7. jiaxing 嘉兴市直初中      → 官方来源巡检失效（404），历史留档不进推荐
  *
  * 时间基准固定为 2026-10-04，保证测试与演示确定性。
  */
@@ -686,9 +687,95 @@ const hefei = (): RecruitmentAnnouncement => {
   };
 };
 
+// ---------- 场景 7：嘉兴 · 官方来源巡检失效（历史留档，不进推荐） ----------
+
+const JX_URL = "https://www.jiaxing.example.gov.cn/edu/2026/teacher-07";
+
+/**
+ * 报名窗口名义上仍开放，但人工巡检确认官方发布页 404（疑似撤稿或链接调整）。
+ * source_unavailable 闸门失败 → 不进推荐；公告原文锚点与核对记录保留为历史留档。
+ * 演示「来源失效」异常态：它不是过期、不是资格不符合，恢复后可重新评估。
+ */
+const jiaxing = (): RecruitmentAnnouncement => {
+  const id = "ann-jiaxing";
+  const requirements: Requirement[] = [
+    requirement(
+      "jx-edu",
+      "education",
+      "本科及以上学历",
+      { kind: "education", minLevel: "bachelor" },
+      JX_URL,
+      "具有大学本科及以上学历。",
+    ),
+    requirement(
+      "jx-major",
+      "major",
+      "汉语言文学、汉语言文学（师范）专业",
+      { kind: "major", majorNames: ["汉语言文学", "汉语言文学（师范）"] },
+      JX_URL,
+      "初中语文岗位专业：汉语言文学、汉语言文学（师范）。",
+    ),
+    requirement(
+      "jx-cert",
+      "teacher_cert",
+      "具有初中语文教师资格证",
+      { kind: "teacher_cert", subject: "chinese", stage: "middle", acceptInProgress: false },
+      JX_URL,
+      "须具有初中语文教师资格证书。",
+    ),
+  ];
+  const units = [
+    unit(`${id}-v1`, id, {
+      id: "unit-jiaxing-01",
+      code: "JX-CW-01",
+      name: "嘉兴市教育局直属初中·语文岗位组",
+      region: { code: "330400", province: "浙江省", city: "嘉兴市" },
+      stage: "middle",
+      headcount: 6,
+      nature: NATURE_PUBLIC,
+      allocation: ALLOC_ASSIGN,
+      teachingScope: "嘉兴市教育局直属初中，录取后统一调配",
+      requirements,
+      registerUrl: "https://www.jiaxing.example.gov.cn/edu/2026/teacher-07-apply",
+    }),
+  ];
+  return {
+    id,
+    title: "2026年嘉兴市教育局直属学校公开招聘教师公告（来源巡检失效）",
+    publisher: "嘉兴市教育局",
+    organizationType: "government_unified",
+    officialUrl: JX_URL,
+    subjectScope: ["chinese"],
+    region: { code: "330000", province: "浙江省" },
+    lifecycle: "active",
+    firstPublishedAt: "2026-09-25T09:00:00+08:00",
+    versions: [
+      version(
+        id,
+        1,
+        "original",
+        "2026-09-25T09:00:00+08:00",
+        JX_URL,
+        {
+          registrationStart: "2026-10-01",
+          registrationEnd: "2026-10-20",
+          writtenExamDate: "2026-11-08",
+        },
+        units,
+      ),
+    ],
+    // 人工巡检确认的故障（非网络抖动）：来源恢复并复核前不进入推荐，历史留档保留
+    sourceHealth: {
+      ok: false,
+      checkedAt: "2026-10-04T09:00:00+08:00",
+      failReason: "官方发布页返回 404，疑似撤稿或链接调整",
+    },
+  };
+};
+
 // ---------- 导出 ----------
 
-/** 六个演示场景公告（顺序固定，测试依赖该顺序） */
+/** 七个演示场景公告（顺序固定，测试依赖该顺序） */
 export const V61_SEED_ANNOUNCEMENTS: RecruitmentAnnouncement[] = [
   hangzhou(),
   yinzhou(),
@@ -696,6 +783,7 @@ export const V61_SEED_ANNOUNCEMENTS: RecruitmentAnnouncement[] = [
   nanjing(),
   wenzhou(),
   hefei(),
+  jiaxing(),
 ];
 
 /** 场景 id 常量，避免测试中写魔法字符串 */
@@ -706,4 +794,5 @@ export const V61_SCENARIO_IDS = {
   educationFail: "ann-nanjing",
   closed: "ann-wenzhou",
   supplemented: "ann-hefei",
+  sourceUnavailable: "ann-jiaxing",
 } as const;

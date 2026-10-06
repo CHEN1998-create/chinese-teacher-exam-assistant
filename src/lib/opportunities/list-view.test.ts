@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { MatchResponse, UnitMatchDTO } from "./api-types";
-import { buildListViewModel, formatEvaluatedAt } from "./list-view";
+import type { UserRecruitmentProfile } from "@/lib/profile/types";
+import {
+  buildListViewModel,
+  formatEvaluatedAt,
+  listCardNextStepLabel,
+} from "./list-view";
 
 function makeUnit(
   unitId: string,
@@ -269,5 +274,146 @@ describe("buildListViewModel：四类结果的列表叙事", () => {
     expect(view.closed.map((u) => u.unit.id)).toEqual(["unit-wenzhou-01"]);
     expect(view.validCount).toBe(0);
     expect(view.coverage.openOpportunityCount).toBe(0);
+  });
+});
+
+describe("buildListViewModel：模块 5 异常态与地区分流", () => {
+  function profileWith(regions: UserRecruitmentProfile["regions"]) {
+    return { regions } as UserRecruitmentProfile;
+  }
+
+  it("仅地区维度 FAIL 的单元进入 regionOutOfScope，不留在明确不符合（缺信息不算不符合）", () => {
+    const regionOnly = makeUnit("unit-guangzhou-01", "not_eligible", {
+      dimensions: [
+        {
+          requirementId: "req-region",
+          dimension: "region",
+          value: "FAIL",
+          reason: "岗位在广东，画像未选广东",
+          hard: true,
+        },
+      ],
+    });
+    const hardFail = makeUnit("unit-nanjing-01", "not_eligible", {
+      dimensions: [
+        {
+          requirementId: "req-edu",
+          dimension: "education",
+          value: "FAIL",
+          reason: "要求硕士",
+          hard: true,
+        },
+        {
+          requirementId: "req-region",
+          dimension: "region",
+          value: "FAIL",
+          reason: "地区也不匹配",
+          hard: true,
+        },
+      ],
+    });
+    const response = makeResponse({} as never);
+    response.groups.notEligible = [regionOnly, hardFail];
+
+    const view = buildListViewModel(response);
+    expect(view.regionOutOfScope.map((u) => u.unit.id)).toEqual([
+      "unit-guangzhou-01",
+    ]);
+    expect(view.notEligible.map((u) => u.unit.id)).toEqual(["unit-nanjing-01"]);
+  });
+
+  it("暂未收录：画像省级地区无任何岗位/监测覆盖时给出提示，但不产生任何不符合结论", () => {
+    const response = makeResponse({
+      hangzhou: makeUnit("unit-hangzhou-01", "preliminary_eligible"),
+    });
+    const view = buildListViewModel(
+      response,
+      profileWith([
+        { code: "330000", province: "浙江省", level: "required" },
+        { code: "440000", province: "广东省", level: "consider" },
+      ]),
+    );
+    expect(view.uncoveredRegions).toEqual([
+      { code: "440000", label: "广东省" },
+    ]);
+  });
+
+  it("四档全空且 closed 也为空时 emptyResult=true；有留档记录时不算空结果", () => {
+    const empty = makeResponse({} as never);
+    expect(buildListViewModel(empty).emptyResult).toBe(true);
+
+    const withClosed = makeResponse({} as never);
+    withClosed.groups.closed = [
+      makeUnit("unit-wenzhou-01", "preliminary_eligible", {
+        gates: [
+          { code: "subject_not_open", passed: true, reason: "" },
+          { code: "registration_closed", passed: false, reason: "已截止" },
+          { code: "out_of_scope_nature", passed: true, reason: "" },
+          { code: "announcement_withdrawn", passed: true, reason: "" },
+          { code: "no_official_source", passed: true, reason: "" },
+        ],
+      }),
+    ];
+    expect(buildListViewModel(withClosed).emptyResult).toBe(false);
+  });
+
+  it("closedBuckets：截止进 expired 桶，来源失效进 source 桶", () => {
+    const expired = makeUnit("unit-wenzhou-01", "preliminary_eligible", {
+      gates: [
+        { code: "subject_not_open", passed: true, reason: "" },
+        { code: "registration_closed", passed: false, reason: "已截止" },
+        { code: "out_of_scope_nature", passed: true, reason: "" },
+        { code: "announcement_withdrawn", passed: true, reason: "" },
+        { code: "no_official_source", passed: true, reason: "" },
+      ],
+    });
+    const sourceLost = makeUnit("unit-jiaxing-01", "preliminary_eligible", {
+      gates: [
+        { code: "subject_not_open", passed: true, reason: "" },
+        { code: "registration_closed", passed: true, reason: "" },
+        { code: "out_of_scope_nature", passed: true, reason: "" },
+        { code: "announcement_withdrawn", passed: true, reason: "" },
+        {
+          code: "source_unavailable",
+          passed: false,
+          reason: "官方来源最近巡检不可用（404）",
+        },
+        { code: "no_official_source", passed: true, reason: "" },
+      ],
+    });
+    const response = makeResponse({} as never);
+    response.groups.closed = [expired, sourceLost];
+    const view = buildListViewModel(response);
+    const keys = view.closedBuckets.map((b) => b.key);
+    expect(keys).toContain("expired");
+    expect(keys).toContain("source");
+    expect(
+      view.closedBuckets.find((b) => b.key === "source")?.units[0]?.unit.id,
+    ).toBe("unit-jiaxing-01");
+  });
+
+  it("listCardNextStepLabel：四档与闸门态各给一个下一步文案", () => {
+    expect(
+      listCardNextStepLabel(makeUnit("u1", "preliminary_eligible")),
+    ).toBe("查看依据并关注");
+    expect(listCardNextStepLabel(makeUnit("u2", "need_more_info"))).toBe(
+      "查看要补充的信息",
+    );
+    expect(listCardNextStepLabel(makeUnit("u3", "manual_review"))).toBe(
+      "查看确认要点",
+    );
+    expect(listCardNextStepLabel(makeUnit("u4", "not_eligible"))).toBe(
+      "查看不符合原因",
+    );
+    const closed = makeUnit("u5", "preliminary_eligible", {
+      gates: [
+        { code: "subject_not_open", passed: true, reason: "" },
+        { code: "registration_closed", passed: false, reason: "已截止" },
+        { code: "out_of_scope_nature", passed: true, reason: "" },
+        { code: "announcement_withdrawn", passed: true, reason: "" },
+        { code: "no_official_source", passed: true, reason: "" },
+      ],
+    });
+    expect(listCardNextStepLabel(closed)).toContain("公告");
   });
 });

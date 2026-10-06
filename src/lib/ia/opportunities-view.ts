@@ -24,6 +24,12 @@ import {
 } from "@/lib/matching/domain";
 import { isRegistrationOpen } from "@/lib/announcements/domain";
 import {
+  bucketClosedUnits,
+  gateStateMeta,
+  primaryFailedGate,
+  type ClosedBucketKey,
+} from "@/lib/gate-states";
+import {
   dateWithWeekday,
   daysUntil,
   deadlineText,
@@ -37,7 +43,16 @@ import {
 export interface DimensionView {
   label: string;
   value: MatchDimensionResult["value"];
+  /** 公告对该条件的原文表述（官方事实）；地区维度为 null */
+  officialRequirement: string | null;
+  /** 系统按画像给出的预筛判断（推断，不是官方结论） */
   reason: string;
+}
+
+export interface ClosedBucketView {
+  key: ClosedBucketKey;
+  label: string;
+  rows: OpportunityRow[];
 }
 
 export interface OpportunityRow {
@@ -60,7 +75,9 @@ export interface OpportunityRow {
   registrationClosed: boolean;
   /** 一句话依据 */
   oneLineReason: string;
-  /** 闸门失败原因（已截止/未收录等；为空表示闸门全过） */
+  /** 主异常闸门 code（无失败闸门为 null） */
+  gateCode: string | null;
+  /** 闸门失败原因（已截止/来源失效等；为空表示闸门全过） */
   gateReason: string | null;
   /** 逐项条件（第二层展开用） */
   dimensions: DimensionView[];
@@ -101,14 +118,24 @@ export interface OpportunitiesView {
   manualReview: OpportunityRow[];
   /** 闸门通过但总体明确不符合 */
   notEligible: OpportunityRow[];
-  /** 闸门失败（已截止等），不进主要推荐但保留原因可查 */
+  /** 仅因岗位地区不在画像可接受范围而未推荐（不是资格不符合） */
+  regionOutOfScope: OpportunityRow[];
+  /** 闸门失败（已截止/来源失效等），不进主要推荐但保留原因可查 */
   closed: OpportunityRow[];
+  /** closed 按异常态（来源失效/过期/待复核…）的稳定分桶 */
+  closedBuckets: ClosedBucketView[];
+  /** 画像中当前没有任何公告覆盖的地区（暂未收录 ≠ 没有招聘） */
+  uncoveredRegions: { code: string; label: string }[];
 }
 
 function toRow(candidate: OpportunityCandidate, nowIso: string): OpportunityRow {
   const { announcement, version, unit, match } = candidate;
-  const closedGate = match.gates.find((g) => !g.passed) ?? null;
+  const primaryGate = primaryFailedGate(match.gates);
   const deadline = deadlineText(version.timeline.registrationEnd, nowIso);
+  const requirementText = (requirementId: string): string | null => {
+    if (requirementId === "region") return null;
+    return unit.requirements.find((r) => r.id === requirementId)?.description ?? null;
+  };
   return {
     unitId: unit.id,
     announcementId: announcement.id,
@@ -122,10 +149,12 @@ function toRow(candidate: OpportunityCandidate, nowIso: string): OpportunityRow 
     registrationEnd: version.timeline.registrationEnd,
     registrationClosed: deadline.closed,
     oneLineReason: match.summary,
-    gateReason: closedGate ? closedGate.reason : null,
+    gateCode: primaryGate ? primaryGate.code : null,
+    gateReason: primaryGate ? primaryGate.reason : null,
     dimensions: match.dimensions.map((d) => ({
       label: dimensionLabel(d.dimension),
       value: d.value,
+      officialRequirement: requirementText(d.requirementId),
       reason: d.reason,
     })),
     officialUrl: announcement.officialUrl,
@@ -180,9 +209,21 @@ export function buildOpportunitiesView(
   const infoDeficit = gatePassedButInvalid.filter(
     (c) => c.match.overall !== "not_eligible",
   );
-  const notEligible = gatePassedButInvalid
+  const notEligibleAll = gatePassedButInvalid
     .filter((c) => c.match.overall === "not_eligible")
     .map((c) => toRow(c, nowIso));
+  // 地区偏好不重叠与资格不符合分离（仅视图叙事，判定仍在 matching/domain.ts）
+  const isRegionOnlyMismatch = (c: OpportunityCandidate): boolean => {
+    const fails = c.match.dimensions.filter((d) => d.value === "FAIL");
+    return fails.length > 0 && fails.every((d) => d.dimension === "region");
+  };
+  const regionMismatchCandidates = gatePassedButInvalid.filter(
+    (c) => c.match.overall === "not_eligible" && isRegionOnlyMismatch(c),
+  );
+  const regionOutOfScope = regionMismatchCandidates.map((c) => toRow(c, nowIso));
+  const notEligible = notEligibleAll.filter(
+    (row) => !regionOutOfScope.some((r) => r.unitId === row.unitId),
+  );
   const needInfoGroups = groupByMissingDimension([...valid, ...infoDeficit]).map((group) => ({
     dimension: group.dimension,
     dimensionText: dimensionLabel(group.dimension),
@@ -195,6 +236,34 @@ export function buildOpportunitiesView(
   const closed = invalid
     .filter((c) => !c.match.gates.every((g) => g.passed))
     .map((c) => toRow(c, nowIso));
+  const closedBuckets = bucketClosedUnits(
+    invalid.filter((c) => !c.match.gates.every((g) => g.passed)),
+    (c) => c.match.gates,
+  ).map((bucket) => ({ ...bucket, rows: bucket.units.map((c) => toRow(c, nowIso)) }));
+
+  // 暂未收录：画像地区在全部演示公告中均无同前缀岗位（真实监测覆盖由
+  // preview 页另用 GUEST_COVERAGE 声明，访客视图模型只基于本批公告判定）。
+  // 省级画像（330000）可被省内任意城市岗位覆盖；市级画像只认同城前缀。
+  const regionPrefixesOf = (code: string): string[] =>
+    code.slice(2, 4) === "00"
+      ? [code.slice(0, 2)]
+      : [code.slice(0, 4), code.slice(0, 2)];
+  const coveredPrefixes = new Set<string>();
+  for (const a of announcements)
+    for (const prefix of regionPrefixesOf(a.region.code))
+      coveredPrefixes.add(prefix);
+  const uncoveredRegions: { code: string; label: string }[] = [];
+  const seenRegionCodes = new Set<string>();
+  for (const pref of profile.regions) {
+    if (seenRegionCodes.has(pref.code)) continue;
+    seenRegionCodes.add(pref.code);
+    if (regionPrefixesOf(pref.code).some((prefix) => coveredPrefixes.has(prefix)))
+      continue;
+    uncoveredRegions.push({
+      code: pref.code,
+      label: pref.city ? `${pref.province}${pref.city}` : pref.province,
+    });
+  }
 
   const preliminaryRows = preliminary.map((c) => toRow(c, nowIso));
   const priority = preliminaryRows[0]
@@ -227,8 +296,45 @@ export function buildOpportunitiesView(
     needInfoGroups,
     manualReview,
     notEligible,
+    regionOutOfScope,
     closed,
+    closedBuckets,
+    uncoveredRegions,
   };
+}
+
+/** 卡片「一个下一步」类型（具体 href 由页面/组件映射：登录落点在 previewEngine） */
+export type GuestCardNextStepKind = "login" | "onboarding" | "official" | "expand";
+
+export interface GuestCardNextStep {
+  kind: GuestCardNextStepKind;
+  label: string;
+}
+
+/**
+ * 每张访客卡唯一的高强调下一步（长证据仍可单独按需展开）。
+ * “展开看依据”不算下一步；异常态只给官方留档出口，不出现报名/关注动作。
+ */
+export function guestCardNextStep(row: OpportunityRow): GuestCardNextStep {
+  if (row.gateCode) {
+    return { kind: "official", label: gateStateMeta(row.gateCode).cardAction };
+  }
+  switch (row.status) {
+    case "preliminary_eligible":
+      return { kind: "login", label: "关注并登录后保存" };
+    case "need_more_info":
+      return { kind: "onboarding", label: "补充信息后判断" };
+    case "manual_review":
+      return { kind: "expand", label: "查看确认要点" };
+    case "not_eligible": {
+      const fails = row.dimensions.filter((d) => d.value === "FAIL");
+      const regionOnly = fails.length > 0 && fails.every((d) => d.label === "地区意向");
+      return {
+        kind: "expand",
+        label: regionOnly ? "查看地区范围说明" : "查看不符合原因",
+      };
+    }
+  }
 }
 
 /** 报名是否仍在进行（页面按钮可用性判断，复用公告域规则） */

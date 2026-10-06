@@ -9,8 +9,10 @@ import {
   regionLabel,
   stageLabel,
 } from "@/lib/ia/labels";
-import { ClosedTag, MatchStatusTag } from "@/components/ia/MatchStatusTag";
+import { GateTag, MatchStatusTag } from "@/components/ia/MatchStatusTag";
+import { primaryFailedGate } from "@/lib/gate-states";
 import type { UnitMatchDTO } from "@/lib/opportunities/api-types";
+import { listCardNextStepLabel } from "@/lib/opportunities/list-view";
 import {
   FOLLOW_STATUS_LABELS,
   STUDY_TARGET_ROLE_LABELS,
@@ -26,12 +28,17 @@ interface OpportunityListItemProps {
   /** 关注/取消关注（卡片上的快捷操作）；缺省时只展示关注状态 */
   onToggleFollow?: (unit: UnitMatchDTO) => void;
   followBusy?: boolean;
+  /**
+   * 展示在「岗位地区不在你选择的范围」分区：overall 虽为 not_eligible，
+   * 但仅地区偏好不重叠，不能显示红色「明确不符合」标签。
+   */
+  regionOutOfScope?: boolean;
 }
 
 /**
- * 机会列表卡片：第 1 层摘要（地区/单元/状态/截止/一句话依据）+
- * 展开后的条件核对简版；完整三层结构在详情页。
- * 标题与“查看详情”均跳转详情，不嵌套交互元素。
+ * 登录态机会列表卡片（模块 5：首层七要素 + 一个下一步）。
+ * 主行动始终是「进详情完成下一步」（文案说明进去做什么），
+ * 关注与展开条件降为次级文本操作；闸门失败时显示具体异常态名称与原因。
  */
 export function OpportunityListItem({
   unit,
@@ -40,10 +47,11 @@ export function OpportunityListItem({
   defaultExpanded = false,
   onToggleFollow,
   followBusy = false,
+  regionOutOfScope = false,
 }: OpportunityListItemProps) {
   const panelId = useId();
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const closedGate = unit.gates.find((g) => !g.passed);
+  const closedGate = primaryFailedGate(unit.gates);
   const deadline = deadlineText(
     unit.version.timeline.registrationEnd,
     evaluatedAt,
@@ -54,14 +62,14 @@ export function OpportunityListItem({
     <article
       className={cn(
         "rounded-xl border bg-white",
-        priority ? "border-blue-300" : "border-slate-200",
+        priority ? "border-blue-300 ring-1 ring-blue-100" : "border-slate-200",
       )}
     >
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
           <Link
             href={`/opportunities/${unit.unit.id}`}
-            className="min-w-0 text-sm font-semibold text-slate-900 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 rounded"
+            className="min-w-0 rounded text-sm font-semibold text-slate-900 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
           >
             <span className="font-normal text-slate-500">
               {regionLabel(unit.unit.region)}
@@ -71,7 +79,21 @@ export function OpportunityListItem({
             </span>
             <span className="break-words">{unit.unit.name}</span>
           </Link>
-          {closedGate ? <ClosedTag /> : <MatchStatusTag status={unit.overall} />}
+          {closedGate ? (
+            <GateTag code={closedGate.code} />
+          ) : regionOutOfScope ? (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-slate-600">
+              <span
+                aria-hidden="true"
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-400 text-[10px] font-bold text-white"
+              >
+                ◌
+              </span>
+              地区不在选择范围
+            </span>
+          ) : (
+            <MatchStatusTag status={unit.overall} />
+          )}
         </div>
 
         <p className="mt-2 text-sm text-slate-600">
@@ -85,11 +107,17 @@ export function OpportunityListItem({
             closedGate || deadline.closed ? "text-slate-400" : "text-slate-600",
           )}
         >
-          {closedGate ? closedGate.reason : `报名${deadline.text}`}
+          报名{deadline.text}
         </p>
 
-        <p className="mt-2 line-clamp-2 text-sm text-slate-500">
-          {unit.summary}
+        {/* 一条关键依据或风险：闸门失败时优先显示异常原因 */}
+        <p
+          className={cn(
+            "mt-2 text-sm leading-6",
+            closedGate ? "font-medium text-red-700" : "text-slate-600",
+          )}
+        >
+          {closedGate ? closedGate.reason : unit.summary}
         </p>
 
         {unit.announcement.dataset === "real" && (
@@ -137,13 +165,30 @@ export function OpportunityListItem({
           </p>
         )}
 
-        <div className="mt-3 flex items-center justify-between">
+        {/* 一个下一步（主样式，进详情完成）+ 关注/展开（次级文本） */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Link
+            href={`/opportunities/${unit.unit.id}`}
+            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            {listCardNextStepLabel(unit)}
+          </Link>
+          {onToggleFollow && (
+            <button
+              type="button"
+              onClick={() => onToggleFollow(unit)}
+              disabled={followBusy}
+              className="text-xs font-medium text-slate-600 underline underline-offset-2 hover:text-blue-700 disabled:opacity-50"
+            >
+              {follow ? "取消关注" : "关注"}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
             aria-expanded={expanded}
             aria-controls={panelId}
-            className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 rounded"
+            className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
           >
             {expanded ? "收起条件核对" : "展开条件核对"}
             <svg
@@ -164,24 +209,6 @@ export function OpportunityListItem({
               />
             </svg>
           </button>
-          <div className="flex items-center gap-3">
-            {onToggleFollow && (
-              <button
-                type="button"
-                onClick={() => onToggleFollow(unit)}
-                disabled={followBusy}
-                className="text-xs font-medium text-slate-600 hover:text-blue-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 rounded"
-              >
-                {follow ? "取消关注" : "关注"}
-              </button>
-            )}
-            <Link
-              href={`/opportunities/${unit.unit.id}`}
-              className="text-xs font-medium text-blue-700 hover:text-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 rounded"
-            >
-              查看详情
-            </Link>
-          </div>
         </div>
       </div>
 

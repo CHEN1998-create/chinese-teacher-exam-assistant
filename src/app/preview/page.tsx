@@ -188,6 +188,68 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
     });
   };
 
+  // 留档分区：即使没有有效机会（空态），地区不重叠/明确不符合/异常桶仍可追溯，
+  // 不能因为无优先机会就把这些记录藏掉。
+  const archiveSections = (
+    <>
+      {view.regionOutOfScope.length > 0 && (
+        <Disclosure
+          title="岗位地区不在你选择的范围（不是资格不符合）"
+          count={view.regionOutOfScope.length}
+        >
+          <div className="space-y-3">
+            <p className="text-xs leading-5 text-slate-500">
+              这些岗位只是地点不在你勾选的可接受地区内，其他条件没有被判为不符合；
+              修改画像地区后会重新评估。
+            </p>
+            {view.regionOutOfScope.map((row) => (
+              <OpportunityCard
+                key={row.unitId}
+                row={row}
+                regionOutOfScope
+                expanded={openIds.has(row.unitId)}
+                onToggle={() => toggleRow(row.unitId)}
+              />
+            ))}
+          </div>
+        </Disclosure>
+      )}
+
+      {view.notEligible.length > 0 && (
+        <Disclosure title="明确不符合（资格条件本身不满足）" count={view.notEligible.length}>
+          <div className="space-y-3">
+            {view.notEligible.map((row) => (
+              <OpportunityCard
+                key={row.unitId}
+                row={row}
+                expanded={openIds.has(row.unitId)}
+                onToggle={() => toggleRow(row.unitId)}
+              />
+            ))}
+          </div>
+        </Disclosure>
+      )}
+
+      {view.closedBuckets.map((bucket) => (
+        <Disclosure key={bucket.key} title={bucket.label} count={bucket.rows.length}>
+          <div className="space-y-3">
+            {bucket.rows.map((row) => (
+              <OpportunityCard
+                key={row.unitId}
+                row={row}
+                expanded={openIds.has(row.unitId)}
+                onToggle={() => toggleRow(row.unitId)}
+              />
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            该状态只表示当前不进入推荐，历史留档仍可追溯；它不是资格不符合结论。
+          </p>
+        </Disclosure>
+      ))}
+    </>
+  );
+
   // 空数据：画像完整但已覆盖公告中没有可考虑机会
   if (!view.priority) {
     const missingRegion = limitations.some((item) => item.step === 1);
@@ -196,6 +258,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-slate-50">
         <div className="mx-auto max-w-2xl space-y-4 py-6 px-4">
           <p className="text-xs text-slate-500">{formatCoverageLine()}</p>
+          <UncoveredRegionsCard regionLabels={view.uncoveredRegions.map((r) => r.label)} />
           {missingRegion && (
             <Card className="border-amber-200 bg-amber-50/70" data-testid="missing-region-notice">
               <h2 className="text-sm font-semibold text-amber-900">
@@ -225,6 +288,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             actionHref="/onboarding"
           />
           <LimitationsCard limitations={limitations} />
+          {archiveSections}
         </div>
       </div>
     );
@@ -254,6 +318,11 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
 
         {/* 最低必要信息缺失导致的结果限制（用户选择过「暂不提供」） */}
         <LimitationsCard limitations={limitations} />
+
+        {/* 画像地区暂未收录：暂未收录 ≠ 当地没有招聘 */}
+        <UncoveredRegionsCard
+          regionLabels={view.uncoveredRegions.map((region) => region.label)}
+        />
 
         {/* 优先机会：首屏可见，默认展开依据 */}
         <div id="priority-opportunity" className="space-y-2">
@@ -328,36 +397,8 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
           </section>
         )}
 
-        {/* 明确不符合 / 已截止：默认收起，原因可查 */}
-        {view.notEligible.length > 0 && (
-          <Disclosure title="明确不符合" count={view.notEligible.length}>
-            <div className="space-y-3">
-              {view.notEligible.map((row) => (
-                <OpportunityCard
-                  key={row.unitId}
-                  row={row}
-                  expanded={openIds.has(row.unitId)}
-                  onToggle={() => toggleRow(row.unitId)}
-                />
-              ))}
-            </div>
-          </Disclosure>
-        )}
-
-        {view.closed.length > 0 && (
-          <Disclosure title="已截止或不在收录范围" count={view.closed.length}>
-            <div className="space-y-3">
-              {view.closed.map((row) => (
-                <OpportunityCard
-                  key={row.unitId}
-                  row={row}
-                  expanded={openIds.has(row.unitId)}
-                  onToggle={() => toggleRow(row.unitId)}
-                />
-              ))}
-            </div>
-          </Disclosure>
-        )}
+        {/* 留档分区：仅地区不重叠 / 明确不符合 / 异常态分桶 */}
+        {archiveSections}
 
         <p className="text-center text-xs text-slate-400">
           初步匹配结果不等于保证可以报名，最终资格以招聘单位审核为准。
@@ -369,6 +410,33 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/* ================== 画像地区暂未收录提示 ================== */
+
+function UncoveredRegionsCard({ regionLabels }: { regionLabels: string[] }) {
+  if (regionLabels.length === 0) return null;
+  return (
+    <section
+      data-testid="uncovered-regions"
+      className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-3"
+    >
+      <h2 className="text-sm font-semibold text-slate-700">
+        这些地区当前暂未收录官方公告
+      </h2>
+      <p className="mt-1 text-xs text-slate-600">{regionLabels.join("、")}</p>
+      <p className="mt-1.5 text-xs leading-5 text-slate-500">
+        暂未收录不等于当地没有招聘：可能公告尚未发布，或还没进入演示数据的覆盖范围。
+        结果是预筛而非官方资格认定，报名前请以当地教育局/人社局官网为准。
+      </p>
+      <Link
+        href="/onboarding"
+        className="mt-2 inline-block text-xs font-medium text-blue-700 underline underline-offset-2"
+      >
+        修改画像地区
+      </Link>
+    </section>
   );
 }
 

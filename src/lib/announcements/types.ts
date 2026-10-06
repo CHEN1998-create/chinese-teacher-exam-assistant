@@ -248,6 +248,19 @@ export type AnnouncementLifecycle =
   | "active" // 在招或后续节点未结束
   | "withdrawn"; // 取消/失效（经官方确认）
 
+/**
+ * 官方来源巡检健康度（镜像后端 SourceHealth）。
+ * 只记录人工巡检确认的故障（404/撤稿/域名失效）；网络抖动不登记。
+ * 缺省视为正常；ok=false 时 source_unavailable 闸门失败、不进推荐，历史留档保留。
+ */
+export interface SourceHealth {
+  ok: boolean;
+  /** 巡检时间 ISO */
+  checkedAt: string;
+  /** 故障现象（如「官方发布页返回 404」） */
+  failReason?: string | null;
+}
+
 /** 一次官方公开招聘活动 */
 export interface RecruitmentAnnouncement {
   id: string;
@@ -271,4 +284,6 @@ export interface RecruitmentAnnouncement {
   supplementOfAnnouncementId?: string;
   /** 版本链（按 versionNumber 升序，不可变追加） */
   versions: AnnouncementVersion[];
+  /** 官方来源巡检健康度；缺省视为正常（未登记异常） */
+  sourceHealth?: SourceHealth;
 }

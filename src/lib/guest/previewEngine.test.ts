@@ -119,8 +119,20 @@ describe("buildGuestPreview：未填写条件只能 UNKNOWN，绝不判不符合
     const wenzhou = r.view.closed.find((row) => row.unitId === "unit-wenzhou-01");
     expect(wenzhou).toBeDefined();
     expect(wenzhou!.gateReason).toContain("截止");
-    // 有效机会 = 杭州、合肥（初步符合）+ 鄞州（补信息）+ 苏州（人工确认），已截止不计入
+    // 有效机会 = 杭州、合肥（初步符合）+ 鄞州（补信息）+ 苏州（人工确认），已截止/来源失效不计入
     expect(r.view.validCount).toBe(4);
+  });
+
+  it("嘉兴来源失效：不进入有效推荐，闸门原因可查且与已截止分桶", () => {
+    const r = ready();
+    const jiaxing = r.view.closed.find((row) => row.unitId === "unit-jiaxing-01");
+    expect(jiaxing).toBeDefined();
+    expect(jiaxing!.gateCode).toBe("source_unavailable");
+    expect(jiaxing!.gateReason).toContain("404");
+    const sourceBucket = r.view.closedBuckets.find((b) => b.key === "source");
+    expect(sourceBucket?.rows.some((row) => row.unitId === "unit-jiaxing-01")).toBe(true);
+    const expiredBucket = r.view.closedBuckets.find((b) => b.key === "expired");
+    expect(expiredBucket?.rows.some((row) => row.unitId === "unit-wenzhou-01")).toBe(true);
   });
 });
 
@@ -140,7 +152,7 @@ describe("buildGuestPreview：返回修改后重新计算（纯函数确定性�
     ).toBe(false);
   });
 
-  it("去掉浙江地区：杭州因地区硬边界不再推荐，江苏/安徽机会不受影响", () => {
+  it("去掉浙江地区：杭州/鄞州因地区硬边界进入「地区不重叠」，不判资格不符合；江苏/安徽机会不受影响", () => {
     const draft = completeDraft({
       regions: [{ code: "320000", province: "江苏省", level: "required" }],
     });
@@ -148,10 +160,16 @@ describe("buildGuestPreview：返回修改后重新计算（纯函数确定性�
     expect(
       r.view.preliminary.some((row) => row.unitId === "unit-hangzhou-01"),
     ).toBe(false);
-    // 宁波鄞州也随浙江地区一起被过滤（地区 FAIL，闸门外失效）
+    // 宁波鄞州也随浙江地区一起被过滤（地区 FAIL，闸门外失效）：
+    // 模块 5 起与「明确不符合」分离，进入「不在你填写的地区范围」
+    expect(
+      r.view.regionOutOfScope.some((row) => row.announcementId === V61_SCENARIO_IDS.needHukou),
+    ).toBe(true);
     expect(
       r.view.notEligible.some((row) => row.announcementId === V61_SCENARIO_IDS.needHukou),
-    ).toBe(true);
+    ).toBe(false);
+    // 广东之外：画像地区之外的浙江省份不算「收录覆盖」， uncovered 不涉及（江苏有岗位）
+    expect(r.view.uncoveredRegions).toEqual([]);
   });
 
   it("同一草稿多次计算结果一致（返回修改前后可稳定复算）", () => {

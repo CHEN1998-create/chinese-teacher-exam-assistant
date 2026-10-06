@@ -1,14 +1,19 @@
 "use client";
 
 import { useId } from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { DimensionView, OpportunityRow } from "@/lib/ia/opportunities-view";
-import { MatchStatusTag, ClosedTag } from "./MatchStatusTag";
+import { guestCardNextStep } from "@/lib/ia/opportunities-view";
+import { GUEST_FOLLOW_LOGIN_HREF } from "@/lib/guest/previewEngine";
+import { GateTag, MatchStatusTag } from "./MatchStatusTag";
 
 /**
- * 机会卡（IA 第 4.1 节内容预算：最多 6 项 + 1 个行动）：
- * 地区/报考单元 · 用工性质/学段 · 招聘人数 · 匹配状态（文字）· 截止时间 · 一句话依据。
- * 第二、三层在同一卡内渐进展开，不做 card 套 card；无阴影，仅靠边框分区。
+ * 访客机会卡（模块 5 信息层级：首层七要素 + 一个下一步）：
+ * 报考单元 · 用工性质/学段 · 人数 · 截止时间 · 四档/闸门状态 ·
+ * 一条关键依据或风险 · 一个下一步。长证据（逐项条件、官方来源）按需展开。
+ * 整张卡不再是一个大按钮：主行动由 guestCardNextStep 唯一决定，
+ * 展开/收起只是次级文本操作。
  */
 
 const DIMENSION_VALUE_META: Record<
@@ -21,93 +26,184 @@ const DIMENSION_VALUE_META: Record<
   FAIL: { text: "不满足", symbol: "×", className: "text-red-700" },
 };
 
+const PRIMARY_ACTION_CLASS =
+  "inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
+
 interface OpportunityCardProps {
   row: OpportunityRow;
   expanded: boolean;
   onToggle: () => void;
   priority?: boolean;
+  /**
+   * 展示在「岗位地区不在你选择的范围」分区：这些单元 overall 仍是 not_eligible，
+   * 但语义上只是地区偏好不重叠，不能显示红色「明确不符合」标签。
+   */
+  regionOutOfScope?: boolean;
 }
 
-export function OpportunityCard({ row, expanded, onToggle, priority = false }: OpportunityCardProps) {
+export function OpportunityCard({ row, expanded, onToggle, priority = false, regionOutOfScope = false }: OpportunityCardProps) {
   const panelId = useId();
-  const closed = row.gateReason !== null;
+  const closed = row.gateCode !== null;
+  const step = guestCardNextStep(row);
+
+  const primaryAction = (() => {
+    if (step.kind === "login") {
+      return (
+        <Link href={GUEST_FOLLOW_LOGIN_HREF} className={PRIMARY_ACTION_CLASS}>
+          {step.label}
+        </Link>
+      );
+    }
+    if (step.kind === "onboarding") {
+      return (
+        <Link href="/onboarding" className={PRIMARY_ACTION_CLASS}>
+          {step.label}
+        </Link>
+      );
+    }
+    if (step.kind === "official") {
+      return (
+        <a
+          href={row.officialUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={PRIMARY_ACTION_CLASS}
+        >
+          {step.label}
+        </a>
+      );
+    }
+    return (
+      <button type="button" onClick={onToggle} className={PRIMARY_ACTION_CLASS}>
+        {step.label}
+      </button>
+    );
+  })();
 
   return (
     <article
       className={cn(
         "rounded-xl border bg-white",
-        priority ? "border-blue-300" : "border-slate-200",
+        priority ? "border-blue-300 ring-1 ring-blue-100" : "border-slate-200",
       )}
     >
       <h3 className="sr-only">{row.unitName}</h3>
 
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={expanded}
-        aria-controls={panelId}
-        className="block w-full p-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 rounded-t-xl"
-      >
-        {/* 第 1 行：地区 + 状态（均有文字） */}
+      <div className="p-4">
+        {/* 报考单元 + 状态 */}
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 text-sm font-semibold text-slate-900">
-            <span className="text-slate-500 font-normal">{row.regionText}</span>
+            <span className="font-normal text-slate-500">{row.regionText}</span>
             <span className="mx-1.5 text-slate-300" aria-hidden="true">|</span>
             <span className="break-words">{row.unitName}</span>
           </p>
-          {closed ? <ClosedTag /> : <MatchStatusTag status={row.status} />}
+          {closed && row.gateCode ? (
+            <GateTag code={row.gateCode} />
+          ) : regionOutOfScope ? (
+            <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-medium text-slate-600">
+              <span
+                aria-hidden="true"
+                className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-slate-400 text-[10px] font-bold text-white"
+              >
+                ◌
+              </span>
+              地区不在选择范围
+            </span>
+          ) : (
+            <MatchStatusTag status={row.status} />
+          )}
         </div>
 
-        {/* 第 2 行：用工性质/学段 · 招聘人数 */}
+        {/* 用工性质/学段 · 人数 */}
         <p className="mt-2 text-sm text-slate-600">
           {row.natureText} · {row.stageText} · 招 {row.headcount} 人
         </p>
 
-        {/* 第 3 行：截止时间 / 闸门原因 */}
-        <p className={cn("mt-1 text-sm", row.registrationClosed ? "text-slate-400" : "text-slate-600")}>
-          {closed ? row.gateReason : `报名${row.deadline}`}
+        {/* 截止时间 */}
+        <p className={cn("mt-1 text-sm", closed ? "text-slate-400" : "text-slate-600")}>
+          报名{row.deadline}
         </p>
 
-        {/* 第 4 行：一句话依据 */}
-        <p className="mt-2 text-sm text-slate-500 line-clamp-2">{row.oneLineReason}</p>
+        {/* 一条关键依据或风险 */}
+        <p
+          className={cn(
+            "mt-2 text-sm leading-6",
+            closed ? "font-medium text-red-700" : "text-slate-600",
+          )}
+        >
+          {closed ? row.gateReason : row.oneLineReason}
+        </p>
 
-        <p className="mt-2 flex items-center gap-1 text-xs font-medium text-blue-700">
-          {expanded ? "收起依据" : "查看依据与下一步"}
-          <svg
-            aria-hidden="true"
-            className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")}
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
+        {/* 一个下一步 + 次级展开入口 */}
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          {primaryAction}
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            aria-controls={panelId}
+            className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-slate-700"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </p>
-      </button>
+            {expanded ? "收起长证据" : "展开长证据"}
+            <svg
+              aria-hidden="true"
+              className={cn("h-3.5 w-3.5 transition-transform", expanded && "rotate-180")}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+      </div>
 
       {expanded && (
         <div id={panelId} className="border-t border-slate-200 px-4 py-3">
-          {/* 第二层：逐项条件（主要依据与风险） */}
-          <p className="text-xs font-semibold text-slate-500">条件核对</p>
+          {/* 长证据 1：逐项条件，官方事实与系统判断分两栏 */}
+          <p className="text-xs font-semibold text-slate-500">条件核对（官方表述 / 系统预筛判断）</p>
           <ul className="mt-2 divide-y divide-slate-100">
             {row.dimensions.map((dim) => {
               const meta = DIMENSION_VALUE_META[dim.value];
               return (
-                <li key={`${row.unitId}-${dim.label}`} className="py-2">
+                <li key={`${row.unitId}-${dim.label}`} className="py-2.5">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-medium text-slate-700">{dim.label}</span>
-                    <span className={cn("inline-flex shrink-0 items-center gap-1 text-xs font-medium", meta.className)}>
+                    <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium", meta.className)}>
                       <span aria-hidden="true">{meta.symbol}</span>
                       {meta.text}
                     </span>
                   </div>
-                  <p className="mt-0.5 text-xs text-slate-500">{dim.reason}</p>
+                  <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                    <p className="rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700">
+                      <span className="block font-medium text-slate-500">公告怎么写（官方事实）</span>
+                      {dim.officialRequirement ?? (
+                        <span className="text-slate-400">
+                          该条件无单独原文摘录，岗位地区以岗位表对应行为准
+                        </span>
+                      )}
+                    </p>
+                    <p className="rounded-md bg-white p-2 text-xs leading-5 text-slate-600 ring-1 ring-slate-100">
+                      <span className="block font-medium text-slate-500">系统预筛判断（基于你填写的画像）</span>
+                      {dim.reason}
+                      {dim.value === "UNKNOWN" && (
+                        <span className="mt-1 block text-amber-700">
+                          缺少信息不是不符合，补充后会重新判断。
+                        </span>
+                      )}
+                      {dim.value === "MANUAL_REVIEW" && (
+                        <span className="mt-1 block text-amber-700">
+                          公告表述可能有多种解释，需招聘单位确认，系统不能自动判定。
+                        </span>
+                      )}
+                    </p>
+                  </div>
                 </li>
               );
             })}
           </ul>
 
-          {/* 第三层：完整来源与细节 */}
+          {/* 长证据 2：官方来源与核对时间 */}
           <p className="mt-3 text-xs font-semibold text-slate-500">官方来源与核对</p>
           <dl className="mt-1.5 space-y-1 text-xs text-slate-500">
             <div className="flex gap-2">
@@ -132,7 +228,9 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false }: O
               </dd>
             </div>
           </dl>
-          <p className="mt-2 text-[11px] text-slate-400">演示数据：字段以官方公告为准，正式环境以已审核发布版本为准。</p>
+          <p className="mt-2 text-[11px] text-slate-400">
+            演示示例，非在报岗位；字段以官方公告为准。初步匹配结果不等于保证可以报名，最终资格以招聘单位审核为准。
+          </p>
         </div>
       )}
     </article>

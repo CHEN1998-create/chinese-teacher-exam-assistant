@@ -287,6 +287,18 @@ export function evaluateGates(
       announcement.lifecycle === "withdrawn" ? "公告已取消或失效" : "公告处于有效状态",
   });
 
+  // 来源失效：与后端 kb-match-rules-1.2.0 同序同口径，只采信人工巡检确认的
+  // 故障（404/撤稿/域名失效），网络抖动等偶发问题不登记 ok=false。
+  const health = announcement.sourceHealth;
+  gates.push({
+    code: "source_unavailable",
+    passed: !health || health.ok,
+    reason:
+      health && !health.ok
+        ? `官方来源最近巡检不可用（${health.failReason ?? "原因未登记"}，巡检于 ${health.checkedAt}），暂不进入推荐`
+        : "官方来源巡检正常",
+  });
+
   const hasOfficial =
     version.officialSource.state === "official" &&
     (version.officialSource.locator.kind === "url"

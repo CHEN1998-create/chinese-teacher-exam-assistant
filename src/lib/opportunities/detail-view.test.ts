@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import type { DimensionDTO, FollowDTO, UnitMatchDTO } from "./api-types";
 import {
   DIMENSION_VALUE_META,
+  failedGateViews,
   failedGates,
   groupDimensions,
   nextAction,
+  primaryGate,
 } from "./detail-view";
 
 function dimension(
@@ -101,8 +103,8 @@ function follow(overrides: Partial<FollowDTO> = {}): FollowDTO {
   };
 }
 
-describe("groupDimensions：第二层三组划分", () => {
-  it("PASS → 已满足；UNKNOWN/MANUAL_REVIEW → 待确认；FAIL → 不满足", () => {
+describe("groupDimensions：第二段四组划分（信息不足与人工确认分离）", () => {
+  it("PASS → 已满足；UNKNOWN → 需要补充；MANUAL_REVIEW → 建议官方确认；FAIL → 不满足", () => {
     const groups = groupDimensions([
       dimension("education", "PASS"),
       dimension("hukou", "UNKNOWN"),
@@ -110,15 +112,25 @@ describe("groupDimensions：第二层三组划分", () => {
       dimension("degree", "FAIL"),
     ]);
     expect(groups.satisfied.map((d) => d.dimension)).toEqual(["education"]);
-    expect(groups.toConfirm.map((d) => d.dimension)).toEqual([
-      "hukou",
-      "major",
-    ]);
+    expect(groups.missingInfo.map((d) => d.dimension)).toEqual(["hukou"]);
+    expect(groups.confirmOfficial.map((d) => d.dimension)).toEqual(["major"]);
     expect(groups.unsatisfied.map((d) => d.dimension)).toEqual(["degree"]);
+  });
+
+  it("UNKNOWN 与 MANUAL_REVIEW 不再混入同一组（缺信息与歧义确认分流）", () => {
+    const groups = groupDimensions([
+      dimension("age", "UNKNOWN"),
+      dimension("hukou", "UNKNOWN"),
+      dimension("social_security", "MANUAL_REVIEW"),
+    ]);
+    expect(groups.missingInfo).toHaveLength(2);
+    expect(groups.confirmOfficial).toHaveLength(1);
+    expect(groups.unsatisfied).toHaveLength(0);
+    expect(groups.satisfied).toHaveLength(0);
   });
 });
 
-describe("failedGates：闸门失败提取", () => {
+describe("failedGates / primaryGate / failedGateViews：异常态", () => {
   it("只返回未通过的闸门", () => {
     const failed = failedGates([
       { code: "subject_not_open", passed: true, reason: "" },
@@ -126,6 +138,24 @@ describe("failedGates：闸门失败提取", () => {
     ]);
     expect(failed).toHaveLength(1);
     expect(failed[0]?.code).toBe("registration_closed");
+  });
+
+  it("多个失败闸门并存时，主态优先解释来源失效/撤回/过期，且不隐藏其余闸门", () => {
+    const gates = [
+      { code: "registration_unconfirmed", passed: false, reason: "时间未定" },
+      { code: "source_unavailable", passed: false, reason: "404" },
+      { code: "evidence_not_reviewed", passed: false, reason: "待复核" },
+    ] as UnitMatchDTO["gates"];
+    expect(primaryGate(gates)?.code).toBe("source_unavailable");
+    const views = failedGateViews(gates);
+    expect(views.map((v) => v.gate.code)).toEqual([
+      "registration_unconfirmed",
+      "source_unavailable",
+      "evidence_not_reviewed",
+    ]);
+    expect(views.find((v) => v.gate.code === "source_unavailable")?.meta.label).toBe(
+      "官方来源暂不可访问",
+    );
   });
 });
 

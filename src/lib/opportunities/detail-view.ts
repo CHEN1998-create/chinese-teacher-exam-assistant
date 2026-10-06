@@ -1,9 +1,12 @@
 /**
- * 机会详情视图模型（纯函数，模块 5，PRD 7.4 三层结构）。
+ * 机会详情视图模型（纯函数，模块 5，PRD 7.4 五段结构）。
  *
- * 第一层结论与“下一步”由 nextAction 唯一决定（每个状态只有一个主行动）；
- * 第二层把逐条件结果分为已满足 / 待确认（UNKNOWN+MANUAL_REVIEW）/ 不满足；
- * 第三层（证据、版本、纠错）直接渲染 DTO，不在此加工。
+ * 第一段结论与“下一步”由 nextAction 唯一决定（每个状态只有一个主行动）；
+ * 第二段把逐条件结果分为：
+ * - missingInfo：UNKNOWN（信息不足，用户补充后重算；缺信息不是不符合）
+ * - confirmOfficial：MANUAL_REVIEW（公告有歧义，需向招聘单位确认）
+ * - satisfied / unsatisfied；
+ * 第三、四、五段（官方原文位置、核对时间与变化、我的跟进）直接渲染 DTO。
  */
 import type {
   DimensionDTO,
@@ -11,30 +14,56 @@ import type {
   MatchValue,
   UnitMatchDTO,
 } from "./api-types";
+import {
+  failedGatesOf,
+  gateStateMeta,
+  primaryFailedGate,
+  type GateStateMeta,
+} from "@/lib/gate-states";
 
 export interface DimensionGroups {
   satisfied: DimensionDTO[];
-  /** UNKNOWN（补信息）与 MANUAL_REVIEW（人工确认）合并为“待确认”，但各自标记可区分 */
-  toConfirm: DimensionDTO[];
+  /** UNKNOWN：需要用户补充的信息（补充后重新判断，绝不是不符合） */
+  missingInfo: DimensionDTO[];
+  /** MANUAL_REVIEW：公告表述有歧义，建议向招聘单位人工确认 */
+  confirmOfficial: DimensionDTO[];
   unsatisfied: DimensionDTO[];
 }
 
 export function groupDimensions(dimensions: DimensionDTO[]): DimensionGroups {
   const groups: DimensionGroups = {
     satisfied: [],
-    toConfirm: [],
+    missingInfo: [],
+    confirmOfficial: [],
     unsatisfied: [],
   };
   for (const dimension of dimensions) {
     if (dimension.value === "PASS") groups.satisfied.push(dimension);
     else if (dimension.value === "FAIL") groups.unsatisfied.push(dimension);
-    else groups.toConfirm.push(dimension);
+    else if (dimension.value === "MANUAL_REVIEW")
+      groups.confirmOfficial.push(dimension);
+    else groups.missingInfo.push(dimension);
   }
   return groups;
 }
 
 export function failedGates(gates: GateDTO[]): GateDTO[] {
-  return gates.filter((g) => !g.passed);
+  return failedGatesOf(gates);
+}
+
+/** 主异常闸门（决定卡片角标与异常面板主标题） */
+export function primaryGate(gates: GateDTO[]): GateDTO | null {
+  return primaryFailedGate(gates);
+}
+
+/** 失败闸门 + 异常态元信息（异常面板逐条渲染，不隐藏并存的多个闸门） */
+export function failedGateViews(
+  gates: GateDTO[],
+): { gate: GateDTO; meta: GateStateMeta }[] {
+  return failedGatesOf(gates).map((gate) => ({
+    gate,
+    meta: gateStateMeta(gate.code),
+  }));
 }
 
 /**
@@ -68,11 +97,11 @@ export interface NextAction {
 }
 
 export function nextAction(unit: UnitMatchDTO): NextAction {
-  const closed = failedGates(unit.gates);
-  if (closed.length > 0) {
+  const closedGate = primaryGate(unit.gates);
+  if (closedGate) {
     // 不同降级原因给不同出口文案，但主行动都是「回到官方依据」，
     // 不允许在待复核/预告/来源失效时出现「报名」「准备」行动
-    const code = closed[0]!.code;
+    const code = closedGate.code;
     const labelByCode: Record<string, string> = {
       registration_unconfirmed:
         "官方尚未公布报名时间：查看公告原文并等待官方通知",
