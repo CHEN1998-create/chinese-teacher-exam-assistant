@@ -51,6 +51,23 @@ export class OpportunitiesController {
     return this.service.listFollows(req.user!.id);
   }
 
+  /** 登录后合并访客在本机暂存的关注记录（服务端已有则跳过） */
+  @Post('follows/merge')
+  mergeGuestFollows(
+    @Body()
+    body: {
+      items?: Array<{
+        unitId?: unknown;
+        status?: unknown;
+        materialStatuses?: unknown;
+        consultationNotes?: unknown;
+      }>;
+    },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.mergeGuestFollows(req.user!.id, body.items ?? []);
+  }
+
   /** 备考目标列表（模块 7）：活跃关注聚合公告版本，供 /study 页与主要目标选择 */
   @Get('goals')
   listGoals(@Req() req: AuthenticatedRequest) {
@@ -66,12 +83,13 @@ export class OpportunitiesController {
     return this.service.follow(req.user!.id, unitId);
   }
 
-  /** 状态流转：preparing / registered / abandoned / closed / considering */
+  /** 状态流转：preparing / registered / abandoned / closed / considering。
+   *  带 version 乐观锁：与服务端不一致时返回 409 + 当前状态。 */
   @Patch('units/:unitId/follow')
   transition(
     @Param('unitId') unitId: string,
     @Body()
-    body: { status?: unknown; note?: string; abandonReason?: string },
+    body: { status?: unknown; note?: string; abandonReason?: string; version?: unknown },
     @Req() req: AuthenticatedRequest,
   ) {
     return this.service.transition(
@@ -82,6 +100,41 @@ export class OpportunitiesController {
       typeof body.abandonReason === 'string'
         ? body.abandonReason
         : undefined,
+      typeof body.version === 'number' ? body.version : undefined,
+    );
+  }
+
+  /** 设置某报名材料项的完成状态（带 version 乐观锁） */
+  @Patch('units/:unitId/materials')
+  setMaterialStatus(
+    @Param('unitId') unitId: string,
+    @Body()
+    body: { itemId?: unknown; status?: unknown; version?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.setMaterialStatus(
+      req.user!.id,
+      unitId,
+      body.itemId,
+      body.status,
+      typeof body.version === 'number' ? body.version : undefined,
+    );
+  }
+
+  /** 记录用户自行填写的官方咨询结论（不参与匹配判断，带 version 乐观锁） */
+  @Patch('units/:unitId/consultation')
+  saveConsultationNote(
+    @Param('unitId') unitId: string,
+    @Body()
+    body: { dimensionKey?: unknown; note?: unknown; version?: unknown },
+    @Req() req: AuthenticatedRequest,
+  ) {
+    return this.service.saveConsultationNote(
+      req.user!.id,
+      unitId,
+      body.dimensionKey,
+      body.note,
+      typeof body.version === 'number' ? body.version : undefined,
     );
   }
 

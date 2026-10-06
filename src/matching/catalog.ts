@@ -28,6 +28,7 @@ import type {
   EmploymentNature,
   EvidenceAnchor,
   EvidenceLocator,
+  MaterialItem,
   RecruitmentAnnouncement,
   RegionRef,
   Requirement,
@@ -105,6 +106,7 @@ interface UnitSpec {
   teachingScope?: string;
   requirements: Requirement[];
   registerUrl?: string;
+  materials?: MaterialItem[];
 }
 
 function unit(
@@ -128,7 +130,27 @@ function unit(
     allocation: spec.allocation,
     registerUrl: spec.registerUrl,
     requirements: spec.requirements,
+    materials: spec.materials,
   };
+}
+
+/**
+ * 演示数据的最小材料清单：无法从公告原文确认具体要求，
+ * 故全部标记为「以公告为准」且 required=false，不误导用户。
+ */
+function demoMaterials(officialUrl: string): MaterialItem[] {
+  const src = (id: string, excerpt: string): EvidenceAnchor => ({
+    id,
+    locator: { kind: 'url', url: officialUrl },
+    excerpt,
+    state: 'official',
+    checkedAt: '2026-10-04T12:00:00+08:00',
+  });
+  return [
+    { id: 'id-card', label: '身份证', applicableAudience: '以公告为准', required: false, source: src('demo-mat-id', '报名一般需提供有效身份证件，具体以公告为准。') },
+    { id: 'edu-cert', label: '学历、学位证书', applicableAudience: '以公告为准', required: false, source: src('demo-mat-edu', '学历学位材料要求以公告原文为准。') },
+    { id: 'teacher-cert', label: '教师资格证书', applicableAudience: '以公告为准', required: false, source: src('demo-mat-tc', '教师资格及学科要求以公告原文为准。') },
+  ];
 }
 
 function version(
@@ -227,6 +249,7 @@ function hangzhou(): RecruitmentAnnouncement {
       teachingScope: '杭州市教育局直属初中',
       requirements,
       registerUrl: 'https://www.hangzhou.example.gov.cn/edu/apply',
+      materials: demoMaterials(HZ_URL),
     }),
   ];
   return {
@@ -324,6 +347,7 @@ function yinzhou(): RecruitmentAnnouncement {
       allocation: ALLOC_CHOICE,
       teachingScope: '鄞州区下属公办初中，按总成绩择岗',
       requirements,
+      materials: demoMaterials(YZ_URL),
     }),
   ];
   return {
@@ -414,6 +438,7 @@ function suzhou(): RecruitmentAnnouncement {
       allocation: ALLOC_CHOICE,
       teachingScope: '苏州高新区公办初中',
       requirements,
+      materials: demoMaterials(SZ_URL),
     }),
   ];
   return {
@@ -505,6 +530,7 @@ function nanjing(): RecruitmentAnnouncement {
       allocation: ALLOC_DIRECT,
       teachingScope: '南京市教育局直属普通高中',
       requirements,
+      materials: demoMaterials(NJ_URL),
     }),
   ];
   return {
@@ -589,6 +615,7 @@ function wenzhou(): RecruitmentAnnouncement {
       allocation: ALLOC_ASSIGN,
       teachingScope: '龙湾区公办初中，录取后统一调配',
       requirements,
+      materials: demoMaterials(WZ_URL),
     }),
   ];
   return {
@@ -671,6 +698,7 @@ function hefei(): RecruitmentAnnouncement {
       allocation: ALLOC_ASSIGN,
       teachingScope: '合肥市教育局直属初中，录取后统一调配',
       requirements: makeRequirements(),
+      materials: demoMaterials(HF_URL),
     }),
   ];
   const v2Units = [
@@ -685,6 +713,7 @@ function hefei(): RecruitmentAnnouncement {
       allocation: ALLOC_ASSIGN,
       teachingScope: '合肥市教育局直属初中，录取后统一调配',
       requirements: makeRequirements(),
+      materials: demoMaterials(HF_URL),
     }),
   ];
 

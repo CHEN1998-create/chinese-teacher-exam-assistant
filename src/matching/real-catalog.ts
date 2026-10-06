@@ -23,6 +23,7 @@ import type {
   EmploymentNature,
   EvidenceAnchor,
   EvidenceLocator,
+  MaterialItem,
   RecruitmentAnnouncement,
   RegionRef,
   Requirement,
@@ -133,6 +134,7 @@ interface RealUnitSpec {
   registerUrl?: string;
   requirements: Requirement[];
   sourceRow: EvidenceAnchor;
+  materials?: MaterialItem[];
 }
 
 function unit(announcementId: string, spec: RealUnitSpec): ApplicationUnit {
@@ -153,6 +155,7 @@ function unit(announcementId: string, spec: RealUnitSpec): ApplicationUnit {
     registerUrl: spec.registerUrl,
     requirements: spec.requirements,
     sourceRow: spec.sourceRow,
+    materials: spec.materials,
   };
 }
 
@@ -408,6 +411,23 @@ function hangzhouRequirements(seq: 5 | 6): Requirement[] {
   ];
 }
 
+function hangzhouMaterials(): MaterialItem[] {
+  const mat = (id: string, label: string, audience: string, required: boolean, anchor: string, excerpt: string): MaterialItem => ({
+    id,
+    label,
+    applicableAudience: audience,
+    required,
+    source: aiAnchor(`real-hz-mat-${id}`, HZ_ARTICLE, `公告正文 · ${anchor}`, excerpt),
+  });
+  return [
+    mat('id-card', '身份证', '所有报考者', true, '报名材料', '报名时须提供本人有效身份证件。'),
+    mat('edu-cert', '学历、学位证书', '所有报考者', true, '报名材料', '须提供学历证书、学位证书原件及复印件。'),
+    mat('teacher-cert', '教师资格证书', '所有报考者', true, '报名材料', '须提供相应学科教师资格证书。'),
+    mat('mandarin', '普通话水平测试等级证书', '语文岗位报考者', true, '报名材料', '语文教师岗位须提供二级甲等及以上普通话证书。'),
+    mat('registration-form', '报名登记表', '所有报考者', true, '报名材料', '在报名系统填写并打印报名登记表。'),
+  ];
+}
+
 function hangzhou(): RecruitmentAnnouncement {
   const id = 'real-hangzhou-2026-04';
   const excerpt =
@@ -442,6 +462,7 @@ function hangzhou(): RecruitmentAnnouncement {
         `${HZ_ET_NAME} · 明细工作表 · 序号5`,
         '序号5 杭州第二中学富春学校 高中语文教师，招聘人数4名（富阳区）。',
       ),
+      materials: hangzhouMaterials(),
     }),
     unit(id, {
       id: 'real-hz-202604-gaoxin-chinese',
@@ -466,6 +487,7 @@ function hangzhou(): RecruitmentAnnouncement {
         `${HZ_ET_NAME} · 明细工作表 · 序号6`,
         '序号6 杭州第二中学高新学校 高中语文教师，招聘人数1名（滨江区）。',
       ),
+      materials: hangzhouMaterials(),
     }),
   ];
   return {
@@ -486,6 +508,7 @@ function hangzhou(): RecruitmentAnnouncement {
     reviewedBy: null,
     reviewedAt: null,
     sourceHealth: HEALTHY,
+    contactInfo: '杭州市教育局教师工作处，咨询电话见公告原文末尾「报名咨询」栏目',
   };
 }
 

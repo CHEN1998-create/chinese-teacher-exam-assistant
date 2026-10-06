@@ -58,6 +58,16 @@ export interface ScheduleResponse {
   events: TimelineEventDTO[];
   /** 已关闭提醒的机会（前端可在对应分组显示“已静音”标记） */
   mutedUnitIds: string[];
+  /** 首屏「当前最重要的一个动作」：按状态/截止/材料进度推导 */
+  nextAction: NextActionDTO | null;
+}
+
+export interface NextActionDTO {
+  unitId: string;
+  unitName: string;
+  kind: 'register' | 'materials' | 'review' | 'timeline';
+  label: string;
+  href: string;
 }
 
 export interface NotificationDTO {
@@ -249,16 +259,27 @@ export class ScheduleService {
       where: { userId, status: { notIn: ['abandoned', 'closed'] } },
     });
     const mutedUnitIds = follows.filter((f) => f.remindersMuted).map((f) => f.unitId);
-    const unitMeta = new Map<string, { name: string; regionText: string; registerUrl?: string }>();
+    const unitMeta = new Map<string, { name: string; regionText: string; registerUrl?: string; registrationEnd?: string; materialsCount: number; doneCount: number; status: string }>();
     for (const f of follows) {
       const ann = CATALOG_ANNOUNCEMENTS.find((a) => a.id === f.announcementId);
       if (!ann) continue;
-      const unit = currentVersion(ann).units.find((u) => u.id === f.unitId);
+      const version = currentVersion(ann);
+      const unit = version.units.find((u) => u.id === f.unitId);
       if (!unit) continue;
+      const materialStatuses =
+        (f.materialStatuses as Record<string, string> | null) ?? null;
+      const materials = unit.materials ?? [];
+      const doneCount = materials.filter(
+        (m) => materialStatuses?.[m.id] === 'done',
+      ).length;
       unitMeta.set(f.unitId, {
         name: unit.name,
         regionText: regionLabel(unit.region),
         registerUrl: unit.registerUrl,
+        registrationEnd: version.timeline.registrationEnd,
+        materialsCount: materials.length,
+        doneCount,
+        status: f.status,
       });
     }
 
@@ -276,10 +297,72 @@ export class ScheduleService {
         return (a.dateIso ?? '').localeCompare(b.dateIso ?? '');
       });
 
+    // 首屏「当前最重要的一个动作」：按截止临近 > 材料未完成 > 查看机会 优先级选一个
+    const nowMs = Date.now();
+    const candidates: { priority: number; sortKey: number; action: NextActionDTO }[] = [];
+    for (const f of follows) {
+      const meta = unitMeta.get(f.unitId);
+      if (!meta) continue;
+      const href = `/opportunities/${encodeURIComponent(f.unitId)}#follow`;
+      if (meta.registrationEnd && f.status !== 'registered') {
+        const daysLeft = Math.ceil(
+          (new Date(meta.registrationEnd).getTime() - nowMs) / 86400000,
+        );
+        if (daysLeft <= 3) {
+          candidates.push({
+            priority: 0,
+            sortKey: daysLeft,
+            action: {
+              unitId: f.unitId,
+              unitName: meta.name,
+              kind: 'register',
+              label: `进入官方报名入口（还剩 ${daysLeft} 天）`,
+              href,
+            },
+          });
+          continue;
+        }
+      }
+      if (f.status === 'preparing' && meta.materialsCount > meta.doneCount) {
+        candidates.push({
+          priority: 1,
+          sortKey: meta.doneCount - meta.materialsCount,
+          action: {
+            unitId: f.unitId,
+            unitName: meta.name,
+            kind: 'materials',
+            label: `准备报名材料（${meta.doneCount}/${meta.materialsCount}）`,
+            href,
+          },
+        });
+        continue;
+      }
+      if (f.status === 'considering') {
+        candidates.push({
+          priority: 2,
+          sortKey: 0,
+          action: {
+            unitId: f.unitId,
+            unitName: meta.name,
+            kind: 'review',
+            label: '查看该机会并推进',
+            href,
+          },
+        });
+      }
+    }
+    candidates.sort((a, b) =>
+      a.priority !== b.priority
+        ? a.priority - b.priority
+        : a.sortKey - b.sortKey,
+    );
+    const nextAction = candidates[0]?.action ?? null;
+
     return {
       meta: { evaluatedAt: nowIso, syncVersion: SYNC_VERSION },
       events: dtos,
       mutedUnitIds,
+      nextAction,
     };
   }
 

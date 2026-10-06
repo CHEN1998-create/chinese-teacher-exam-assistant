@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,11 +15,14 @@ import type {
   DegreeCode,
   EmploymentNatureCode,
   EmploymentStatus,
+  MaterialStatus,
   RegionPreferenceLevel,
   TeacherCertStatus,
   UserRecruitmentProfile,
 } from '../matching/types.js';
 import {
+  applyConsultationNote,
+  applyMaterialStatus,
   canTransition,
   isFollowStatus,
   transitionFollow,
@@ -123,26 +127,7 @@ export class OpportunitiesService {
 
   async listFollows(userId: string): Promise<FollowDTO[]> {
     const follows = await this.listFollowRecords(userId);
-    return follows.map((follow) => {
-      const announcement = PUBLISHED_ANNOUNCEMENTS.find(
-        (a) => a.id === follow.announcementId,
-      );
-      return {
-        id: follow.id,
-        unitId: follow.unitId,
-        announcementId: follow.announcementId,
-        versionId: follow.versionId,
-        status: follow.status,
-        role: follow.role,
-        followedAt: follow.followedAt,
-        statusHistory: follow.statusHistory,
-        abandonReason: follow.abandonReason,
-        newerVersion: announcement
-          ? follow.versionId !== currentVersion(announcement).id
-          : false,
-        remindersMuted: follow.remindersMuted,
-      };
-    });
+    return follows.map((follow) => this.toDTO(follow));
   }
 
   /** 备考目标列表（模块 7）：活跃关注 + 公告版本聚合，供主要目标选择与 /study 页使用 */
@@ -213,13 +198,77 @@ export class OpportunitiesService {
     return this.toDTO(this.fromRow(row));
   }
 
-  /** 状态流转（非法边由领域层拒绝）；只影响该单元，其他关注记录不变 */
+  /** 登录后合并访客本地关注：服务端已有记录时以服务端为准（不覆盖）。 */
+  async mergeGuestFollows(
+    userId: string,
+    items: Array<{
+      unitId?: unknown;
+      status?: unknown;
+      materialStatuses?: unknown;
+      consultationNotes?: unknown;
+    }>,
+  ): Promise<{ merged: number; skipped: number }> {
+    if (!Array.isArray(items)) return { merged: 0, skipped: 0 };
+    let merged = 0;
+    let skipped = 0;
+    for (const item of items) {
+      if (!item || typeof item.unitId !== 'string') {
+        skipped++;
+        continue;
+      }
+      let target: { announcementId: string; versionId: string };
+      try {
+        target = this.findCatalogUnit(item.unitId);
+      } catch {
+        skipped++;
+        continue;
+      }
+      const existing = await this.prisma.followedOpportunity.findUnique({
+        where: { userId_unitId: { userId, unitId: item.unitId } },
+      });
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      const status = this.asFollowStatus(item.status) ?? 'considering';
+      const atIso = new Date().toISOString();
+      await this.prisma.followedOpportunity.create({
+        data: {
+          userId,
+          unitId: item.unitId,
+          announcementId: target.announcementId,
+          versionId: target.versionId,
+          status,
+          role: null,
+          followedAt: new Date(atIso),
+          statusHistory: [
+            { status, at: atIso },
+          ] satisfies Prisma.InputJsonValue,
+          abandonReason: null,
+          materialStatuses:
+            item.materialStatuses && typeof item.materialStatuses === 'object'
+              ? (item.materialStatuses as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+          consultationNotes:
+            item.consultationNotes && typeof item.consultationNotes === 'object'
+              ? (item.consultationNotes as Prisma.InputJsonValue)
+              : Prisma.JsonNull,
+        },
+      });
+      merged++;
+    }
+    return { merged, skipped };
+  }
+
+  /** 状态流转（非法边由领域层拒绝）；只影响该单元，其他关注记录不变。
+   *  乐观锁：expectedVersion 与当前 version 不一致时抛 409，返回服务端最新状态。 */
   async transition(
     userId: string,
     unitId: string,
     nextInput: unknown,
     note?: string,
     abandonReason?: string,
+    expectedVersion?: number,
   ): Promise<FollowDTO> {
     const next = this.asFollowStatus(nextInput);
     const row = await this.prisma.followedOpportunity.findUnique({
@@ -227,6 +276,12 @@ export class OpportunitiesService {
     });
     if (!row) throw new NotFoundException('尚未关注该机会');
     const current = this.fromRow(row);
+    if (expectedVersion !== undefined && expectedVersion !== current.version) {
+      throw new ConflictException({
+        error: 'VERSION_CONFLICT',
+        current: this.toDTO(current),
+      });
+    }
     if (!canTransition(current.status, next)) {
       throw new BadRequestException(
         `不允许从「${current.status}」流转到「${next}」`,
@@ -245,6 +300,74 @@ export class OpportunitiesService {
         status: updated.status,
         statusHistory: updated.statusHistory as unknown as Prisma.InputJsonValue,
         abandonReason: updated.abandonReason,
+        version: updated.version,
+      },
+    });
+    return this.toDTO(this.fromRow(saved));
+  }
+
+  private assertVersion(current: FollowRecord, expectedVersion?: number) {
+    if (expectedVersion !== undefined && expectedVersion !== current.version) {
+      throw new ConflictException({
+        error: 'VERSION_CONFLICT',
+        current: this.toDTO(current),
+      });
+    }
+  }
+
+  /** 设置某报名材料项的完成状态。同状态幂等；带乐观锁。 */
+  async setMaterialStatus(
+    userId: string,
+    unitId: string,
+    itemIdInput: unknown,
+    statusInput: unknown,
+    expectedVersion?: number,
+  ): Promise<FollowDTO> {
+    const itemId = typeof itemIdInput === 'string' ? itemIdInput : '';
+    const status = this.asMaterialStatus(statusInput);
+    const row = await this.prisma.followedOpportunity.findUnique({
+      where: { userId_unitId: { userId, unitId } },
+    });
+    if (!row) throw new NotFoundException('尚未关注该机会');
+    const current = this.fromRow(row);
+    this.assertVersion(current, expectedVersion);
+    const updated = applyMaterialStatus(current, itemId, status);
+    if (updated === current) return this.toDTO(current);
+    const saved = await this.prisma.followedOpportunity.update({
+      where: { userId_unitId: { userId, unitId } },
+      data: {
+        materialStatuses: updated.materialStatuses as unknown as Prisma.InputJsonValue,
+        version: updated.version,
+      },
+    });
+    return this.toDTO(this.fromRow(saved));
+  }
+
+  /** 记录用户自行填写的官方咨询结论。不参与匹配；带乐观锁。 */
+  async saveConsultationNote(
+    userId: string,
+    unitId: string,
+    dimensionKeyInput: unknown,
+    noteInput: unknown,
+    expectedVersion?: number,
+  ): Promise<FollowDTO> {
+    const dimensionKey =
+      typeof dimensionKeyInput === 'string' ? dimensionKeyInput : '';
+    const note = typeof noteInput === 'string' ? noteInput : '';
+    if (!dimensionKey) throw new BadRequestException('缺少维度标识');
+    const row = await this.prisma.followedOpportunity.findUnique({
+      where: { userId_unitId: { userId, unitId } },
+    });
+    if (!row) throw new NotFoundException('尚未关注该机会');
+    const current = this.fromRow(row);
+    this.assertVersion(current, expectedVersion);
+    const updated = applyConsultationNote(current, dimensionKey, note);
+    if (updated === current) return this.toDTO(current);
+    const saved = await this.prisma.followedOpportunity.update({
+      where: { userId_unitId: { userId, unitId } },
+      data: {
+        consultationNotes: updated.consultationNotes as unknown as Prisma.InputJsonValue,
+        version: updated.version,
       },
     });
     return this.toDTO(this.fromRow(saved));
@@ -382,6 +505,9 @@ export class OpportunitiesService {
     followedAt: Date;
     statusHistory: Prisma.JsonValue;
     abandonReason: string | null;
+    materialStatuses?: Prisma.JsonValue | null;
+    consultationNotes?: Prisma.JsonValue | null;
+    version?: number;
     remindersMuted?: boolean;
   }): FollowRecord {
     return {
@@ -395,6 +521,11 @@ export class OpportunitiesService {
       followedAt: row.followedAt.toISOString(),
       statusHistory: row.statusHistory as unknown as FollowStatusEvent[],
       abandonReason: row.abandonReason,
+      materialStatuses:
+        (row.materialStatuses as Record<string, MaterialStatus> | null) ?? null,
+      consultationNotes:
+        (row.consultationNotes as Record<string, string> | null) ?? null,
+      version: row.version ?? 0,
       remindersMuted: row.remindersMuted ?? false,
     };
   }
@@ -418,12 +549,27 @@ export class OpportunitiesService {
       abandonReason: follow.abandonReason,
       newerVersion: follow.versionId !== currentVersionId,
       remindersMuted: follow.remindersMuted,
+      version: follow.version,
+      materialStatuses: follow.materialStatuses,
+      consultationNotes: follow.consultationNotes,
     };
   }
 
   private asFollowStatus(value: unknown): FollowStatus {
     if (isFollowStatus(value)) return value;
     throw new BadRequestException('非法的关注状态');
+  }
+
+  private asMaterialStatus(value: unknown): MaterialStatus {
+    if (
+      value === 'not_started' ||
+      value === 'in_progress' ||
+      value === 'done' ||
+      value === 'not_applicable'
+    ) {
+      return value;
+    }
+    throw new BadRequestException('非法的材料状态');
   }
 
   private asRole(value: unknown): StudyTargetRole {

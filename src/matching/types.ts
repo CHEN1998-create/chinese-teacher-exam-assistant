@@ -160,6 +160,28 @@ export interface ApplicationUnit {
    * 真实台账中人数、学历、专业等结构化字段以此定位到官方岗位表具体行。
    */
   sourceRow?: EvidenceAnchor;
+  /**
+   * 报名材料清单（模块 6）：按公告要求生成的最小材料项。
+   * 每项必须有可追溯来源（EvidenceAnchor）；无法从公告确定的不列为必填。
+   */
+  materials?: MaterialItem[];
+}
+
+/** 报名材料完成状态（只存进度，不存证件内容） */
+export type MaterialStatus = 'not_started' | 'in_progress' | 'done' | 'not_applicable';
+
+/**
+ * 报名材料项（模块 6）。
+ * - source：官方来源锚点（公告原文摘录或岗位表行定位），必填以保证可追溯；
+ * - applicableAudience：适用人群文本（如「所有报考者」「应届毕业生」）；
+ * - required：是否公告明确要求的必交材料；无法确认时为 false。
+ */
+export interface MaterialItem {
+  id: string;
+  label: string;
+  source: EvidenceAnchor;
+  applicableAudience: string;
+  required: boolean;
 }
 
 export type AnnouncementSourceKind = 'original' | 'supplement' | 'correction';
@@ -233,6 +255,8 @@ export interface RecruitmentAnnouncement {
   reviewedAt?: string | null;
   /** 官方来源巡检健康度；缺省视为正常（未登记异常） */
   sourceHealth?: SourceHealth;
+  /** 官方联系信息（咨询电话/邮箱/地址等），缺省为 null */
+  contactInfo?: string | null;
 }
 
 // ==================== 用户画像 ====================

@@ -1,4 +1,8 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   MAJOR_ALIAS_VERSION,
@@ -47,6 +51,9 @@ interface FollowRow {
   followedAt: Date;
   statusHistory: unknown;
   abandonReason: string | null;
+  materialStatuses?: unknown;
+  consultationNotes?: unknown;
+  version?: number;
 }
 
 /** 内存版 Prisma：只实现 service 实际用到的模型方法 */
@@ -357,6 +364,68 @@ describe('OpportunitiesService：关注与状态流转', () => {
     expect(dto.announcementId).toBe(REAL_ANNOUNCEMENT_IDS.ningbo202607);
     expect(dto.versionId).toBe('real-ningbo-2026-07-v1');
   });
+
+  it('设置材料状态：持久化并递增 version；同状态幂等不递增', async () => {
+    await service.follow('user-1', 'unit-hangzhou-01');
+    const before = await service.listFollows('user-1');
+    expect(before[0]?.version).toBe(0);
+
+    const after = await service.setMaterialStatus(
+      'user-1',
+      'unit-hangzhou-01',
+      'id-card',
+      'done',
+    );
+    expect(after.materialStatuses).toEqual({ 'id-card': 'done' });
+    expect(after.version).toBe(1);
+
+    // 同状态幂等
+    const again = await service.setMaterialStatus(
+      'user-1',
+      'unit-hangzhou-01',
+      'id-card',
+      'done',
+    );
+    expect(again.version).toBe(1);
+  });
+
+  it('材料状态 version 冲突返回 409，不写入', async () => {
+    await service.follow('user-1', 'unit-hangzhou-01');
+    await expect(
+      service.setMaterialStatus(
+        'user-1',
+        'unit-hangzhou-01',
+        'id-card',
+        'done',
+        99, // 与服务端 version=0 冲突
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    const follows = await service.listFollows('user-1');
+    expect(follows[0]?.materialStatuses).toBeNull();
+    expect(follows[0]?.version).toBe(0);
+  });
+
+  it('记录咨询结论：持久化且不影响匹配状态；空字符串删除该条', async () => {
+    await service.follow('user-1', 'unit-hangzhou-01');
+    const saved = await service.saveConsultationNote(
+      'user-1',
+      'unit-hangzhou-01',
+      'major',
+      '已电话确认，汉语言文学师范符合',
+    );
+    expect(saved.consultationNotes).toEqual({
+      major: '已电话确认，汉语言文学师范符合',
+    });
+    expect(saved.version).toBe(1);
+
+    const cleared = await service.saveConsultationNote(
+      'user-1',
+      'unit-hangzhou-01',
+      'major',
+      '',
+    );
+    expect(cleared.consultationNotes).toBeNull();
+  });
 });
 
 describe('OpportunitiesService：主要备考目标', () => {
@@ -453,6 +522,9 @@ describe('OpportunitiesService：备考目标（模块 7）', () => {
       followedAt: '2026-02-10T00:00:00.000Z',
       statusHistory: [],
       abandonReason: null,
+      materialStatuses: null,
+      consultationNotes: null,
+      version: 0,
       remindersMuted: false,
     });
 

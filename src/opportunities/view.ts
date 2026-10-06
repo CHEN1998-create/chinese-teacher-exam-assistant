@@ -25,6 +25,7 @@ import type {
   AnnouncementTimeline,
   ApplicationUnit,
   EvidenceAnchor,
+  MaterialStatus,
   OpportunityCandidate,
   RequirementDimension,
   UserRecruitmentProfile,
@@ -71,6 +72,12 @@ export interface FollowDTO {
   newerVersion: boolean;
   /** 是否已关闭该机会的站内提醒 */
   remindersMuted: boolean;
+  /** 乐观锁版本号：每次状态/材料/咨询变更递增 */
+  version: number;
+  /** 报名材料完成状态：{ [materialItemId]: MaterialStatus }，空视为全部未开始 */
+  materialStatuses: Record<string, MaterialStatus> | null;
+  /** 用户自行记录的官方咨询结论：{ [dimensionKey]: note }，不参与匹配 */
+  consultationNotes: Record<string, string> | null;
 }
 
 export interface DimensionDTO {
@@ -99,6 +106,7 @@ export interface UnitMatchDTO {
     | 'teachingScope'
     | 'registerUrl'
     | 'sourceRow'
+    | 'materials'
   >;
   announcement: {
     id: string;
@@ -111,6 +119,8 @@ export interface UnitMatchDTO {
     reviewStatus: 'ai_reviewed_pending' | 'human_reviewed';
     reviewedBy: string | null;
     reviewedAt: string | null;
+    /** 官方联系信息 */
+    contactInfo: string | null;
   };
   version: {
     id: string;
@@ -126,6 +136,15 @@ export interface UnitMatchDTO {
   overall: OpportunityCandidate['match']['overall'];
   summary: string;
   follow: FollowDTO | null;
+  /** 需官方确认维度的咨询问题模板 */
+  consultationTemplates: ConsultationTemplateDTO[];
+}
+
+/** 可复制的官方咨询问题模板（针对需官方确认的维度） */
+export interface ConsultationTemplateDTO {
+  dimensionKey: string;
+  dimensionLabel: string;
+  question: string;
 }
 
 export interface MatchGroupsDTO {
@@ -200,6 +219,9 @@ function toFollowDTO(
     abandonReason: follow.abandonReason,
     newerVersion: hasNewerVersion(follow, currentVersionId),
     remindersMuted: follow.remindersMuted,
+    version: follow.version,
+    materialStatuses: follow.materialStatuses,
+    consultationNotes: follow.consultationNotes,
   };
 }
 
@@ -231,6 +253,7 @@ export function toUnitMatchDTO(
   follow: FollowRecord | null,
 ): UnitMatchDTO {
   const { announcement, version, unit, match } = candidate;
+  const dimensions = toDimensions(candidate);
   return {
     unit: {
       id: unit.id,
@@ -245,6 +268,7 @@ export function toUnitMatchDTO(
       teachingScope: unit.teachingScope,
       registerUrl: unit.registerUrl,
       sourceRow: unit.sourceRow,
+      materials: unit.materials ?? [],
     },
     announcement: {
       id: announcement.id,
@@ -256,6 +280,7 @@ export function toUnitMatchDTO(
       reviewStatus: announcement.reviewStatus ?? 'human_reviewed',
       reviewedBy: announcement.reviewedBy ?? null,
       reviewedAt: announcement.reviewedAt ?? null,
+      contactInfo: announcement.contactInfo ?? null,
     },
     version: {
       id: version.id,
@@ -267,11 +292,45 @@ export function toUnitMatchDTO(
       officialSource: version.officialSource,
     },
     gates: match.gates,
-    dimensions: toDimensions(candidate),
+    dimensions,
     overall: match.overall,
     summary: match.summary,
     follow: follow ? toFollowDTO(follow, version.id) : null,
+    consultationTemplates: buildConsultationTemplates(announcement, unit, dimensions),
   };
+}
+
+const DIMENSION_LABELS: Record<string, string> = {
+  region: '地区范围',
+  education: '学历学位',
+  major: '专业',
+  graduation_status: '毕业状态',
+  employment_status: '就业状态',
+  teacher_cert: '教师资格',
+  hukou: '户籍',
+  age: '年龄',
+  other: '其他条件',
+};
+
+/** 针对需官方确认（MANUAL_REVIEW）的维度生成可复制的咨询问题模板 */
+function buildConsultationTemplates(
+  announcement: { title: string },
+  unit: { name: string },
+  dimensions: DimensionDTO[],
+): ConsultationTemplateDTO[] {
+  return dimensions
+    .filter((d) => d.value === 'MANUAL_REVIEW')
+    .map((d) => {
+      const label = DIMENSION_LABELS[d.dimension] ?? d.dimension;
+      const excerpt = d.requirementDescription
+        ? `公告原文表述：${d.requirementDescription}`
+        : '';
+      const question =
+        `您好，我想咨询《${announcement.title}》中「${unit.name}」岗位关于「${label}」的要求。` +
+        (excerpt ? `${excerpt}。` : '') +
+        `请问该条件的具体认定标准是什么？`;
+      return { dimensionKey: d.dimension, dimensionLabel: label, question };
+    });
 }
 
 /**

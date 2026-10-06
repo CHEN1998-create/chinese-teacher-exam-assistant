@@ -1,3 +1,5 @@
+import type { MaterialStatus } from '../matching/types.js';
+
 /**
  * 用户关注关系的纯函数规则（PRD 7.5，与前端 opportunities/domain 同构）。
  *
@@ -34,6 +36,12 @@ export interface FollowRecord {
   followedAt: string;
   statusHistory: FollowStatusEvent[];
   abandonReason: string | null;
+  /** 报名材料完成状态：{ [materialItemId]: MaterialStatus } */
+  materialStatuses: Record<string, MaterialStatus> | null;
+  /** 用户自行记录的官方咨询结论：{ [dimensionKey]: note } */
+  consultationNotes: Record<string, string> | null;
+  /** 乐观锁版本号 */
+  version: number;
   /** 是否已关闭该机会的站内提醒 */
   remindersMuted: boolean;
 }
@@ -92,6 +100,43 @@ export function transitionFollow(
     // 仅在放弃时保留原因；流转到其他状态时清空历史放弃原因
     abandonReason: next === 'abandoned' ? (abandonReason ?? null) : null,
     statusHistory: [...follow.statusHistory, event],
+    version: follow.version + 1,
+  };
+}
+
+/** 设置某材料项的完成状态（不可变）。同状态不递增版本（幂等）。 */
+export function applyMaterialStatus(
+  follow: FollowRecord,
+  itemId: string,
+  status: MaterialStatus,
+): FollowRecord {
+  const current = follow.materialStatuses?.[itemId];
+  if (current === status) return follow;
+  return {
+    ...follow,
+    materialStatuses: { ...(follow.materialStatuses ?? {}), [itemId]: status },
+    version: follow.version + 1,
+  };
+}
+
+/** 记录某维度的官方咨询结论（不可变）。空字符串删除该条。 */
+export function applyConsultationNote(
+  follow: FollowRecord,
+  dimensionKey: string,
+  note: string,
+): FollowRecord {
+  const notes = { ...(follow.consultationNotes ?? {}) };
+  if (note.trim() === '') {
+    if (!(dimensionKey in notes)) return follow;
+    delete notes[dimensionKey];
+  } else {
+    if (notes[dimensionKey] === note) return follow;
+    notes[dimensionKey] = note;
+  }
+  return {
+    ...follow,
+    consultationNotes: Object.keys(notes).length > 0 ? notes : null,
+    version: follow.version + 1,
   };
 }
 

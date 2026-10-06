@@ -96,6 +96,18 @@ model FollowedOpportunity {
   followedAt     DateTime @default(now()) @map("followed_at")
   statusHistory  Json     @map("status_history")
   abandonReason  String?  @map("abandon_reason")
+  /**
+   * 报名材料完成状态（模块 6）：{ [materialItemId]: "not_started"|"in_progress"|"done"|"not_applicable" }。
+   * 只存进度枚举，不存证件号/扫描件。可空，空视为全部 not_started。
+   */
+  materialStatuses Json? @map("material_statuses")
+  /**
+   * 用户自行记录的官方咨询结论（模块 6）：{ [dimensionKey]: note }。
+   * 仅本账号可见，不参与匹配判断、不作为官方事实。
+   */
+  consultationNotes Json? @map("consultation_notes")
+  /** 乐观锁版本号：每次状态/材料/咨询变更递增，用于并发冲突检测 */
+  version        Int      @default(0)
   /** 是否关闭该机会的所有站内提醒（报名截止等仍在日程可见，但不产生通知） */
   remindersMuted Boolean  @default(false) @map("reminders_muted")
   createdAt      DateTime @default(now()) @map("created_at")
