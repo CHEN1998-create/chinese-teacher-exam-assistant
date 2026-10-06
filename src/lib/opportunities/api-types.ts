@@ -306,5 +306,41 @@ export interface GoalsResponse {
   primaryTargetUnitId: string | null;
 }
 
+/** 机会纠错处理状态（P0-F）：与后端 corrections.domain 对齐 */
+export type OpportunityCorrectionStatus =
+  | "submitted"
+  | "reviewing"
+  | "resolved"
+  | "rejected";
+
+/** 用户视角的纠错记录（GET /opportunities/corrections/mine） */
+export interface OpportunityCorrectionDTO {
+  id: string;
+  unitId: string;
+  unitName: string | null;
+  announcementId: string;
+  announcementTitle: string | null;
+  versionId: string;
+  fieldPath: string;
+  fieldLabel: string;
+  content: string;
+  contact: string | null;
+  status: OpportunityCorrectionStatus;
+  reviewNote: string | null;
+  reviewerId: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+}
+
+/** 员工队列项（GET /opportunities/admin/corrections）：附带提交人账号 */
+export interface StaffOpportunityCorrectionDTO
+  extends OpportunityCorrectionDTO {
+  submitter: {
+    id: string;
+    email: string;
+    name: string | null;
+  };
+}
+
 /** POST 请求体：前端只提交画像与补问答案，判定在后端完成 */
 export type ProfilePayload = { profile: UserRecruitmentProfile };

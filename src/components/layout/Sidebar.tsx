@@ -14,8 +14,9 @@ import { isDemoMode } from "@/lib/demo/config";
 import { PRIMARY_NAV, isNavActive } from "@/lib/ia/nav";
 import { NavIcon } from "./navIcons";
 
-// v6.1：主导航只有 机会 / 日程 / 备考；
-// 设置、通知、资料、账号进入头像菜单或上下文页面，不在主导航中。
+// v7.0：主导航只有 机会 / 日程 / 我的；
+// 备考为次级入口（已设主要目标后从「我的」与目标上下文进入）；
+// 设置、资料、通知、账号进入头像菜单或「我的」页面，不在主导航中。
 
 export function Sidebar() {
   const pathname = usePathname();

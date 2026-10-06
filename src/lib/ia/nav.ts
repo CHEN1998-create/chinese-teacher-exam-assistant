@@ -1,12 +1,15 @@
 /**
- * v6.1 用户端主导航（模块 3：机会 / 日程 / 备考）。
+ * v7.0 用户端主导航（机会 / 日程 / 我的）。
  *
- * 不变量（docs/v6.1-information-architecture.md 第 1 节）：
- * - 主导航永远只有三个入口；设置/通知/资料/账号进入头像菜单或上下文页面；
+ * 不变量（PRD-全国教师公开招聘助手-v7.0 第 5 节 信息架构）：
+ * - 主导航永远只有三个入口：机会 / 日程 / 我的；
+ * - 个人画像、地区偏好、用工偏好、通知、隐私、纠错记录统一收入「我的」；
+ * - 不设置独立「备考」主导航：备考能力仅在用户设置主要目标后，
+ *   从目标上下文与「我的」次级入口进入；旧 /study 路由与数据保留；
  * - 高亮以新路由为准；旧路由 /exam /today /plan 经 middleware.ts 跳转，不参与高亮。
  */
 
-export type PrimaryNavId = "opportunities" | "schedule" | "study";
+export type PrimaryNavId = "opportunities" | "schedule" | "me";
 
 export interface PrimaryNavItem {
   id: PrimaryNavId;
@@ -17,7 +20,7 @@ export interface PrimaryNavItem {
 export const PRIMARY_NAV: readonly PrimaryNavItem[] = [
   { id: "opportunities", href: "/opportunities", label: "机会" },
   { id: "schedule", href: "/schedule", label: "日程" },
-  { id: "study", href: "/study", label: "备考" },
+  { id: "me", href: "/me", label: "我的" },
 ] as const;
 
 /**
@@ -29,7 +32,7 @@ export function isNavActive(pathname: string, href: string): boolean {
   return pathname.startsWith(`${href}/`);
 }
 
-/** 当前命中的主导航项；未命中返回 null（设置、资料等二级页面无高亮） */
+/** 当前命中的主导航项；未命中返回 null（设置、资料、备考等二级页面无高亮） */
 export function activeNavId(pathname: string): PrimaryNavId | null {
   const hit = PRIMARY_NAV.find((item) => isNavActive(pathname, item.href));
   return hit ? hit.id : null;

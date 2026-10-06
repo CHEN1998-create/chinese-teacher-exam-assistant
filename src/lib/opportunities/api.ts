@@ -12,6 +12,8 @@ import type {
   GoalsResponse,
   MatchResponse,
   MaterialStatus,
+  OpportunityCorrectionDTO,
+  StaffOpportunityCorrectionDTO,
   StudyTargetRole,
   UnitDetailResponse,
 } from "./api-types";
@@ -182,6 +184,30 @@ export const opportunitiesApi = {
     return request<{ id: string; status: string }>(
       `/units/${encodeURIComponent(unitId)}/corrections`,
       { method: "POST", body: JSON.stringify(input) },
+    );
+  },
+
+  /** 我提交过的纠错与员工处理状态（我的页） */
+  listMyCorrections(): Promise<OpportunityCorrectionDTO[]> {
+    return request<OpportunityCorrectionDTO[]>("/corrections/mine");
+  },
+
+  /** 员工跨用户纠错队列（STAFF_ROLES；status 省略时返回全部） */
+  adminListCorrections(
+    status?: string,
+  ): Promise<StaffOpportunityCorrectionDTO[]> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+    return request<StaffOpportunityCorrectionDTO[]>(`/admin/corrections${qs}`);
+  },
+
+  /** 员工处理纠错：reviewing / resolved / rejected（rejected 必填 reviewNote） */
+  adminReviewCorrection(
+    correctionId: string,
+    input: { status: "reviewing" | "resolved" | "rejected"; reviewNote?: string },
+  ): Promise<OpportunityCorrectionDTO> {
+    return request<OpportunityCorrectionDTO>(
+      `/admin/corrections/${encodeURIComponent(correctionId)}`,
+      { method: "PATCH", body: JSON.stringify(input) },
     );
   },
 };
