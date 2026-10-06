@@ -26,7 +26,7 @@ export function Header() {
   // 再取二级页面静态标题。
   const navId = activeNavId(pathname);
   const navLabel = PRIMARY_NAV.find((item) => item.id === navId)?.label;
-  const title = navLabel ?? PAGE_TITLES[pathname] ?? "考编助手";
+  const title = navLabel ?? PAGE_TITLES[pathname] ?? "教招有据";
   const showBack = BACK_BUTTON_PATHS.has(pathname);
 
   // 会话恢复完成前不渲染依赖存储的摘要与通知，保证与服务端渲染一致

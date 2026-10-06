@@ -44,6 +44,8 @@ export default function Home() {
         <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
           <span className="text-3xl" aria-hidden="true">📝</span>
         </div>
+        <p className="mb-1 text-sm font-semibold tracking-wide text-blue-700">教招有据</p>
+        <p className="mb-3 text-xs text-slate-500">教师招聘机会与资格预筛</p>
         <h1 className="text-2xl font-bold leading-snug text-slate-900 md:text-3xl">
           填写地区、学历、专业、毕业状态和教师资格，
           <br />
@@ -55,6 +57,9 @@ export default function Home() {
         <p className="mt-4 text-sm text-slate-500 md:text-base">
           每个结论都给出公告依据：初步符合、补充信息后判断、建议人工确认、明确不符合，
           自己看得懂、能核对。
+        </p>
+        <p className="mt-3 text-xs text-slate-400">
+          资格结果为预筛，最终以官方公告和招聘单位审核为准
         </p>
         <Link
           href="/onboarding"

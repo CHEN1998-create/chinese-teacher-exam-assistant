@@ -52,7 +52,7 @@ export function Sidebar() {
       <div className="flex h-16 items-center border-b border-slate-200 px-6">
         <Link href="/opportunities" className="flex items-center gap-2">
           <span className="text-2xl" aria-hidden="true">📝</span>
-          <span className="text-lg font-semibold text-slate-900">考编助手</span>
+          <span className="text-lg font-semibold text-slate-900">教招有据</span>
         </Link>
       </div>
 

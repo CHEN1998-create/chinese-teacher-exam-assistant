@@ -10,8 +10,8 @@ import { AuthProvider } from "@/lib/auth";
 // 字体文件，放 public/ 下以本地字体加载方式随项目部署。
 
 export const metadata: Metadata = {
-  title: "语文教师编备考助手",
-  description: "帮你核对考什么、判断资料怎么用、安排接下来7天",
+  title: "教招有据｜教师招聘机会与资格预筛",
+  description: "查看可追溯的教师招聘机会，逐项理解资格判断依据，推进报考下一步。当前先开放语文岗位。",
   // 公开演示环境：禁止搜索引擎收录（配合 X-Robots-Tag 响应头双保险）
   robots: { index: false, follow: false },
 };

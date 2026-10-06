@@ -32,7 +32,7 @@ function AdminChrome({ children }: { children: React.ReactNode }) {
             <span className="text-lg">🛡️</span>
             <div>
               <p className="text-sm font-semibold leading-4">运营审核后台</p>
-              <p className="text-[11px] text-slate-400">全国语文教师编备考助手</p>
+              <p className="text-[11px] text-slate-400">教招有据</p>
             </div>
           </div>
           <div className="flex items-center gap-4">

@@ -79,8 +79,11 @@ function LoginForm() {
           <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
             <span className="text-2xl">📝</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900">语文教师编备考助手</h1>
-          <p className="text-sm text-slate-500 mt-1">登录后可以保存安排和记录进度</p>
+          <h1 className="text-xl font-bold text-slate-900">教招有据</h1>
+          <p className="text-sm text-slate-500 mt-1">教师招聘机会与资格预筛</p>
+          <p className="mt-3 text-xs leading-5 text-slate-400">
+            登录后可以保存关注机会与报考进度；资格结果为预筛，最终以官方公告和招聘单位审核为准
+          </p>
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
