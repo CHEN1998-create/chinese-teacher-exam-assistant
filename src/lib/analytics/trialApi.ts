@@ -46,9 +46,35 @@ export interface TrialCohortReport {
   datasetSplit: { real: number; demo: number; unknown: number };
 }
 
+export interface SupplySnapshot {
+  generatedAt: string;
+  coverage: {
+    subjectLabel: string;
+    status: "monitoring_no_open" | "open_batch_exists" | "paused";
+    monitoredRegions: number;
+    monitoredSources: number;
+    sourcesUnhealthy: number;
+    lastCheckedAt: string;
+    openOpportunityCount: number;
+  };
+  announcements: {
+    total: number;
+    active: number;
+    withdrawn: number;
+    open: number;
+    preview: number;
+    closed: number;
+    sourceFailed: number;
+    review: { humanReviewed: number; pending: number };
+  };
+  units: { total: number; open: number };
+  crossCheck: { manualOpenCount: number; computedOpenUnits: number; consistent: boolean };
+}
+
 export interface TrialDashboardResponse {
   generatedAt: string;
   cohorts: Record<TrialCohortKey, TrialCohortReport>;
+  supply: SupplySnapshot;
 }
 
 export const TRIAL_COHORT_LABELS: Record<TrialCohortKey, string> = {

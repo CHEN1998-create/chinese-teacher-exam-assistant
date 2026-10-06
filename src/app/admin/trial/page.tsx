@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/Button";
 import {
   TRIAL_COHORT_LABELS,
   trialApi,
+  type SupplySnapshot,
   type TrialCohortKey,
   type TrialCohortReport,
   type TrialDashboardResponse,
@@ -163,6 +164,96 @@ function CohortReport({ report }: { report: TrialCohortReport }) {
   );
 }
 
+const COVERAGE_STATUS_LABELS: Record<SupplySnapshot["coverage"]["status"], string> = {
+  monitoring_no_open: "监测中 · 当前无在报批次",
+  open_batch_exists: "监测中 · 存在在报批次",
+  paused: "监测暂停",
+};
+
+/**
+ * 机会供给卡片（模块 8）：市场侧存量，来自人工巡检登记与真实公告台账，
+ * 不是用户行为事件；演示台账岗位永远不计入。
+ */
+function SupplyCard({ supply }: { supply: SupplySnapshot }) {
+  const { coverage, announcements: a, units, crossCheck } = supply;
+  return (
+    <Card>
+      <CardHeader
+        title="机会供给（真实监测台账）"
+        description="市场侧存量：人工巡检 + 官方公告台账计算，非用户行为事件；每日台账的供给行从此抄录"
+      />
+      <div className="space-y-3 px-4 pb-4">
+        <div className="flex flex-wrap items-end gap-6">
+          <div>
+            <p className="text-3xl font-bold tabular-nums text-slate-900">
+              {coverage.openOpportunityCount}
+            </p>
+            <p className="mt-0.5 text-xs text-slate-500">
+              当前在报{coverage.subjectLabel}岗位（人工巡检登记 · 报考单元口径）
+            </p>
+          </div>
+          <Badge variant={coverage.status === "paused" ? "warning" : "info"}>
+            {COVERAGE_STATUS_LABELS[coverage.status]}
+          </Badge>
+          <p className="text-[11px] text-slate-400">
+            监测 {coverage.monitoredRegions} 地区 / {coverage.monitoredSources} 个官方栏目
+            {coverage.sourcesUnhealthy > 0 && (
+              <span className="ml-1 text-red-600">（{coverage.sourcesUnhealthy} 个来源失效）</span>
+            )}
+            ，最近核对 {new Date(coverage.lastCheckedAt).toLocaleString("zh-CN", { hour12: false })}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {(
+            [
+              ["在报公告", a.open],
+              ["预告 · 待官方通知", a.preview],
+              ["已截止", a.closed],
+              ["已取消", a.withdrawn],
+            ] as const
+          ).map(([label, count]) => (
+            <div key={label} className="rounded-lg border border-slate-200 px-3 py-2">
+              <p className="text-lg font-semibold tabular-nums text-slate-900">{count}</p>
+              <p className="text-[11px] text-slate-500">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-slate-600">
+          <span>
+            岗位单元合计 <span className="font-semibold tabular-nums">{units.total}</span>（在报{" "}
+            <span className="font-semibold tabular-nums">{units.open}</span>，各公告取最新版本）
+          </span>
+          <span>
+            人工复核 <span className="font-semibold tabular-nums">{a.review.humanReviewed}</span> /
+            待复核 <span className="font-semibold tabular-nums">{a.review.pending}</span>
+          </span>
+          {a.sourceFailed > 0 && (
+            <span className="text-red-600">
+              来源失效公告 <span className="font-semibold tabular-nums">{a.sourceFailed}</span>
+            </span>
+          )}
+        </div>
+
+        {crossCheck.consistent ? (
+          <p className="text-[11px] text-slate-400">
+            交叉核对一致：人工巡检登记 {crossCheck.manualOpenCount} = 按公告报名时间计算{" "}
+            {crossCheck.computedOpenUnits}
+          </p>
+        ) : (
+          <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+            交叉核对不一致：人工巡检登记 {crossCheck.manualOpenCount} ≠ 按公告报名时间计算{" "}
+            {crossCheck.computedOpenUnits}
+            。可能是巡检未更新或延期/取消公告未录入，必须人工排查后才能把供给数写入每日台账，
+            不得静默取其一。
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 export default function TrialDashboardPage() {
   const [data, setData] = useState<TrialDashboardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -248,6 +339,9 @@ export default function TrialDashboardPage() {
           </button>
         </p>
       )}
+
+      {/* 机会供给：市场侧存量（全局，不随分群切换） */}
+      {data && <SupplyCard supply={data.supply} />}
 
       {/* 分群切换 */}
       <div className="inline-flex p-1 bg-slate-100 rounded-lg" role="group" aria-label="看板分群">
