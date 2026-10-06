@@ -25,10 +25,12 @@ import {
   V61_SEED_ANNOUNCEMENTS,
 } from "@/lib/seed/v61-opportunities";
 import {
+  buildProfileLimitations,
   draftToProfile,
   isSubjectOpen,
   subjectLabel,
   type GuestProfileDraft,
+  type ProfileLimitation,
 } from "./guestSession";
 
 /** 关注/保存/提醒统一走的登录落点（未登录也能继续看结果） */
@@ -56,6 +58,11 @@ export interface GuestPreviewReady {
   view: OpportunitiesView;
   /** 按需补问说明（与 view.needInfoGroups 对应，额外给出补问原因） */
   followUps: GuestFollowUp[];
+  /**
+   * 最低必要信息缺失导致的结果限制（用户在采集时选择「暂不确定/暂不提供」）。
+   * 页面必须原样展示：让用户知道结论收窄到了什么程度，且这不是「不符合」。
+   */
+  limitations: ProfileLimitation[];
   /** 整页唯一高强调行动；无有效机会时为 null（页面转空态） */
   primaryAction: GuestPrimaryAction | null;
 }
@@ -76,10 +83,23 @@ export type GuestPreview =
   | GuestPreviewIncomplete;
 
 /**
- * 条件画像各维度的补问原因。基础五组覆盖的维度不会出现在这里
- * （学历/学位/专业/毕业状态/教师资格/地区在采集流程中已填）。
+ * 各缺失维度的补问原因。
+ * 条件画像（年龄/户籍/社保/经历）本就不采集；基础五组在用户选择
+ * 「暂不确定/暂不提供」时同样会缺失——两种缺事实都只能 UNKNOWN，绝不判不符合。
  */
 const FOLLOW_UP_REASONS: Record<string, string> = {
+  region:
+    "你还没有选择能接受的地区：补充至少一个地区后，这些岗位才能按地区判断；没选地区不会被当作不符合。",
+  education:
+    "你暂未提供最高学历，这些岗位有明确学历门槛，补充后才能判断；未提供不判不符合。",
+  degree:
+    "你暂未提供学位信息，这些岗位有学位要求，补充后才能判断；未提供不判不符合。",
+  major:
+    "你暂未提供毕业证专业全称，这些岗位限报专业，补充名称后才能逐条比对；未提供不判专业不符。",
+  graduate_status:
+    "你暂未提供毕业时间与当前状态，这些岗位按应届/社会人员区分，补充后才能判断。",
+  teacher_cert:
+    "你暂未提供教师资格情况，这些岗位要求教师资格证或合格证明，补充后才能判断；未提供不当作没有资格。",
   hukou:
     "这些机会的公告写明了户籍或生源地要求，补充户籍所在地区后才能判断；没有填写不会被直接判定为不符合。",
   age: "这些机会有明确的年龄上限，需要出生日期后按公告参考日计算周岁，补充后才能判断。",
@@ -145,6 +165,7 @@ export function buildGuestPreview(
     profile,
     view,
     followUps: buildFollowUps(view),
+    limitations: buildProfileLimitations(draft),
     primaryAction: buildPrimaryAction(view),
   };
 }

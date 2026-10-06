@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useCurrentUser } from "@/lib/auth";
 import { guestSessionService } from "@/lib/guest/guestSession";
 import { buildGuestPreview, type GuestPreview } from "@/lib/guest/previewEngine";
+import { GUEST_COVERAGE } from "@/lib/guest/coverage";
 import { V61_NOW, V61_SEED_ANNOUNCEMENTS } from "@/lib/seed/v61-opportunities";
 import { Hero } from "@/components/ia/Hero";
 import { OpportunityCard } from "@/components/ia/OpportunityCard";
@@ -16,6 +17,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
 import { trackOncePerUser } from "@/lib/analytics/eventService";
 import type { GuestPreviewReady } from "@/lib/guest/previewEngine";
+import type { ProfileLimitation } from "@/lib/guest/guestSession";
 
 /**
  * v6.1 访客初步机会结果页：
@@ -141,8 +143,26 @@ function NotOpenSubject({
 
 /* ================== 初步机会结果 ================== */
 
+/** 真实监测事实行（与首页同一数据源）；下方 seed 机会必须明确标注为演示示例 */
+function formatCoverageLine(): string {
+  const d = new Date(GUEST_COVERAGE.lastCheckedAt);
+  const day = Number.isNaN(d.getTime())
+    ? GUEST_COVERAGE.lastCheckedAt
+    : `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+  return `真实监测：杭州、宁波语文教师渠道，最近核对 ${day}，当前在报 ${GUEST_COVERAGE.openOpportunityCount} 个；下方为功能演示示例公告，非在报岗位。`;
+}
+
+/** 这些维度属于「条件画像」，本就不在基础五组中采集；基础五组被跳过时不显示该行 */
+const CONDITIONAL_DIMENSIONS = new Set([
+  "hukou",
+  "age",
+  "social_security",
+  "work_experience",
+  "other",
+]);
+
 function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
-  const { view, followUps, primaryAction } = preview;
+  const { view, followUps, limitations, primaryAction } = preview;
 
   // P0 漏斗②：访客看到至少一个有效（初步符合）机会；同用户只记一次
   useEffect(() => {
@@ -170,15 +190,42 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
 
   // 空数据：画像完整但已覆盖公告中没有可考虑机会
   if (!view.priority) {
+    const missingRegion = limitations.some((item) => item.step === 1);
+    const regionFollowUp = followUps.find((f) => f.dimension === "region");
     return (
-      <div className="mx-auto max-w-2xl space-y-6 py-6">
-        <p className="text-xs text-slate-500">{view.coverage}</p>
-        <EmptyState
-          title="当前已覆盖的公告里还没有你能考虑的机会"
-          description="可以修改地区或学历等条件再看；未覆盖地区不等于没有招聘，新公告核对后会出现在这里。"
-          actionLabel="返回修改画像"
-          actionHref="/onboarding"
-        />
+      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-slate-50">
+        <div className="mx-auto max-w-2xl space-y-4 py-6 px-4">
+          <p className="text-xs text-slate-500">{formatCoverageLine()}</p>
+          {missingRegion && (
+            <Card className="border-amber-200 bg-amber-50/70" data-testid="missing-region-notice">
+              <h2 className="text-sm font-semibold text-amber-900">
+                你选择了暂不提供「能接受的地区」
+              </h2>
+              <p className="mt-1.5 text-sm leading-relaxed text-amber-800">
+                没有地区意向时不会给出任何「初步符合」结果
+                {regionFollowUp ? `（当前 ${regionFollowUp.affectsCount} 个示例岗位都在等你补充地区）` : ""}
+                ；这不是不符合，补充至少一个地区后结论会立即重新计算。
+              </p>
+              <Link
+                href="/onboarding"
+                className="mt-3 inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                返回补充地区
+              </Link>
+            </Card>
+          )}
+          <EmptyState
+            title={
+              missingRegion
+                ? "补充地区后才能看到可考虑的机会"
+                : "当前已覆盖的公告里还没有你能考虑的机会"
+            }
+            description="可以修改地区或学历等条件再看；未覆盖地区不等于没有招聘，新公告核对后会出现在这里。"
+            actionLabel="返回修改画像"
+            actionHref="/onboarding"
+          />
+          <LimitationsCard limitations={limitations} />
+        </div>
       </div>
     );
   }
@@ -191,7 +238,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* 第一层：一句结论 + 一个风险 + 唯一主行动（关注才登录） */}
         <Hero
-          meta={view.coverage}
+          meta={formatCoverageLine()}
           conclusion={view.conclusion}
           risk={view.risk}
           action={
@@ -204,6 +251,9 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             不登录也可以继续查看全部结果；登录后才能关注机会、保存画像和跟踪报名（演示环境不发送真实通知）。
           </p>
         </Hero>
+
+        {/* 最低必要信息缺失导致的结果限制（用户选择过「暂不提供」） */}
+        <LimitationsCard limitations={limitations} />
 
         {/* 优先机会：首屏可见，默认展开依据 */}
         <div id="priority-opportunity" className="space-y-2">
@@ -245,9 +295,11 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
                 <p className="text-sm text-amber-800 leading-relaxed">
                   有 {followUp.affectsCount} 个机会需要这条信息。{followUp.reason}
                 </p>
-                <p className="text-xs text-amber-700/80 mt-1">
-                  年龄、户籍、社保和工作经历只在具体机会需要时补问，不需要在基础信息里一次填完。
-                </p>
+                {CONDITIONAL_DIMENSIONS.has(followUp.dimension) && (
+                  <p className="text-xs text-amber-700/80 mt-1">
+                    年龄、户籍、社保和工作经历只在具体机会需要时补问，不需要在基础信息里一次填完。
+                  </p>
+                )}
               </Card>
               {group.rows.map((row) => (
                 <OpportunityCard
@@ -317,5 +369,37 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/* ================== 最低必要信息缺失的结果限制卡 ================== */
+
+function LimitationsCard({ limitations }: { limitations: ProfileLimitation[] }) {
+  if (limitations.length === 0) return null;
+  return (
+    <section
+      aria-label="暂未提供信息导致的结果限制"
+      data-testid="profile-limitations"
+      className="rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3"
+    >
+      <h2 className="text-sm font-semibold text-amber-900">
+        有 {limitations.length} 项信息你暂未提供，结果已相应收窄
+      </h2>
+      <ul className="mt-2 list-disc space-y-1 pl-5">
+        {limitations.map((item) => (
+          <li key={item.step} className="text-xs leading-relaxed text-amber-800">
+            <span className="font-medium">{item.label}：</span>
+            {item.impact}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-2 text-xs text-amber-800">
+        缺失信息一律显示「补充信息后判断」，不会被判为不符合；
+        <Link href="/onboarding" className="font-medium underline underline-offset-2 ml-1">
+          返回补填
+        </Link>
+        后结果自动更新。
+      </p>
+    </section>
   );
 }

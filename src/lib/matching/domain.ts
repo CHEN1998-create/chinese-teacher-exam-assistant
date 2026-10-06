@@ -158,6 +158,9 @@ export function evaluateRequirement(
     case "graduate_status": {
       if (!c.requireFresh) return pass(req, "公告未限制应届身份");
       if (!profile.graduationDate) return unknown(req, "尚未填写毕业时间，无法按本公告口径判断应届身份");
+      if (!profile.employmentStatus) {
+        return unknown(req, "尚未填写当前就业状态，补充后按本公告口径判断应届身份");
+      }
       if (
         profile.employmentStatus === "employed_fulltime" &&
         (profile.socialSecurityMonths ?? 0) > 0
@@ -171,6 +174,10 @@ export function evaluateRequirement(
     }
     case "teacher_cert": {
       const cert = profile.teacherCert;
+      // 用户选择「暂不提供教师资格情况」：缺事实只能 UNKNOWN，不得判不符合（模块 4）
+      if (!cert || !cert.status) {
+        return unknown(req, "尚未填写教师资格情况，补充信息后判断");
+      }
       if (cert.status === "none") return fail(req, "尚未取得公告要求的教师资格");
       if (cert.status === "in_progress") {
         if (!c.acceptInProgress || !cert.expectedDate) {

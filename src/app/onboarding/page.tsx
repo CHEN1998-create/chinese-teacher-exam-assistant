@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
@@ -14,14 +14,21 @@ import {
   PROVINCE_OPTIONS,
   REGION_LEVEL_OPTIONS,
   STAGE_OPTIONS,
+  STEP_PURPOSE,
+  STEP_SKIP_COPY,
   SUBJECT_OPTIONS,
   TEACHER_CERT_STATUS_OPTIONS,
   TOTAL_PROFILE_STEPS,
+  buildProfileLimitations,
   draftToProfile,
   guestSessionService,
   isStepComplete,
+  isStepSkipped,
+  pruneSkippedSteps,
+  stepHasContent,
   type GuestProfileDraft,
 } from "@/lib/guest/guestSession";
+import { GUEST_COVERAGE } from "@/lib/guest/coverage";
 import { profileApi } from "@/lib/profile/profileApi";
 import { trackOncePerUser } from "@/lib/analytics/eventService";
 import type { EmploymentNatureCode, SubjectCode } from "@/lib/announcements/types";
@@ -42,6 +49,9 @@ import { NATURE_SHORT_LABELS } from "@/lib/ia/labels";
  *
  * - 未登录可完成，草稿自动保存在本机浏览器，刷新可恢复；
  * - 随时返回修改，已填内容保留；
+ * - 每组都可「暂不确定 / 暂不提供」：允许继续，但相关维度引擎只能判 UNKNOWN，
+ *   结果页明确标注限制，绝不把缺失信息当作「不符合」；
+ * - 本机存储写入失败时页面输入不丢失，明确提示重试；
  * - 年龄/户籍/社保/工作经历不在此收齐，结果页按需说明补问原因；
  * - 意向学科非语文时明确提示尚未开放，可留下意向，不生成虚假匹配；
  * - 完成后进入 /preview 查看初步机会，关注时才要求登录。
@@ -54,6 +64,12 @@ const STEP_TITLES = [
   "你什么时候毕业？现在是什么状态？",
   "你的教师资格情况？",
 ];
+
+function formatCheckedDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -78,6 +94,9 @@ export default function OnboardingPage() {
     return Math.min(session.step + 1, TOTAL_PROFILE_STEPS);
   });
 
+  // 本机存储写入失败提示（输入仍保留在 draft 状态中，不会丢失）
+  const [saveError, setSaveError] = useState(false);
+
   useEffect(() => {
     if (status === "loading") return;
     if (status === "authenticated") {
@@ -89,16 +108,30 @@ export default function OnboardingPage() {
     }
   }, [status, router]);
 
+  // 任何一组补填了实质内容，自动取消该组的「暂不提供」标记（由纯函数规整）
   const updateDraft = (patch: Partial<GuestProfileDraft>) => {
-    setDraft((prev) => ({ ...prev, ...patch }));
+    setSaveError(false);
+    setDraft((prev) => pruneSkippedSteps({ ...prev, ...patch }));
+  };
+
+  /** 把当前进度写入本机存储；失败返回 false（调用方保留页面状态并提示） */
+  const persist = (step?: number): boolean => {
+    try {
+      guestSessionService.save({ draft, step });
+      setSaveError(false);
+      return true;
+    } catch {
+      setSaveError(true);
+      return false;
+    }
   };
 
   /** 进入下一组：保存草稿与完成进度。
-   *  invited 模式下若草稿已完整，同步持久化到服务端（跨浏览器恢复）。 */
+   *  invited 模式下若草稿已完整且没有「暂不提供」项，同步持久化到服务端（跨浏览器恢复）。 */
   const goNext = () => {
     const finishedStep = view;
-    guestSessionService.save({ draft, step: finishedStep });
-    if (AUTH_MODE === "invited") {
+    if (!persist(finishedStep)) return; // 保存失败：停在本步，输入不丢
+    if (AUTH_MODE === "invited" && (draft.skippedSteps?.length ?? 0) === 0) {
       const profile = draftToProfile(draft);
       if (profile) profileApi.saveProfile(profile).catch(() => undefined);
     }
@@ -113,20 +146,54 @@ export default function OnboardingPage() {
     }
   };
 
-  /** 返回上一组：草稿照样保留（即使本组尚未答完） */
+  /** 返回上一组：草稿照样保留（即使本组尚未答完或已跳过） */
   const goBack = () => {
-    guestSessionService.save({ draft });
+    persist(); // 返回修改时也尝试落盘；失败不拦截返回（输入仍在当前会话里）
     setView((v) => Math.max(v - 1, 1));
+  };
+
+  /** 当前组标记为「暂不确定 / 暂不提供」并进入下一组（最后一步直接看结果） */
+  const skipCurrentStep = () => {
+    const nextDraft: GuestProfileDraft = {
+      ...draft,
+      skippedSteps: [...new Set([...(draft.skippedSteps ?? []), view])],
+    };
+    setDraft(nextDraft);
+    setSaveError(false);
+    try {
+      guestSessionService.save({ draft: nextDraft, step: view });
+    } catch {
+      setSaveError(true);
+      return; // 存储失败不前进；跳过意图已在页面状态中，可重试
+    }
+    if (view >= TOTAL_PROFILE_STEPS) {
+      trackOncePerUser("profile_completed", "profile", {
+        props: { stepCount: TOTAL_PROFILE_STEPS, skipped: true },
+      });
+      router.push("/preview");
+    } else {
+      setView(view + 1);
+    }
+  };
+
+  /** 撤销本组的「暂不提供」，留在本组填写 */
+  const undoSkip = () => {
+    updateDraft({
+      skippedSteps: (draft.skippedSteps ?? []).filter((step) => step !== view),
+    });
   };
 
   if (status === "loading") return null;
 
   const canContinue = isStepComplete(draft, view);
+  const skippedHere = isStepSkipped(draft, view);
+  const hasContentHere = stepHasContent(draft, view);
+  const limitations = buildProfileLimitations(draft);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-slate-50">
       <div className="max-w-2xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4 gap-2">
           <Link href="/" className="text-sm text-slate-500 hover:text-slate-700">
             ← 返回首页
           </Link>
@@ -135,20 +202,64 @@ export default function OnboardingPage() {
           </span>
         </div>
 
-        {/* 进度条 */}
-        <div className="flex gap-2 mb-6" aria-hidden="true">
-          {Array.from({ length: TOTAL_PROFILE_STEPS }).map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 flex-1 rounded-full transition-colors ${
-                i < view ? "bg-blue-500" : "bg-slate-200"
-              }`}
-            />
-          ))}
+        {/* 当前真实监测范围（一行事实，与首页同一数据源） */}
+        <p className="mb-5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs leading-relaxed text-emerald-900">
+          当前仅监测浙江杭州、宁波的<strong>语文教师</strong>官方招聘渠道，最近核对
+          {formatCheckedDate(GUEST_COVERAGE.lastCheckedAt)}，在报 {GUEST_COVERAGE.openOpportunityCount} 个；
+          暂未收录其他城市不等于没有招聘。
+        </p>
+
+        {/* 进度条：蓝色=已完成，琥珀色=已选择暂不提供 */}
+        <div
+          className="flex gap-2 mb-6"
+          role="progressbar"
+          aria-valuemin={1}
+          aria-valuemax={TOTAL_PROFILE_STEPS}
+          aria-valuenow={view}
+          aria-label={`基础画像填写进度：第 ${view} 组，共 ${TOTAL_PROFILE_STEPS} 组`}
+        >
+          {Array.from({ length: TOTAL_PROFILE_STEPS }).map((_, i) => {
+            const stepNo = i + 1;
+            const isSkipped = isStepSkipped(draft, stepNo);
+            return (
+              <div
+                key={i}
+                title={isSkipped ? `第 ${stepNo} 组：暂不提供` : undefined}
+                className={`h-1.5 flex-1 rounded-full transition-colors ${
+                  isSkipped
+                    ? "bg-amber-400"
+                    : i < view
+                      ? "bg-blue-500"
+                      : "bg-slate-200"
+                }`}
+              />
+            );
+          })}
         </div>
 
         <Card>
           <h1 className="text-lg font-bold text-slate-900 mb-1">{STEP_TITLES[view - 1]}</h1>
+          {/* 资料用途：每组都先说清「这条信息用来做什么」 */}
+          <p className="text-sm text-slate-500 leading-relaxed">{STEP_PURPOSE[view]}</p>
+
+          {/* 已选择暂不提供：明确结果限制，一键返回补填 */}
+          {skippedHere && (
+            <div
+              className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5"
+              data-testid={`skipped-banner-${view}`}
+            >
+              <p className="text-sm text-amber-900">
+                已选择「暂不提供」这一组。{STEP_SKIP_COPY[view].confirm}
+              </p>
+              <button
+                type="button"
+                onClick={undoSkip}
+                className="mt-1.5 text-sm font-medium text-amber-800 underline underline-offset-2 hover:text-amber-900"
+              >
+                现在补上这一组
+              </button>
+            </div>
+          )}
 
           {view === 1 && <StepRegions value={draft.regions} onChange={(regions) => updateDraft({ regions })} />}
           {view === 2 && (
@@ -173,14 +284,66 @@ export default function OnboardingPage() {
           )}
           {view === 5 && <StepCert draft={draft} onChange={updateDraft} />}
 
+          {/* 最后一步：汇总暂未提供项及其对结果的限制 */}
+          {view === TOTAL_PROFILE_STEPS && limitations.length > 0 && (
+            <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3">
+              <p className="text-sm font-medium text-amber-900">
+                有 {limitations.length} 项信息你暂未提供，结果会这样受限：
+              </p>
+              <ul className="mt-1.5 list-disc pl-5 space-y-1">
+                {limitations.map((item) => (
+                  <li key={item.step} className="text-xs leading-relaxed text-amber-800">
+                    <span className="font-medium">{item.label}：</span>
+                    {item.impact}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 text-xs text-amber-800">
+                这些都不是「不符合」；补填后结论会自动更新，也可现在返回修改。
+              </p>
+            </div>
+          )}
+
+          {/* 写入失败：不跳转、不丢输入，提示重试 */}
+          {saveError && (
+            <div
+              className="mt-5 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-800"
+              data-testid="save-error"
+              role="alert"
+            >
+              本机浏览器存储当前不可用（隐私模式或空间已满），进度没能保存；你填写的内容仍在页面上，
+              <button
+                type="button"
+                onClick={goNext}
+                className="mx-1 font-medium underline underline-offset-2"
+              >
+                点这里重试
+              </button>
+              ，或调整浏览器设置后继续。
+            </div>
+          )}
+
           <div className="mt-6">
             <Button onClick={goNext} disabled={!canContinue} size="lg" fullWidth>
               {view >= TOTAL_PROFILE_STEPS ? "查看初步匹配结果" : "下一步"}
             </Button>
             {!canContinue && (
-              <p className="text-xs text-slate-400 text-center mt-2">完成本页问题后才能继续</p>
+              <p className="text-xs text-slate-400 text-center mt-2">
+                完成本页问题后继续；如果暂时不确定，也可以选择下方「暂不提供」
+              </p>
             )}
           </div>
+
+          {/* 暂不确定 / 暂不提供：仅在本组没有任何实质内容时出现，避免与已填答案矛盾 */}
+          {!skippedHere && !hasContentHere && (
+            <button
+              type="button"
+              onClick={skipCurrentStep}
+              className="mt-3 w-full rounded-lg border border-dashed border-slate-300 px-3 py-2.5 text-sm text-slate-500 transition-colors hover:border-amber-300 hover:text-amber-800"
+            >
+              {STEP_SKIP_COPY[view].action}（结果会标注限制，不会判不符合）
+            </button>
+          )}
         </Card>
 
         {view > 1 && (
@@ -190,13 +353,13 @@ export default function OnboardingPage() {
               onClick={goBack}
               className="text-sm text-slate-500 hover:text-slate-700"
             >
-              返回上一组
+              ← 返回上一组修改
             </button>
           </div>
         )}
 
-        <p className="text-center text-xs text-slate-400 mt-6">
-          当前输入仅保存在本机浏览器，不会上传到服务器。
+        <p className="text-center text-xs text-slate-400 mt-6 leading-relaxed">
+          当前输入仅保存在本机浏览器（7 天有效），不会上传到服务器；可随时返回修改。
           <Link href="/login" className="text-blue-600 hover:underline ml-1">
             已有账号？直接登录
           </Link>
@@ -255,7 +418,7 @@ function StepRegions({
         可以填多个地区；招聘只按你能接受的地区筛选，不会推荐你明确不去的地方。
       </p>
       <div className="space-y-4">
-        {(rows.length > 0 ? rows : []).map((region, index) => {
+        {rows.map((region, index) => {
           const provinceCode = region.code.endsWith("0000")
             ? region.code
             : `${region.code.slice(0, 2)}0000`;
@@ -271,7 +434,7 @@ function StepRegions({
                     onChange={(e) =>
                       updateRow(index, regionFromSelect(e.target.value, "", region.level))
                     }
-                    className="mt-1 w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {PROVINCE_OPTIONS.map((p) => (
                       <option key={p.code} value={p.code}>
@@ -287,7 +450,7 @@ function StepRegions({
                     onChange={(e) =>
                       updateRow(index, regionFromSelect(provinceCode, e.target.value, region.level))
                     }
-                    className="mt-1 w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">全省均可</option>
                     {cities.map((c) => (
@@ -309,7 +472,7 @@ function StepRegions({
                         updateRow(index, regionFromSelect(provinceCode, cityCode, opt.value))
                       }
                       title={opt.hint}
-                      className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                      className={`min-h-11 px-3 py-2 rounded-lg border text-base sm:text-sm transition-colors ${
                         region.level === opt.value
                           ? "border-blue-500 bg-blue-50 text-blue-700"
                           : "border-slate-200 text-slate-600 hover:border-slate-300"
@@ -375,7 +538,7 @@ function OptionList<T extends string>({
           key={opt.value}
           type="button"
           onClick={() => onSelect(opt.value)}
-          className={`text-left p-3 rounded-xl border text-sm transition-colors ${
+          className={`min-h-11 text-left p-3 rounded-xl border text-base sm:text-sm transition-colors ${
             value === opt.value
               ? "border-blue-500 bg-blue-50 text-slate-900"
               : "border-slate-200 text-slate-700 hover:border-blue-300"
@@ -437,7 +600,9 @@ function StepMajor({
         value={major}
         onChange={(e) => onChange(e.target.value)}
         placeholder="毕业证专业全称"
-        className="w-full h-11 px-3 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        autoComplete="off"
+        // text-base 防止 iOS Safari 聚焦时自动放大页面
+        className="w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       <p className="text-xs text-slate-400 mt-2">
         专业目录存在解释空间（如“相关专业”）时，不会自动判定，会提示你向招聘单位确认。
@@ -469,7 +634,7 @@ function StepGraduation({
           onChange={(e) =>
             onChange({ graduationDate: e.target.value ? `${e.target.value}-15` : undefined })
           }
-          className="w-full h-11 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <p className="text-xs text-slate-400 mt-2">
           只记录毕业时间这一事实，不给你贴“应届生”标签；是否算应届按每条公告口径逐次判断。
@@ -504,13 +669,18 @@ function StepCert({
   draft: GuestProfileDraft;
   onChange: (patch: Partial<GuestProfileDraft>) => void;
 }) {
-  const cert: TeacherCertInfo = draft.teacherCert ?? { status: "obtained" };
+  // 暂不提供时 cert 可能整体缺失：不预选任何状态，避免把「未填」显示成「已取得」
+  const cert: Partial<TeacherCertInfo> = draft.teacherCert ?? {};
   const certNone = cert.status === "none";
   const subjectValue = certNone ? draft.intendedSubject : cert.subject;
   const subjectOpen = subjectValue === "chinese";
 
   const updateCert = (patch: Partial<TeacherCertInfo>) => {
-    const nextCert = { ...cert, ...patch };
+    const nextCert = {
+      status: "obtained",
+      ...cert,
+      ...patch,
+    } as TeacherCertInfo;
     onChange({
       teacherCert: nextCert,
       // 有证/在途时，报考学科跟随资格证学科；无证时由单独的意向学科选择决定
@@ -535,7 +705,8 @@ function StepCert({
     }
   };
 
-  const changeIntendedSubject = (subject: SubjectCode) => {
+  const changeIntendedSubject = (e: ChangeEvent<HTMLSelectElement>) => {
+    const subject = e.target.value as SubjectCode;
     if (certNone) {
       onChange({ intendedSubject: subject });
     } else {
@@ -565,40 +736,48 @@ function StepCert({
         />
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <label className="block">
-          <span className="text-xs text-slate-500">
-            {certNone ? "想报考的学科" : "资格证学科"}
-          </span>
-          <select
-            value={subjectValue ?? ""}
-            onChange={(e) => changeIntendedSubject(e.target.value)}
-            className="mt-1 w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            {SUBJECT_OPTIONS.map((s) => (
-              <option key={s.value} value={s.value}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {!certNone && (
+      {cert.status !== undefined && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-xs text-slate-500">资格证学段</span>
+            <span className="text-xs text-slate-500">
+              {certNone ? "想报考的学科" : "资格证学科"}
+            </span>
             <select
-              value={cert.stage ?? ""}
-              onChange={(e) => updateCert({ stage: e.target.value as TeacherCertInfo["stage"] })}
-              className="mt-1 w-full h-10 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={subjectValue ?? ""}
+              onChange={changeIntendedSubject}
+              className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              {STAGE_OPTIONS.map((s) => (
+              <option value="" disabled>
+                请选择学科
+              </option>
+              {SUBJECT_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>
                   {s.label}
                 </option>
               ))}
             </select>
           </label>
-        )}
-      </div>
+          {!certNone && (
+            <label className="block">
+              <span className="text-xs text-slate-500">资格证学段</span>
+              <select
+                value={cert.stage ?? ""}
+                onChange={(e) => updateCert({ stage: e.target.value as TeacherCertInfo["stage"] })}
+                className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="" disabled>
+                  请选择学段
+                </option>
+                {STAGE_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+      )}
 
       {cert.status === "in_progress" && (
         <label className="block">
@@ -609,12 +788,12 @@ function StepCert({
             onChange={(e) =>
               updateCert({ expectedDate: e.target.value ? `${e.target.value}-15` : undefined })
             }
-            className="mt-1 w-full h-11 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </label>
       )}
 
-      {!subjectOpen && (
+      {!subjectOpen && cert.status !== undefined && (
         <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
           当前先开放<strong>语文</strong>教师公开招聘；其他学科暂未开放匹配，完成后可以在结果页留下开注意向，
           不会为你生成不相关的匹配结果。
@@ -631,7 +810,7 @@ function StepCert({
             return (
               <label
                 key={opt.value}
-                className={`flex items-center gap-2 p-3 rounded-xl border text-sm cursor-pointer transition-colors ${
+                className={`flex min-h-11 items-center gap-2 p-3 rounded-xl border text-base sm:text-sm cursor-pointer transition-colors ${
                   checked
                     ? "border-blue-500 bg-blue-50 text-slate-900"
                     : "border-slate-200 text-slate-700 hover:border-blue-300"

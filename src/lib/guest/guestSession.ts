@@ -35,7 +35,7 @@ import type {
   UserRecruitmentProfile,
 } from "@/lib/profile/types";
 import { STORAGE_KEYS } from "@/lib/mock-data";
-import { loadFromStorage, saveToStorage, removeFromStorage } from "@/lib/storage";
+import { loadFromStorage, saveToStorageStrict, removeFromStorage } from "@/lib/storage";
 
 /** 五组基础画像，分步采集；每组在完成前都允许部分填写 */
 export const TOTAL_PROFILE_STEPS = 5;
@@ -64,6 +64,13 @@ export interface GuestProfileDraft {
   intendedSubject?: SubjectCode;
   /** 非语文用户已在本机留下开注意向（仅本地标记，不发送任何通知） */
   intentionLeft?: boolean;
+  /**
+   * 显式选择「暂不确定 / 暂不提供」的步骤号（1..5，模块 4）。
+   * 被跳过的步骤视为完成、允许继续，但相关字段保持空缺：
+   * 匹配引擎只能判 UNKNOWN（补充信息后判断），绝不能判为「明确不符合」。
+   * 用户一旦补填该步内容，步骤号会被 pruneSkippedSteps 自动移除。
+   */
+  skippedSteps?: number[];
 }
 
 export interface GuestProfileSession {
@@ -262,7 +269,87 @@ export function subjectLabel(code: SubjectCode | undefined): string {
 
 // ==================== 分组完成度（页面“下一步”门禁唯一口径） ====================
 
+/** 每组信息「用来做什么」的说明（页面逐组展示，避免用户盲填） */
+export const STEP_PURPOSE: Record<number, string> = {
+  1: "用来圈定你能接受的地区：只按这些地区筛选官方公告，不会推荐你明确不去的地方。",
+  2: "用来比对公告里的学历、学位门槛，例如「本科及以上」「学士及以上学位」。",
+  3: "用来逐条比对公告的专业要求目录；名称不完整或存在解释空间时不会硬判。",
+  4: "用来按每条公告的口径判断你是否属于应届或社会人员，不提前给你贴身份标签。",
+  5: "用来核对岗位要求的教师资格证/合格证明、学科与学段；用工形式决定哪些岗位会出现。",
+};
+
+/** 「暂不确定 / 暂不提供」按钮文案与跳过后的结果限制提示 */
+export const STEP_SKIP_COPY: Record<
+  number,
+  { action: string; confirm: string }
+> = {
+  1: {
+    action: "还没确定地区，先跳过",
+    confirm: "未选地区时不会给出任何「初步符合」结果：所有岗位都要等你补充地区后才能判断，这不是不符合。",
+  },
+  2: {
+    action: "学历/学位暂不确定，先跳过",
+    confirm: "缺少学历、学位时，相关岗位只能停留在「补充信息后判断」，不会给初步符合结论。",
+  },
+  3: {
+    action: "专业全称暂不确定，先跳过",
+    confirm: "缺少专业名称时，限专业的岗位只能停留在「补充信息后判断」，不会被当作专业不符。",
+  },
+  4: {
+    action: "毕业时间/状态暂不确定，先跳过",
+    confirm: "缺少毕业信息时，区分应届与社会人员的岗位无法判断，补充后才会出结论。",
+  },
+  5: {
+    action: "教师资格情况暂不提供，先跳过",
+    confirm: "缺少教师资格信息时，相关岗位只能停留在「补充信息后判断」，不会被当作没有资格。",
+  },
+};
+
+/** 步骤是否被显式跳过 */
+export function isStepSkipped(draft: GuestProfileDraft, step: number): boolean {
+  return draft.skippedSteps?.includes(step) ?? false;
+}
+
+/**
+ * 该步骤是否已经填有实质内容（与「跳过」互斥判定用）。
+ * 只有内容真实为空时，跳过状态才成立。
+ */
+export function stepHasContent(draft: GuestProfileDraft, step: number): boolean {
+  switch (step) {
+    case 1:
+      return draft.regions.length > 0;
+    case 2:
+      return draft.educationLevel !== undefined && draft.degree !== undefined;
+    case 3:
+      return (draft.majorFullName ?? "").trim().length > 0;
+    case 4:
+      return !!draft.graduationDate && draft.employmentStatus !== undefined;
+    case 5:
+      return !!draft.teacherCert?.status;
+    default:
+      return false;
+  }
+}
+
+/**
+ * 用户补填内容后自动取消对应步骤的「跳过」标记；
+ * 同时清理 1..5 之外的脏值。保存草稿前调用。
+ */
+export function pruneSkippedSteps(draft: GuestProfileDraft): GuestProfileDraft {
+  const before = draft.skippedSteps ?? [];
+  // 去重 + 限定 1..5 + 已有实质内容的步骤自动取消跳过
+  const seen = new Set<number>();
+  const skipped = before.filter((step) => {
+    if (seen.has(step)) return false;
+    seen.add(step);
+    return step >= 1 && step <= TOTAL_PROFILE_STEPS && !stepHasContent(draft, step);
+  });
+  if (before.length === skipped.length) return draft; // 过滤结果与原数组一致，无需变更
+  return { ...draft, skippedSteps: skipped.length > 0 ? skipped : undefined };
+}
+
 export function isStepComplete(draft: GuestProfileDraft, step: number): boolean {
+  if (isStepSkipped(draft, step)) return true;
   switch (step) {
     case 1:
       return draft.regions.length > 0;
@@ -274,6 +361,7 @@ export function isStepComplete(draft: GuestProfileDraft, step: number): boolean 
       return !!draft.graduationDate && draft.employmentStatus !== undefined;
     case 5: {
       if (draft.acceptedEmploymentNatures.length === 0) return false;
+      // 第 5 步被跳过时 teacherCert 允许缺失（isStepSkipped 已在上方放行）
       const cert = draft.teacherCert;
       if (!cert || !cert.status) return false;
       if (cert.status === "none") return draft.intendedSubject !== undefined;
@@ -299,15 +387,65 @@ export function isSubjectOpen(draft: GuestProfileDraft): boolean {
   return draft.intendedSubject === OPEN_SUBJECT;
 }
 
+/** 一条「结果限制」：因用户暂不提供某组最低必要信息，结论会收窄到什么程度 */
+export interface ProfileLimitation {
+  step: number;
+  /** 该组信息名称，如「能接受的地区」 */
+  label: string;
+  /** 对结果的具体影响（页面原文展示，必须强调不是不符合） */
+  impact: string;
+}
+
+const LIMITATION_COPY: Record<number, { label: string; impact: string }> = {
+  1: {
+    label: "能接受的地区",
+    impact:
+      "没有地区意向时不会给出任何「初步符合」结果：所有岗位都要等你补充地区后才能判断，这不代表你不符合。",
+  },
+  2: {
+    label: "最高学历与学位",
+    impact: "涉及学历、学位门槛的岗位只能停留在「补充信息后判断」，不会给出初步符合结论。",
+  },
+  3: {
+    label: "毕业证专业全称",
+    impact: "限专业的岗位只能停留在「补充信息后判断」，不会被当作「专业不符」。",
+  },
+  4: {
+    label: "毕业时间与当前状态",
+    impact: "区分应届与社会人员的岗位暂时无法判断，补充这一组后才会出结论。",
+  },
+  5: {
+    label: "教师资格情况",
+    impact: "要求教师资格证或合格证明的岗位只能停留在「补充信息后判断」，不会被当作没有资格。",
+  },
+};
+
+/**
+ * 依据「实际缺失的最低必要信息」（而非跳过标记本身）生成结果限制说明。
+ * 只要字段后来补填，限制自动消失。
+ */
+export function buildProfileLimitations(draft: GuestProfileDraft): ProfileLimitation[] {
+  const limitations: ProfileLimitation[] = [];
+  for (let step = 1; step <= TOTAL_PROFILE_STEPS; step += 1) {
+    if (stepHasContent(draft, step)) continue;
+    const copy = LIMITATION_COPY[step];
+    if (copy) limitations.push({ step, ...copy });
+  }
+  return limitations;
+}
+
 /**
  * 把完整草稿映射为匹配引擎使用的画像。
  * 条件画像字段（出生/户籍/社保/工作经历）刻意不设置 → 引擎只能判 UNKNOWN。
  * 草稿不完整或学科未开放时返回 null（调用方负责回引导/未开放页）。
  */
 export function draftToProfile(draft: GuestProfileDraft): UserRecruitmentProfile | null {
-  if (!isDraftComplete(draft) || !isSubjectOpen(draft)) return null;
+  if (!isDraftComplete(draft)) return null;
+  // 非语文学科明确分流；第 5 步整体「暂不提供」时（未选学科）按当前唯一开放的语文处理
+  if (draft.intendedSubject !== undefined && !isSubjectOpen(draft)) return null;
   return {
     regions: draft.regions,
+    // 被跳过的字段保持 undefined：引擎对缺事实一律判 UNKNOWN，不得伪造默认值
     educationLevel: draft.educationLevel as CredentialLevel,
     degree: draft.degree as DegreeCode,
     majorFullName: (draft.majorFullName ?? "").trim(),
@@ -335,18 +473,27 @@ export const guestSessionService = {
     return session;
   },
 
-  /** 创建或更新会话（草稿浅合并，整组覆盖；可随时返回修改） */
+  /**
+   * 创建或更新会话（草稿浅合并，整组覆盖；可随时返回修改）。
+   * 规整「跳过」标记后严格写入：存储不可用/超限时抛出，
+   * 调用方必须捕获并提示用户——此时页面上的输入仍保留在 React 状态中，不会丢失。
+   */
   save(patch: { draft?: Partial<GuestProfileDraft>; step?: number }): GuestProfileSession {
     const existing = this.load();
     const now = new Date().toISOString();
+    const mergedDraft = pruneSkippedSteps({
+      ...emptyDraft(),
+      ...existing?.draft,
+      ...patch.draft,
+    });
     const next: GuestProfileSession = {
-      draft: { ...emptyDraft(), ...existing?.draft, ...patch.draft },
+      draft: mergedDraft,
       step: patch.step ?? existing?.step ?? 0,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
       expiresAt: existing?.expiresAt ?? new Date(Date.now() + GUEST_TTL_MS).toISOString(),
     };
-    saveToStorage(STORAGE_KEYS.GUEST_PROFILE_V61, next);
+    saveToStorageStrict(STORAGE_KEYS.GUEST_PROFILE_V61, next);
     return next;
   },
 

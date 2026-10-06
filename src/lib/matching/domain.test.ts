@@ -140,6 +140,31 @@ describe("缺失信息永远不是不符合（回归）", () => {
     expect(region?.value).toBe("UNKNOWN");
     expect(results[0].overall).not.toBe("not_eligible");
   });
+
+  it("未填教师资格情况（第 5 组暂不提供）：教师维度 UNKNOWN，不抛错也不判不符合", () => {
+    const req = requirementFor("teacher_cert", {
+      kind: "teacher_cert",
+      subject: "chinese",
+      stage: "middle",
+      acceptInProgress: false,
+    });
+    const profileWithoutCert = {
+      ...V61_SEED_PROFILE,
+      teacherCert: undefined,
+    } as unknown as UserRecruitmentProfile;
+    const result = evaluateRequirement(req, profileWithoutCert, V61_NOW);
+    expect(result.value).toBe("UNKNOWN");
+
+    // 整体评估也不能因 teacherCert 缺省而抛 TypeError
+    const match = evaluateOpportunity(
+      findAnnouncement(V61_SCENARIO_IDS.eligible),
+      findAnnouncement(V61_SCENARIO_IDS.eligible).versions[0],
+      findAnnouncement(V61_SCENARIO_IDS.eligible).versions[0].units[0],
+      profileWithoutCert,
+      V61_NOW,
+    );
+    expect(match.overall).not.toBe("not_eligible");
+  });
 });
 
 describe("有效推荐过滤", () => {

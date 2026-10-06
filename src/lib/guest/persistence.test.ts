@@ -117,6 +117,40 @@ describe("访客画像：刷新恢复", () => {
     guestSessionService.clear();
     expect(guestSessionService.load()).toBeNull();
   });
+
+  it("「暂不提供」的步骤号随草稿一起保存与恢复（模块 4）", () => {
+    const draft: GuestProfileDraft = {
+      ...FULL_DRAFT,
+      majorFullName: undefined,
+      skippedSteps: [3],
+    };
+    guestSessionService.save({ draft, step: 5 });
+    const restored = guestSessionService.load()!;
+    expect(restored.draft.skippedSteps).toEqual([3]);
+    expect(restored.draft.majorFullName).toBeUndefined();
+    expect(guestSessionService.isComplete()).toBe(true); // 跳过的步骤视为完成
+  });
+
+  it("补填内容后的保存会自动清掉对应跳过标记", () => {
+    guestSessionService.save({
+      draft: { ...FULL_DRAFT, majorFullName: undefined, skippedSteps: [3] },
+      step: 5,
+    });
+    guestSessionService.save({ draft: { majorFullName: "汉语言文学" } });
+    expect(guestSessionService.load()!.draft.skippedSteps ?? []).toEqual([]);
+  });
+
+  it("本机存储写入失败时 save 抛错（页面据此保留输入并提示重试）", () => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => {
+      throw new Error("QuotaExceededError");
+    };
+    try {
+      expect(() => guestSessionService.save({ draft: FULL_DRAFT, step: 1 })).toThrow();
+    } finally {
+      Storage.prototype.setItem = original;
+    }
+  });
 });
 
 describe("重复提交反馈（既有回归，与访客画像解耦）", () => {

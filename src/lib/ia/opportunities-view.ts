@@ -173,7 +173,17 @@ export function buildOpportunitiesView(
   const invalid = sorted.filter((c) => !isValidOpportunity(c.match));
 
   const preliminary = valid.filter((c) => c.match.overall === "preliminary_eligible");
-  const needInfoGroups = groupByMissingDimension(valid).map((group) => ({
+  // 闸门通过但被 isValidOpportunity 剔除的候选：目前只有「未填地区 → region UNKNOWN」。
+  // 缺事实 ≠ 不符合：overall 不是 not_eligible 的，必须归入「补充信息后判断」，
+  // 只有 overall 明确为 not_eligible 的才进入「明确不符合」组。
+  const gatePassedButInvalid = invalid.filter((c) => c.match.gates.every((g) => g.passed));
+  const infoDeficit = gatePassedButInvalid.filter(
+    (c) => c.match.overall !== "not_eligible",
+  );
+  const notEligible = gatePassedButInvalid
+    .filter((c) => c.match.overall === "not_eligible")
+    .map((c) => toRow(c, nowIso));
+  const needInfoGroups = groupByMissingDimension([...valid, ...infoDeficit]).map((group) => ({
     dimension: group.dimension,
     dimensionText: dimensionLabel(group.dimension),
     count: group.count,
@@ -181,9 +191,6 @@ export function buildOpportunitiesView(
   }));
   const manualReview = valid
     .filter((c) => c.match.overall === "manual_review")
-    .map((c) => toRow(c, nowIso));
-  const notEligible = invalid
-    .filter((c) => c.match.gates.every((g) => g.passed))
     .map((c) => toRow(c, nowIso));
   const closed = invalid
     .filter((c) => !c.match.gates.every((g) => g.passed))
