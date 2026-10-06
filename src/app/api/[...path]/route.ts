@@ -6,8 +6,7 @@ export const dynamic = 'force-dynamic';
 const BACKEND_URL = process.env.BACKEND_URL;
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN;
 
-const FORWARD_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const;
-type ForwardMethod = (typeof FORWARD_METHODS)[number];
+type ForwardMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'HEAD';
 
 async function proxy(
   request: NextRequest,

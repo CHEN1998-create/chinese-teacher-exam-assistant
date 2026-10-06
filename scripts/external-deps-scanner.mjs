@@ -118,14 +118,27 @@ export function classifyOrigin(origin) {
  * @returns {string[]}
  */
 export function collectFiles(root) {
-  if (!fs.existsSync(root)) return [];
-  if (fs.statSync(root).isFile()) {
+  let stat;
+  try {
+    stat = fs.statSync(root);
+  } catch {
+    // 根目录在扫描间隙被移除（如并发构建重写 .next），视为无文件
+    return [];
+  }
+  if (stat.isFile()) {
     const ext = path.extname(root).toLowerCase();
     return TEXT_EXTENSIONS.has(ext) ? [root] : [];
   }
   const files = [];
   const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      // 子目录在遍历间隙被移除或暂不可读（并发构建/清理），跳过
+      return;
+    }
+    for (const entry of entries) {
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name) || entry.name.endsWith(".tsbuildinfo")) {
           continue;

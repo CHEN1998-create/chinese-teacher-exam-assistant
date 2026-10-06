@@ -274,9 +274,24 @@ export default function TrialDashboardPage() {
     }
   }, []);
 
+  // 初次加载：setState 只在异步回调中，避免 effect 内同步 setState（react-hooks 规则）
   useEffect(() => {
-    void load();
-  }, [load]);
+    let cancelled = false;
+    trialApi
+      .getDashboard()
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : "看板加载失败");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSeed = async () => {
     setSeedBusy(true);
