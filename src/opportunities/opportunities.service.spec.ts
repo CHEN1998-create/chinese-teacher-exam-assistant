@@ -156,7 +156,7 @@ const fakeProfileService = {
 } as never;
 
 describe('OpportunitiesService：匹配响应', () => {
-  it('六场景演示数据全部出现且每条结论携带规则版本、公告版本与证据锚点', async () => {
+  it('七场景演示数据全部出现且每条结论携带规则版本、公告版本与证据锚点', async () => {
     const fake = createFakePrisma();
     const service = new OpportunitiesService(fake.prisma, fakeProfileService);
     const response = await service.match(PROFILE, 'user-1');
@@ -177,18 +177,29 @@ describe('OpportunitiesService：匹配响应', () => {
       ...response.groups.notEligible,
       ...response.groups.closed,
     ];
-    // 6 个演示报考单元 + 4 个真实监测单元（鄞州1、杭州2、宁波1）
-    expect(all).toHaveLength(10);
+    // 7 个演示报考单元 + 4 个真实监测单元（鄞州1、杭州2、宁波1）
+    expect(all).toHaveLength(11);
 
     const demo = all.filter((u) => u.announcement.dataset === 'demo');
     const real = all.filter((u) => u.announcement.dataset === 'real');
-    expect(demo).toHaveLength(6);
+    expect(demo).toHaveLength(7);
     expect(real).toHaveLength(4);
 
-    // 6 条演示公告当前版本各一个报考单元（合肥 v1 被 v2 取代，不出现 v1）
+    // 7 条演示公告当前版本各一个报考单元（合肥 v1 被 v2 取代，不出现 v1）
     const demoIds = demo.map((u) => u.unit.id);
     expect(demoIds).toContain('unit-hefei-01-v2');
     expect(demoIds).not.toContain('unit-hefei-01-v1');
+
+    // 来源失效演示单元：报名窗口名义开放但 source_unavailable 闸门失败，
+    // 只能落在 closed，不进任何推荐组
+    const jiaxing = all.find((u) => u.unit.id === 'unit-jiaxing-01');
+    expect(jiaxing).toBeDefined();
+    const jxGate = jiaxing!.gates.find((g) => g.code === 'source_unavailable');
+    expect(jxGate?.passed).toBe(false);
+    expect(jxGate?.reason).toContain('404');
+    expect(response.groups.closed.map((u) => u.unit.id)).toContain(
+      'unit-jiaxing-01',
+    );
 
     for (const dto of demo) {
       expect(dto.version.id).toMatch(/^ann-.+-v\d+$/);
