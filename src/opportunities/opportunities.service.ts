@@ -143,6 +143,12 @@ export class OpportunitiesService {
     for (const announcement of PUBLISHED_ANNOUNCEMENTS) {
       const version = currentVersion(announcement);
       for (const unit of version.units) {
+        // 旧版本中同 code 单元的 id（关注记录可能仍指向旧版本单元 id）
+        const legacyUnitIds = announcement.versions
+          .filter((v) => v.id !== version.id)
+          .flatMap((v) => v.units)
+          .filter((u) => u.code === unit.code)
+          .map((u) => u.id);
         snapshots.push({
           announcementId: announcement.id,
           title: announcement.title,
@@ -161,6 +167,7 @@ export class OpportunitiesService {
             stage: unit.stage,
             headcount: unit.headcount,
           },
+          legacyUnitIds,
         });
       }
     }

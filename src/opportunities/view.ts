@@ -248,6 +248,24 @@ function toDimensions(candidate: OpportunityCandidate): DimensionDTO[] {
   });
 }
 
+/**
+ * 关注记录是否关联指定候选单元（模块 7）。
+ * 关注时的单元 id 可能属于旧版本（新版本同岗位 id 变、code 不变），
+ * 除精确 id 外按「公告 + 单元 code」跨版本对齐。
+ */
+function followMatchesUnit(
+  follow: FollowRecord,
+  candidate: OpportunityCandidate,
+): boolean {
+  if (follow.unitId === candidate.unit.id) return true;
+  if (follow.announcementId !== candidate.announcement.id) return false;
+  for (const v of candidate.announcement.versions) {
+    const u = v.units.find((x) => x.id === follow.unitId);
+    if (u) return u.code === candidate.unit.code;
+  }
+  return false;
+}
+
 export function toUnitMatchDTO(
   candidate: OpportunityCandidate,
   follow: FollowRecord | null,
@@ -343,10 +361,9 @@ export function buildMatchResponse(
   follows: readonly FollowRecord[],
   now: Date,
 ): MatchResponse {
-  const followByUnit = new Map(follows.map((f) => [f.unitId, f]));
   const sorted = sortCandidates([...candidates], profile);
   const dtoOf = (c: OpportunityCandidate) =>
-    toUnitMatchDTO(c, followByUnit.get(c.unit.id) ?? null);
+    toUnitMatchDTO(c, follows.find((f) => followMatchesUnit(f, c)) ?? null);
 
   const groups: MatchGroupsDTO = {
     preliminary: [],
@@ -383,7 +400,7 @@ export function buildMatchResponse(
   }
 
   const followsDTO = follows.map((f) => {
-    const candidate = sorted.find((c) => c.unit.id === f.unitId);
+    const candidate = sorted.find((c) => followMatchesUnit(f, c));
     const currentVersionId =
       candidate?.version.id ?? findCurrentVersionId(candidates, f);
     return toFollowDTO(f, currentVersionId);
@@ -415,7 +432,7 @@ export function buildUnitDetail(
 ): UnitDetailResponse | null {
   const candidate = candidates.find((c) => c.unit.id === unitId);
   if (!candidate) return null;
-  const follow = follows.find((f) => f.unitId === unitId) ?? null;
+  const follow = follows.find((f) => followMatchesUnit(f, candidate)) ?? null;
   const previousVersions = candidate.announcement.versions
     .filter((v) => v.id !== candidate.version.id)
     .map((v) => ({
@@ -454,6 +471,8 @@ export interface CatalogSnapshot {
     stage: ApplicationUnit['stage'];
     headcount: number;
   } | null;
+  /** 旧版本中同 code 单元的 id 列表（关注记录可能指向旧版本单元 id） */
+  legacyUnitIds: string[];
 }
 
 export interface GoalDTO {
@@ -500,7 +519,9 @@ export function buildGoals(
   for (const follow of follows) {
     if (follow.status === 'abandoned' || follow.status === 'closed') continue;
     const snap = catalog.find(
-      (c) => c.unit !== null && c.unit.id === follow.unitId,
+      (c) =>
+        c.unit !== null &&
+        (c.unit.id === follow.unitId || c.legacyUnitIds.includes(follow.unitId)),
     );
     if (!snap || !snap.unit) continue;
     const { unit } = snap;

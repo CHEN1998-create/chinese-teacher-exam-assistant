@@ -16,6 +16,20 @@ import type {
   ApplicationUnit,
   RecruitmentAnnouncement,
 } from '../matching/types.js';
+import {
+  baselineStateFor,
+  changeNotificationBody as versionChangeBody,
+  changeNotificationTitle as versionChangeTitle,
+  deriveUnitTrust,
+  describeTimelineChange,
+  diffFollowedAnnouncement,
+  maxSeverity,
+  noticeStateOf,
+  resolveUnitInVersion,
+  sameNoticeState,
+  type FollowNoticeState,
+  type UnitTrust,
+} from '../changes/changes.domain.js';
 import { regionLabel } from './labels.js';
 import {
   daysUntil,
@@ -50,6 +64,10 @@ export interface TimelineEventDTO {
     field: 'dateIso' | 'title';
     oldValue: string;
     newValue: string;
+    /** 对当前用户的影响（模块 7） */
+    impact?: string;
+    /** 下一步建议动作（模块 7） */
+    nextStep?: string;
   } | null;
 }
 
@@ -60,6 +78,8 @@ export interface ScheduleResponse {
   mutedUnitIds: string[];
   /** 首屏「当前最重要的一个动作」：按状态/截止/材料进度推导 */
   nextAction: NextActionDTO | null;
+  /** 各机会的可信状态（模块 7）：来源失效/公告取消/待人工复核时降级为可理解状态 */
+  unitTrust: Record<string, UnitTrust>;
 }
 
 export interface NextActionDTO {
@@ -80,7 +100,7 @@ export interface NotificationDTO {
   createdAt: string;
 }
 
-export const SYNC_VERSION = 'kb-schedule-sync-1.0.0';
+export const SYNC_VERSION = 'kb-schedule-sync-1.1.0';
 
 const KIND_ORDER: TimelineEventKind[] = [
   'registration_start',
@@ -100,9 +120,10 @@ export class ScheduleService {
   // ==================== 事件同步（按用户关注的机会） ====================
 
   /**
-   * 从当前已发布公告目录重新同步某用户的时间线事件。
+   * 从当前已发布公告目录重新同步某用户的时间线事件，并检测公告级别变更。
    * - 同一 eventKey 已存在且版本未变 → 跳过（幂等）；
    * - 版本变化导致 dateIso/title 变化 → 更新记录并追加 changeHistory，同时产生一条变更通知；
+   * - 公告级别变更（取消/来源失效/资格条件变化）→ 由 changes.domain 检测，幂等通知；
    * - 当前公告版本中不再存在的 eventKey → 标记 superseded（保留记录，不删除）；
    * - 已静音的机会仍同步事件（日程可见），但不产生通知。
    *
@@ -127,7 +148,70 @@ export class ScheduleService {
       );
       if (!announcement) continue;
       const version = currentVersion(announcement);
-      const unit = version.units.find((u) => u.id === follow.unitId);
+
+      // === 模块 7：公告级别变更检测（版本 / 生命周期 / 来源健康度）===
+      const previousState =
+        this.parseLastNotifiedState(follow.lastNotifiedState as Prisma.JsonValue) ??
+        baselineStateFor(follow.versionId, announcement);
+      const currentState = noticeStateOf(announcement, version);
+
+      if (!sameNoticeState(previousState, currentState)) {
+        const versionChanges = diffFollowedAnnouncement({
+          announcement,
+          previous: previousState,
+          current: version,
+          followedUnitId: follow.unitId,
+        });
+
+        if (versionChanges.length > 0 && !follow.remindersMuted) {
+          const oldVersion = announcement.versions.find(
+            (v) => v.id === previousState.versionId,
+          );
+          const unitCurrent = resolveUnitInVersion(version, follow.unitId, oldVersion);
+          const unitOld = oldVersion
+            ? resolveUnitInVersion(oldVersion, follow.unitId, oldVersion)
+            : undefined;
+          const title = versionChangeTitle(
+            unitCurrent?.name ?? unitOld?.name ?? '已关注岗位',
+            versionChanges,
+            version,
+          );
+          const severity = maxSeverity(versionChanges);
+          const body = versionChangeBody(versionChanges);
+          await this.createNotification(
+            userId,
+            severity,
+            title,
+            body,
+            null,
+            follow.unitId,
+          );
+          notificationCount += 1;
+        }
+
+        // 推进通知基线
+        await this.prisma.followedOpportunity.update({
+          where: { id: follow.id },
+          data: {
+            lastNotifiedState: currentState as unknown as Prisma.InputJsonValue,
+          },
+        });
+      } else if (follow.lastNotifiedState == null) {
+        // 历史记录首次同步：静默落基线（以关注版本 + 当前生命周期/来源为准），
+        // 之后的取消/失效/版本变更才能与持久基线对比，且不产生补发风暴。
+        await this.prisma.followedOpportunity.update({
+          where: { id: follow.id },
+          data: {
+            lastNotifiedState: currentState as unknown as Prisma.InputJsonValue,
+          },
+        });
+      }
+
+      // === 时间线事件同步（报考单元跨版本按 code 对齐；版本中已移除则跳过事件同步）===
+      const followVersion = announcement.versions.find(
+        (v) => v.id === follow.versionId,
+      );
+      const unit = resolveUnitInVersion(version, follow.unitId, followVersion);
       if (!unit) continue;
 
       const rawEvents = generateEvents(follow.unitId, version.timeline);
@@ -260,11 +344,16 @@ export class ScheduleService {
     });
     const mutedUnitIds = follows.filter((f) => f.remindersMuted).map((f) => f.unitId);
     const unitMeta = new Map<string, { name: string; regionText: string; registerUrl?: string; registrationEnd?: string; materialsCount: number; doneCount: number; status: string }>();
+    const unitTrust: Record<string, UnitTrust> = {};
     for (const f of follows) {
       const ann = CATALOG_ANNOUNCEMENTS.find((a) => a.id === f.announcementId);
       if (!ann) continue;
       const version = currentVersion(ann);
-      const unit = version.units.find((u) => u.id === f.unitId);
+      const followVersion = ann.versions.find((v) => v.id === f.versionId);
+      // 模块 7：跨版本按 code 对齐单元（关注时的单元 id 可能属于旧版本）
+      const unit = resolveUnitInVersion(version, f.unitId, followVersion);
+      // 可信状态降级（来源失效/取消/待复核）：单元被移除时也保留状态展示
+      unitTrust[f.unitId] = deriveUnitTrust(ann);
       if (!unit) continue;
       const materialStatuses =
         (f.materialStatuses as Record<string, string> | null) ?? null;
@@ -287,7 +376,7 @@ export class ScheduleService {
       .map((e) => {
         const meta = unitMeta.get(e.unitId);
         if (!meta) return null;
-        return this.toDTO(e, meta, nowIso);
+        return this.toDTO(e, meta, nowIso, unitTrust[e.unitId]);
       })
       .filter((d): d is TimelineEventDTO => d !== null)
       .sort((a, b) => {
@@ -303,6 +392,9 @@ export class ScheduleService {
     for (const f of follows) {
       const meta = unitMeta.get(f.unitId);
       if (!meta) continue;
+      // 可信状态降级（公告取消/来源失效）的机会不进入「当前最重要的一个动作」
+      const trust = unitTrust[f.unitId];
+      if (trust && trust.state !== 'ok' && trust.state !== 'pending_review') continue;
       const href = `/opportunities/${encodeURIComponent(f.unitId)}#follow`;
       if (meta.registrationEnd && f.status !== 'registered') {
         const daysLeft = Math.ceil(
@@ -363,6 +455,7 @@ export class ScheduleService {
       events: dtos,
       mutedUnitIds,
       nextAction,
+      unitTrust,
     };
   }
 
@@ -413,12 +506,17 @@ export class ScheduleService {
     },
     meta: { name: string; regionText: string; registerUrl?: string },
     nowIso: string,
+    trust?: UnitTrust,
   ): TimelineEventDTO {
     const kind = row.kind as TimelineEventKind;
     const d = daysUntil(row.dateIso, nowIso);
     const past = isPast(row.dateIso, nowIso);
-    const urgency = urgencyOf(kind, d);
-    const action = this.buildAction(kind, row.dateIso, past, meta.registerUrl);
+    // 公告取消 / 来源失效：节点保留作留档，但不再提示行动、不制造紧迫感
+    const degraded = trust?.state === 'withdrawn' || trust?.state === 'source_unavailable';
+    const urgency = degraded ? 'info' : urgencyOf(kind, d);
+    const action = degraded
+      ? null
+      : this.buildAction(kind, row.dateIso, past, meta.registerUrl);
 
     // 检测是否有变更历史（最近一次）
     const history = (row.changeHistory as unknown as TimelineChangeRecord[]) ?? [];
@@ -426,10 +524,13 @@ export class ScheduleService {
     if (history.length > 0) {
       const last = history[history.length - 1];
       if (last.dateIso !== row.dateIso) {
+        const desc = describeTimelineChange(kind, last.dateIso, row.dateIso);
         changedFromPrevious = {
           field: 'dateIso',
           oldValue: last.dateIso ?? '待官方通知',
           newValue: row.dateIso ?? '待官方通知',
+          impact: desc.impact,
+          nextStep: desc.nextStep,
         };
       } else if (last.title !== row.title) {
         changedFromPrevious = {
@@ -485,12 +586,26 @@ export class ScheduleService {
     return `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
   }
 
+  /** 解析关注记录的通知基线（模块 7）；非法结构视为无基线 */
+  private parseLastNotifiedState(value: Prisma.JsonValue): FollowNoticeState | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const v = value as Record<string, unknown>;
+    if (typeof v.versionId !== 'string') return null;
+    if (v.lifecycle !== 'active' && v.lifecycle !== 'withdrawn') return null;
+    if (typeof v.sourceOk !== 'boolean') return null;
+    return {
+      versionId: v.versionId,
+      lifecycle: v.lifecycle,
+      sourceOk: v.sourceOk,
+    };
+  }
+
   private async createNotification(
     userId: string,
     severity: NotificationSeverity,
     title: string,
     body: string,
-    eventKey: string,
+    eventKey: string | null,
     relatedUnitId: string,
   ): Promise<void> {
     await this.prisma.notificationRecord.create({
@@ -526,7 +641,9 @@ export class ScheduleService {
     const oldText = oldDateIso ? this.formatDate(oldDateIso) : '待官方通知';
     const newText = raw.dateIso ? this.formatDate(raw.dateIso) : '待官方通知';
     if (oldDateIso !== raw.dateIso) {
-      return `${unit.name}的${raw.title}时间已更新：${oldText} → ${newText}。请据此调整你的安排。`;
+      // 模块 7：旧值 → 新值 → 影响 → 下一步
+      const desc = describeTimelineChange(raw.kind, oldDateIso, raw.dateIso);
+      return `${unit.name}的${raw.title}时间已更新：${oldText} → ${newText}。影响：${desc.impact}。下一步：${desc.nextStep}。`;
     }
     return `${unit.name}的事项描述已更新：「${oldTitle}」→「${raw.title}」。`;
   }

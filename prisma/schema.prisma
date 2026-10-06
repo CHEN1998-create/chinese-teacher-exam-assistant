@@ -110,6 +110,12 @@ model FollowedOpportunity {
   version        Int      @default(0)
   /** 是否关闭该机会的所有站内提醒（报名截止等仍在日程可见，但不产生通知） */
   remindersMuted Boolean  @default(false) @map("reminders_muted")
+  /**
+   * 最近一次已通知的公告状态基线（模块 7）：{ versionId, lifecycle, sourceOk }。
+   * 仅当基线与当前公告状态不一致时才产生变更通知，随后推进基线——同一变更只通知一次。
+   * 为空表示历史记录（首次同步时按关注版本回填，不产生通知风暴）。
+   */
+  lastNotifiedState Json? @map("last_notified_state")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

@@ -492,7 +492,7 @@ describe('OpportunitiesService：备考目标（模块 7）', () => {
   });
 
   it('buildGoals：版本取代标记 newerVersion；closed 被排除；目录缺失单元跳过', () => {
-    const snap = (unitId: string): CatalogSnapshot => ({
+    const snap = (unitId: string, legacyUnitIds: string[] = []): CatalogSnapshot => ({
       announcementId: 'ann-x',
       title: '测试公告',
       publisher: '测试教育局',
@@ -510,6 +510,7 @@ describe('OpportunitiesService：备考目标（模块 7）', () => {
         stage: 'primary',
         headcount: 3,
       },
+      legacyUnitIds,
     });
     const follow = (unitId: string, versionId: string, status: FollowRecord['status']): FollowRecord => ({
       id: `f-${unitId}`,
@@ -532,12 +533,15 @@ describe('OpportunitiesService：备考目标（模块 7）', () => {
       [
         follow('unit-a', 'ann-x-v1', 'preparing'), // 关注在旧版本 → newerVersion
         follow('unit-b', 'ann-x-v2', 'closed'), // 已关闭 → 不作为目标
+        follow('unit-d-v1', 'ann-x-v1', 'considering'), // 关注记录指向旧版本单元 id → 跨版本对齐
       ],
-      [snap('unit-a'), snap('unit-b'), snap('unit-c')],
+      [snap('unit-a'), snap('unit-b'), snap('unit-c'), snap('unit-d', ['unit-d-v1'])],
     );
 
-    expect(response.goals).toHaveLength(1);
+    expect(response.goals).toHaveLength(2);
     expect(response.goals[0]?.newerVersion).toBe(true);
+    expect(response.goals[1]?.unitId).toBe('unit-d');
+    expect(response.goals[1]?.newerVersion).toBe(true);
     expect(response.primaryTargetUnitId).toBe('unit-a');
   });
 });

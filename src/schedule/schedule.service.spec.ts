@@ -118,11 +118,12 @@ function createFakePrisma() {
               f.userId === where.userId_unitId.userId &&
               f.unitId === where.userId_unitId.unitId,
           ) ?? null,
-        update: async ({ where, data }: { where: { userId_unitId: { userId: string; unitId: string } }; data: Record<string, unknown> }) => {
-          const idx = follows.findIndex(
-            (f) =>
-              f.userId === where.userId_unitId.userId &&
-              f.unitId === where.userId_unitId.unitId,
+        update: async ({ where, data }: { where: { id?: string; userId_unitId?: { userId: string; unitId: string } }; data: Record<string, unknown> }) => {
+          const idx = follows.findIndex((f) =>
+            where.id !== undefined
+              ? f.id === where.id
+              : f.userId === where.userId_unitId!.userId &&
+                f.unitId === where.userId_unitId!.unitId,
           );
           Object.assign(follows[idx], data);
           return follows[idx];
