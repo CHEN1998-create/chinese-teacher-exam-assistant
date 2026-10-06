@@ -12,9 +12,10 @@ import { AuthModule } from './auth/auth.module.js';
 import { SessionAuthGuard } from './auth/session.guard.js';
 import { ProfileModule } from './profile/profile.module.js';
 import { PlansModule } from './plans/plans.module.js';
+import { TrialModule } from './trial/trial.module.js';
 
 @Module({
-  imports: [PrismaModule, AnnouncementsModule, OpportunitiesModule, ScheduleModule, AuthModule, ProfileModule, PlansModule],
+  imports: [PrismaModule, AnnouncementsModule, OpportunitiesModule, ScheduleModule, AuthModule, ProfileModule, PlansModule, TrialModule],
   controllers: [AppController, HealthController],
   providers: [
     AppService,

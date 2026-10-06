@@ -145,6 +145,46 @@ model OpportunityCorrection {
   @@map("opportunity_corrections")
 }
 
+/**
+ * 受邀试用服务端事件（v7.0 模块 7）。
+ *
+ * - 只存动作类型 + 枚举/计数维度（props 标量、字符串≤64），不存资格原文与证件信息；
+ * - userId/role/authMode 一律取服务端会话身份，绝不信任客户端；
+ * - dataset 由服务端按公告目录解析（demo=演示台账 / real=真实监测台账），
+ *   用于「演示机会 / 真实机会」分列；
+ * - dedupKey 实现 once-per-user(/unit/step)：与 userId 组成唯一约束，
+ *   重复点击、跨设备重复上报在库层去重（唯一冲突按幂等吞掉）；
+ * - occurredAt 为事件发生时间（限 [now-90d, now+5min]），7 日观察窗口按它计算，
+ *   避免访客事件在登录补报时被登录时刻扭曲口径；createdAt 为服务端摄取时间。
+ */
+model TrialEvent {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  type           String
+  module         String
+  unitId         String?  @map("unit_id")
+  announcementId String?  @map("announcement_id")
+  /** demo=演示台账机会 / real=真实监测台账机会 / null=无关机会 */
+  dataset        String?
+  /** 已脱敏的标量维度：string(≤64) / number / boolean */
+  props          Json?
+  /** live=真实上报 / seed=演示种子 */
+  source         String   @default("live")
+  /** invited=受邀环境 / demo=演示环境 */
+  authMode       String   @default("invited") @map("auth_mode")
+  userRole       String   @map("user_role")
+  /** once-per-user(/unit/step) 去重键；空表示不去重 */
+  dedupKey       String?  @map("dedup_key")
+  /** 事件发生时间（客户端时钟，服务端校验范围） */
+  occurredAt     DateTime @map("occurred_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, dedupKey])
+  @@index([occurredAt])
+  @@index([type])
+  @@map("trial_events")
+}
+
 // ==================== 公告数据流水线（v6.1 数据管道文档） ====================
 
 /** 官方来源登记 */
