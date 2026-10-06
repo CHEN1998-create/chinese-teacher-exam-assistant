@@ -16,6 +16,8 @@ interface AdminModule {
   path: string;
   desc: string;
   roles: string[];
+  /** 模块状态徽标；受邀试用类模块不得标注「已上线」 */
+  badge?: { label: string; variant: "success" | "warning" };
 }
 
 export default function AdminHomePage() {
@@ -48,6 +50,13 @@ export default function AdminHomePage() {
       path: "/admin/feedback",
       desc: `待处理纠错 ${correctionCounts.open} · 采纳/驳回/要求补充 · 错误结论撤回与影响范围留痕`,
       roles: ["考情审核员（可写）", "资源审核员（只读）", "管理员"],
+    },
+    {
+      title: "受邀试用看板",
+      path: "/admin/trial",
+      desc: "服务端真实事件 · 北极星与受邀漏斗 · seed/员工/演示分群隔离；发布前检查存在缺项即停止邀请",
+      roles: ["管理员", "考情审核员", "资源审核员"],
+      badge: { label: "受邀试用 · 未上线", variant: "warning" },
     },
   ];
 
@@ -82,7 +91,11 @@ export default function AdminHomePage() {
               <CardHeader
                 title={mod.title}
                 description={mod.desc}
-                action={<Badge variant="success">已上线</Badge>}
+                action={
+                  <Badge variant={mod.badge?.variant ?? "success"}>
+                    {mod.badge?.label ?? "已上线"}
+                  </Badge>
+                }
               />
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">

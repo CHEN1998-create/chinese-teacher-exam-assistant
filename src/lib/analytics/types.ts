@@ -40,6 +40,11 @@ export type AnalyticsEventType =
   | "follow_status_changed"
   | "primary_target_set"
   | "task_started"
+  // —— v7.0 模块 7 受邀试用漏斗新增（服务端事件，见后端 trial 模块白名单） ——
+  | "profile_step_completed" // 基础画像每步完成（含「暂不提供」，skipped 标记）
+  | "opportunity_unfollowed" // 取消关注（不重复计后续漏斗）
+  | "material_status_changed" // 报名材料进度变化（to=done 计入「材料完成」）
+  | "register_entry_opened" // 进入官方报名入口（产品不代理报名）
   // —— 用户价值事件（13 类） ——
   | "target_created"
   | "evidence_viewed"

@@ -30,7 +30,7 @@ import {
 } from "@/lib/guest/guestSession";
 import { GUEST_COVERAGE } from "@/lib/guest/coverage";
 import { profileApi } from "@/lib/profile/profileApi";
-import { trackOncePerUser } from "@/lib/analytics/eventService";
+import { track, trackOncePerUser } from "@/lib/analytics/eventService";
 import type { EmploymentNatureCode, SubjectCode } from "@/lib/announcements/types";
 import type {
   RegionPreference,
@@ -131,6 +131,10 @@ export default function OnboardingPage() {
   const goNext = () => {
     const finishedStep = view;
     if (!persist(finishedStep)) return; // 保存失败：停在本步，输入不丢
+    // 画像各步漏斗（模块 7）：完成（未跳过）的每步记一次
+    track("profile_step_completed", "profile", {
+      props: { step: finishedStep, skipped: 0 },
+    });
     if (AUTH_MODE === "invited" && (draft.skippedSteps?.length ?? 0) === 0) {
       const profile = draftToProfile(draft);
       if (profile) profileApi.saveProfile(profile).catch(() => undefined);
@@ -166,6 +170,10 @@ export default function OnboardingPage() {
       setSaveError(true);
       return; // 存储失败不前进；跳过意图已在页面状态中，可重试
     }
+    // 画像各步漏斗（模块 7）：「暂不提供」同样计完成，以 skipped=1 区分
+    track("profile_step_completed", "profile", {
+      props: { step: view, skipped: 1 },
+    });
     if (view >= TOTAL_PROFILE_STEPS) {
       trackOncePerUser("profile_completed", "profile", {
         props: { stepCount: TOTAL_PROFILE_STEPS, skipped: true },

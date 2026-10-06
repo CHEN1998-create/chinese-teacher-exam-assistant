@@ -76,6 +76,35 @@ export const EVENT_DICTIONARY: EventDictionaryEntry[] = [
     properties: "计划ID、任务序号",
     core: false,
   },
+  // —— v7.0 模块 7 受邀试用漏斗新增（同时登记在后端 trial 白名单） ——
+  {
+    type: "profile_step_completed",
+    label: "完成画像单步",
+    trigger: "基础画像每组问答点「下一步」完成时（选「暂不提供」同样记录，skipped=1）",
+    properties: "步号 step、是否暂不提供 skipped；不含任何答案正文",
+    core: false,
+  },
+  {
+    type: "opportunity_unfollowed",
+    label: "取消关注机会",
+    trigger: "机会详情「取消关注」成功",
+    properties: "机会单元ID；取消后不重复计后续漏斗阶段",
+    core: false,
+  },
+  {
+    type: "material_status_changed",
+    label: "报名材料进度变化",
+    trigger: "报名材料清单某项完成状态保存成功（只记进度枚举，不采集证件信息）",
+    properties: "机会单元ID、新状态枚举 to（done 计入「材料完成」）",
+    core: false,
+  },
+  {
+    type: "register_entry_opened",
+    label: "进入官方报名入口",
+    trigger: "点击「进入官方报名入口」在新标签打开官方地址（同一用户同机会只记一次）",
+    properties: "机会单元ID；不记录 URL 与报名操作内容",
+    core: false,
+  },
   {
     type: "target_created",
     label: "创建目标考试",
@@ -211,7 +240,7 @@ export const EVENT_DICTIONARY: EventDictionaryEntry[] = [
   },
 ];
 
-export type MetricCategory = "user_value" | "quality_ops" | "stock";
+export type MetricCategory = "user_value" | "quality_ops" | "stock" | "trial";
 
 export interface MetricDictionaryEntry {
   key: string;
@@ -402,5 +431,102 @@ export const METRIC_DICTIONARY: MetricDictionaryEntry[] = [
     formula: "时间范围内 critical_write_failed 事件数",
     dataSource: "critical_write_failed 事件",
     timeFiltered: true,
+  },
+];
+
+/**
+ * 受邀试用指标字典（v7.0 模块 7）：/admin/trial 看板的唯一口径登记处。
+ * 数据源全部为服务端 trial_events 表（不是 localStorage Mock），
+ * 按四个隔离分群（受邀真实 / 受邀员工 / 演示环境 / 演示种子）各自独立计算，绝不混算。
+ */
+export const TRIAL_METRIC_DICTIONARY: MetricDictionaryEntry[] = [
+  {
+    key: "north_star_progress_7d",
+    label: "北极星 · 7日有效目标推进率",
+    category: "trial",
+    formula:
+      "分母=获得真实有效机会（真实监测台账 dataset=real）且满 7×24 小时观察期的去重用户（排除 seed/员工/演示环境）；分子=其中 7 日内关注并完成有效推进动作（准备报名/已报名/设为主要目标/进入官方报名入口/材料完成/补信息导致结论变化）的去重人数。未满 7 日者单列「观察中」，不进分母",
+    dataSource: "trial_events 服务端事件（opportunity_revealed + 推进类，按事件发生时间算窗口）",
+    timeFiltered: false,
+  },
+  {
+    key: "opportunity_valid_rate",
+    label: "有效机会获得率",
+    category: "trial",
+    formula: "获得至少 1 个有效机会（opportunity_revealed validCount≥1）的去重用户 ÷ 完成基础画像的去重用户",
+    dataSource: "trial_events：opportunity_revealed / profile_completed",
+    timeFiltered: false,
+  },
+  {
+    key: "profile_step_funnel",
+    label: "画像各步完成",
+    category: "trial",
+    formula: "每步 profile_step_completed 的去重用户数；比率=该步 ÷ 第 1 步完成人数（含「暂不提供」，以 skipped 维度区分）",
+    dataSource: "trial_events：profile_step_completed（按用户+步号去重）",
+    timeFiltered: false,
+  },
+  {
+    key: "match_basis_understood",
+    label: "依据理解",
+    category: "trial",
+    formula: "查看过逐项官方依据（match_basis_viewed）的去重用户 ÷ 获得有效机会的用户",
+    dataSource: "trial_events：match_basis_viewed（按用户+机会去重）",
+    timeFiltered: false,
+  },
+  {
+    key: "follow_rate",
+    label: "关注机会",
+    category: "trial",
+    formula: "关注过机会（opportunity_followed）的去重用户 ÷ 获得有效机会的用户；取消关注（opportunity_unfollowed）不回退本行，但后续阶段不再计",
+    dataSource: "trial_events：opportunity_followed / opportunity_unfollowed",
+    timeFiltered: false,
+  },
+  {
+    key: "conclusion_change_rate",
+    label: "补信息导致结论变化",
+    category: "trial",
+    formula: "补充资格信息后匹配结论发生变化（qualification_supplemented conclusionChanged=1）的去重用户 ÷ 获得有效机会的用户",
+    dataSource: "trial_events：qualification_supplemented（前端对比补问前后结论）",
+    timeFiltered: false,
+  },
+  {
+    key: "material_done_rate",
+    label: "材料完成",
+    category: "trial",
+    formula: "把任一报名材料标记为完成（material_status_changed to=done）的去重用户 ÷ 关注机会的用户",
+    dataSource: "trial_events：material_status_changed",
+    timeFiltered: false,
+  },
+  {
+    key: "preparing_rate",
+    label: "准备报名",
+    category: "trial",
+    formula: "标记准备报名（follow_status_changed to=preparing）的去重用户 ÷ 关注机会的用户",
+    dataSource: "trial_events：follow_status_changed",
+    timeFiltered: false,
+  },
+  {
+    key: "register_entry_rate",
+    label: "进入官方报名入口",
+    category: "trial",
+    formula: "进入官方报名入口（register_entry_opened）的去重用户 ÷ 准备报名的用户；报名始终在官方入口完成，产品不代理",
+    dataSource: "trial_events：register_entry_opened（按用户+机会去重）",
+    timeFiltered: false,
+  },
+  {
+    key: "registered_rate",
+    label: "已报名",
+    category: "trial",
+    formula: "标记已报名（follow_status_changed to=registered）的去重用户 ÷ 进入官方报名入口的用户",
+    dataSource: "trial_events：follow_status_changed",
+    timeFiltered: false,
+  },
+  {
+    key: "primary_target_rate",
+    label: "主要目标",
+    category: "trial",
+    formula: "设为主要目标（primary_target_set）的去重用户 ÷ 关注机会的用户",
+    dataSource: "trial_events：primary_target_set",
+    timeFiltered: false,
   },
 ];

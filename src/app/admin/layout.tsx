@@ -17,6 +17,7 @@ const ADMIN_NAV = [
   { href: "/admin/reviews", label: "审核队列", exact: false },
   { href: "/admin/feedback", label: "纠错与治理", exact: false },
   { href: "/admin/resources", label: "资源管理", exact: false },
+  { href: "/admin/trial", label: "受邀试用看板", exact: false },
 ];
 
 function AdminChrome({ children }: { children: React.ReactNode }) {

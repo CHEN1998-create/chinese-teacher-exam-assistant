@@ -78,9 +78,10 @@ export default function OpportunityDetailPage() {
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [correctionDone, setCorrectionDone] = useState(false);
 
-  // 手动重试 / 补充信息后重拉：事件处理器中调用，可以同步切 loading
+  // 手动重试 / 补充信息后重拉：事件处理器中调用，可以同步切 loading。
+  // 返回最新响应，供「补信息导致结论变化」对比前后结论（模块 7 埋点）。
   const loadDetail = useCallback(
-    async (profile: UserRecruitmentProfile) => {
+    async (profile: UserRecruitmentProfile): Promise<UnitDetailResponse | undefined> => {
       setLoading(true);
       setError(null);
       try {
@@ -91,8 +92,10 @@ export default function OpportunityDetailPage() {
           targetId: unitId,
           props: { fieldCount: response.unit.dimensions.length },
         });
+        return response;
       } catch (e) {
         setError(e instanceof Error ? e.message : "详情加载失败");
+        return undefined;
       } finally {
         setLoading(false);
       }
@@ -202,10 +205,10 @@ export default function OpportunityDetailPage() {
     return { ...base, onClick: () => scrollToId("follow") };
   })();
 
-  /** 用最新本机画像（含刚保存的补充事实）重新拉取后端结论 */
-  function refreshDetail() {
+  /** 用最新本机画像（含刚保存的补充事实）重新拉取后端结论，返回最新详情 */
+  function refreshDetail(): Promise<UnitDetailResponse | undefined> {
     const active = buildActiveProfile();
-    if (!active.ready) return Promise.resolve();
+    if (!active.ready) return Promise.resolve(undefined);
     return loadDetail(active.profile);
   }
 
@@ -273,7 +276,7 @@ export default function OpportunityDetailPage() {
       }
     });
 
-  /** 标记某报名材料项完成状态（带乐观锁） */
+  /** 标记某报名材料项完成状态（带乐观锁）；材料完成进度进看板「材料完成」（模块 7） */
   const handleMaterialStatus = (itemId: string, status: MaterialStatus) =>
     runAction(async () => {
       if (!unit.follow) return;
@@ -283,6 +286,11 @@ export default function OpportunityDetailPage() {
         status,
         unit.follow.version,
       );
+      // 只记进度枚举，不采集证件信息
+      track("material_status_changed", "opportunity", {
+        targetId: unitId,
+        props: { to: status },
+      });
     });
 
   /** 保存用户自行记录的官方咨询结论（带乐观锁，不影响匹配） */
@@ -305,8 +313,10 @@ export default function OpportunityDetailPage() {
       setFacts(saved);
       // 必须重新装配画像：保存后的补充事实要参与后端重算，
       // 不能复用首屏缓存的 profile。
-      await refreshDetail();
-      // P0 漏斗⑤：补充资格信息成功并触发重算（只记维度与字段数，不含答案）
+      const beforeOverall = detail?.unit.overall;
+      const fresh = await refreshDetail();
+      // P0 漏斗⑤：补充资格信息成功并触发重算（只记维度与字段数，不含答案）；
+      // 模块 7：对比补问前后结论，结论变化单独进看板「补信息导致结论变化」。
       const dims = {
         age: saved.birthDate !== undefined,
         hukou: saved.hukouProvinceCode !== undefined,
@@ -316,6 +326,10 @@ export default function OpportunityDetailPage() {
       };
       const fieldCount = Object.values(dims).filter(Boolean).length;
       if (fieldCount > 0) {
+        const conclusionChanged =
+          fresh && beforeOverall !== undefined
+            ? fresh.unit.overall !== beforeOverall
+            : false;
         track("qualification_supplemented", "profile", {
           targetId: unitId,
           props: {
@@ -325,6 +339,7 @@ export default function OpportunityDetailPage() {
             social_security: dims.social_security ? 1 : 0,
             work_experience: dims.work_experience ? 1 : 0,
             other: dims.other ? 1 : 0,
+            conclusionChanged: conclusionChanged ? 1 : 0,
           },
         });
       }
@@ -595,16 +610,18 @@ export default function OpportunityDetailPage() {
           onTransition={(status, opts) => void handleTransition(status, opts)}
           onSetRole={(role) => void handleSetRole(role)}
           onUnfollow={() =>
-            void runAction(
-              async () => opportunitiesApi.unfollow(unitId),
-              { redirectAfter: true },
-            )
+            void runAction(async () => {
+              await opportunitiesApi.unfollow(unitId);
+              // 模块 7：取消关注（看板计入「关注」，但不再计后续阶段）
+              track("opportunity_unfollowed", "opportunity", { targetId: unitId });
+            }, { redirectAfter: true })
           }
         />
 
         {unit.follow && (
           <ActionChain
             follow={unit.follow}
+            unitId={unitId}
             missingInfoCount={groups.missingInfo.length}
             confirmOfficialCount={groups.confirmOfficial.length}
             materials={unit.unit.materials ?? []}

@@ -15,7 +15,7 @@
 import { UserRole } from "@/types";
 import { loadFromStorage, saveToStorage, removeFromStorage } from "@/lib/storage";
 import { STORAGE_KEYS } from "@/lib/mock-data";
-import { authService } from "@/lib/auth";
+import { authService, AUTH_MODE } from "@/lib/auth";
 import { AnalyticsEvent, AnalyticsEventType, AnalyticsModule } from "./types";
 
 // ==================== 订阅 ====================
@@ -109,6 +109,53 @@ export function reseedEvents(): void {
   }
 }
 
+// ==================== 服务端转发（v7.0 模块 7 受邀试用指标） ====================
+
+const TRIAL_EVENTS_ENDPOINT = "/api/trial/events";
+
+/**
+ * 把事件异步转发到服务端 trial_events（受邀试用看板的唯一真实数据源）。
+ *
+ * - fire-and-forget：失败静默，绝不影响业务流程与本地 Mock；
+ * - invited 模式不发送身份头（HttpOnly 会话 cookie 自动携带）；
+ *   demo 模式按既有约定携带 x-user-id / x-user-role；
+ * - 服务端只接受白名单事件与标量维度，资格原文 / 证件字段会被拒绝；
+ * - once-per-user 去重由服务端按 (userId, dedupKey) 唯一约束保证，
+ *   重复点击 / 跨设备重报不会重复计数。
+ */
+function forwardToServer(event: {
+  type: AnalyticsEventType;
+  module: AnalyticsModule;
+  targetId?: string;
+  props?: Record<string, string | number | boolean>;
+  at: string;
+}): void {
+  if (typeof window === "undefined") return;
+  const session = authService.getSession();
+  if (!session) return;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (AUTH_MODE !== "invited") {
+    headers["x-user-id"] = session.userId;
+    headers["x-user-role"] = session.role;
+  }
+  try {
+    void fetch(TRIAL_EVENTS_ENDPOINT, {
+      method: "POST",
+      headers,
+      keepalive: true,
+      body: JSON.stringify({
+        type: event.type,
+        module: event.module,
+        unitId: event.targetId ?? null,
+        props: event.props ?? null,
+        at: event.at,
+      }),
+    }).catch(() => undefined);
+  } catch {
+    // 转发失败静默：监控不能反过来影响主流程
+  }
+}
+
 // ==================== 写入 ====================
 
 export interface TrackOptions {
@@ -143,6 +190,9 @@ function flushPendingEvents(): void {
   all.push(...events);
   persistEvents(all);
   saveToStorage(STORAGE_KEYS.GUEST_ANALYTICS_PENDING, []);
+  // 登录后把访客暂存事件补报到服务端；保留原始发生时间 at，
+  // 保证「画像完成 → 7 日内推进」的观察窗口不被登录时刻扭曲
+  for (const e of pending) forwardToServer(e);
 }
 
 // 会话从无到有（登录/刷新恢复）时自动迁移访客事件；只注册一次
@@ -186,6 +236,8 @@ export function track(
     const all = listEvents();
     all.push(event);
     persistEvents(all);
+    // v7.0 模块 7：同步转发到服务端 trial_events（受邀试用真实指标）
+    forwardToServer(base);
   } catch {
     // 埋点失败静默：不能让监控反过来影响主流程
   }

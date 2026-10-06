@@ -4,11 +4,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/Button";
 import { FOLLOW_STATUS_LABELS } from "@/lib/opportunities";
 import type { FollowDTO } from "@/lib/opportunities/api-types";
+import { track } from "@/lib/analytics/eventService";
 import { materialProgressText } from "./MaterialsList";
 import type { MaterialItemDTO } from "@/lib/opportunities/api-types";
 
 interface ActionChainProps {
   follow: FollowDTO | null;
+  /** 报考单元 ID：进入官方报名入口的埋点归属（模块 7） */
+  unitId?: string;
   missingInfoCount: number;
   confirmOfficialCount: number;
   materials: MaterialItemDTO[];
@@ -31,6 +34,7 @@ interface ActionChainProps {
  */
 export function ActionChain({
   follow,
+  unitId,
   missingInfoCount,
   confirmOfficialCount,
   materials,
@@ -69,6 +73,10 @@ export function ActionChain({
     return {
       label: "进入官方报名入口",
       onClick: () => {
+        // 模块 7：进入官方报名入口（同一用户同机会只记一次，由服务端去重）
+        if (unitId) {
+          track("register_entry_opened", "opportunity", { targetId: unitId });
+        }
         window.open(officialUrl, "_blank", "noreferrer");
         setConfirmRegistered(true);
       },

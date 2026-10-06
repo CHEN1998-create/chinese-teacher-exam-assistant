@@ -11,12 +11,14 @@ const CATEGORY_LABELS: Record<MetricCategory, string> = {
   user_value: "用户价值",
   quality_ops: "质量运营",
   stock: "实时存量",
+  trial: "受邀试用",
 };
 
 const CATEGORY_VARIANT: Record<MetricCategory, "primary" | "warning" | "info"> = {
   user_value: "primary",
   quality_ops: "warning",
   stock: "info",
+  trial: "info",
 };
 
 /**
