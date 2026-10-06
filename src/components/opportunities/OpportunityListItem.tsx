@@ -92,6 +92,32 @@ export function OpportunityListItem({
           {unit.summary}
         </p>
 
+        {unit.announcement.dataset === "real" && (
+          <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-700">
+              真实记录 · AI 初核待人工复核
+            </span>
+            <a
+              href={unit.announcement.officialUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-blue-700 hover:text-blue-800"
+            >
+              官方原文 ↗
+            </a>
+            {unit.unit.sourceRow?.locator.kind === "url" && (
+              <a
+                href={unit.unit.sourceRow.locator.url}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-blue-700 hover:text-blue-800"
+              >
+                岗位表附件 ↗
+              </a>
+            )}
+          </p>
+        )}
+
         {follow && (
           <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
             <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600">

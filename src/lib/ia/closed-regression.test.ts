@@ -26,6 +26,16 @@ describe("已截止不得显示正在报名（回归）", () => {
     expect(today.text).toContain("今天截止");
   });
 
+  it("deadlineText：官方未公布报名时间时不得臆造日期，文案为待官方通知、daysLeft=null", () => {
+    const t = deadlineText(undefined, NOW);
+    expect(t.unconfirmed).toBe(true);
+    expect(t.closed).toBe(false);
+    expect(t.daysLeft).toBeNull();
+    expect(t.text).toContain("待官方通知");
+    expect(t.text).not.toContain("还剩");
+    expect(t.text).not.toMatch(/\d{1,2}月\d{1,2}日/);
+  });
+
   it("nextAction：只要有失败闸门（含已截止），唯一主行动是查看官方公告，不出现报名/准备行动", () => {
     const closedGate: GateDTO = {
       code: "registration_closed",

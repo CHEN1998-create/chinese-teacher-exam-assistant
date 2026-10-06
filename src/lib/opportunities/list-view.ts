@@ -7,6 +7,7 @@
  * 不做任何资格判定，判定规则只存在于后端。
  */
 import type {
+  CoverageDTO,
   MatchResponse,
   MetaDTO,
   UnitMatchDTO,
@@ -14,6 +15,8 @@ import type {
 
 export interface OpportunityListViewModel {
   meta: MetaDTO;
+  /** 真实监测覆盖（地区/最近核对/在报数） */
+  coverage: CoverageDTO;
   primaryTargetUnitId: string | null;
   /** 第一屏优先机会（主要目标或首个初步符合），可能为 null */
   priority: UnitMatchDTO | null;
@@ -22,7 +25,10 @@ export interface OpportunityListViewModel {
   needInfoGroups: MatchResponse["groups"]["needInfo"];
   manualReview: UnitMatchDTO[];
   notEligible: UnitMatchDTO[];
+  /** 已截止/预告/未通过闸门的演示数据卡片 */
   closed: UnitMatchDTO[];
+  /** 真实监测台账卡片（杭州/宁波，AI 初核待人工复核，均未进推荐） */
+  realMonitored: UnitMatchDTO[];
   /** 有效机会数（闸门通过且非明确不符合；已截止不计） */
   validCount: number;
   /** Hero 主结论 */
@@ -43,7 +49,7 @@ function pickPriority(
 }
 
 export function buildListViewModel(response: MatchResponse): OpportunityListViewModel {
-  const { groups, primaryTargetUnitId, meta } = response;
+  const { groups, primaryTargetUnitId, meta, coverage } = response;
   const priority = pickPriority(groups.preliminary, primaryTargetUnitId);
   const otherPreliminary = groups.preliminary.filter(
     (u) => u.unit.id !== priority?.unit.id,
@@ -51,6 +57,13 @@ export function buildListViewModel(response: MatchResponse): OpportunityListView
   const needInfoCount = groups.needInfo.reduce((sum, g) => sum + g.count, 0);
   const validCount =
     groups.preliminary.length + needInfoCount + groups.manualReview.length;
+  // 真实监测卡片与演示卡片分区展示；未复核/已截止/预告的真实记录不计有效机会
+  const realMonitored = groups.closed.filter(
+    (u) => u.announcement.dataset === "real",
+  );
+  const closed = groups.closed.filter(
+    (u) => u.announcement.dataset !== "real",
+  );
   const excludedCount = groups.notEligible.length + groups.closed.length;
 
   let conclusion: string;
@@ -72,13 +85,15 @@ export function buildListViewModel(response: MatchResponse): OpportunityListView
 
   return {
     meta,
+    coverage,
     primaryTargetUnitId,
     priority,
     otherPreliminary,
     needInfoGroups: groups.needInfo,
     manualReview: groups.manualReview,
     notEligible: groups.notEligible,
-    closed: groups.closed,
+    closed,
+    realMonitored,
     validCount,
     conclusion,
     excludedCount,

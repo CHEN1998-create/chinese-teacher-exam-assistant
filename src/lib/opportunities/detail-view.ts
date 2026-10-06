@@ -70,9 +70,24 @@ export interface NextAction {
 export function nextAction(unit: UnitMatchDTO): NextAction {
   const closed = failedGates(unit.gates);
   if (closed.length > 0) {
+    // 不同降级原因给不同出口文案，但主行动都是「回到官方依据」，
+    // 不允许在待复核/预告/来源失效时出现「报名」「准备」行动
+    const code = closed[0]!.code;
+    const labelByCode: Record<string, string> = {
+      registration_unconfirmed:
+        "官方尚未公布报名时间：查看公告原文并等待官方通知",
+      announcement_withdrawn: "公告已取消或撤回：查看官方留档与版本记录",
+      source_unavailable: "官方来源暂时无法访问：查看公告留档",
+      evidence_not_reviewed: "记录尚待人工复核：先查看官方公告原文",
+      evidence_stale: "记录已超过复核时限：先查看官方公告原文",
+      registration_closed: "报名已截止：查看公告留档与版本记录",
+      out_of_scope_nature: "用工性质不在收录范围：查看官方公告",
+      no_official_source: "缺少已核对的官方依据：查看官方公告",
+      subject_not_open: "该岗位不面向当前开放学科：查看官方公告",
+    };
     return {
       kind: "official",
-      label: "报名已截止：查看公告留档与版本记录",
+      label: labelByCode[code] ?? "查看官方公告留档与版本记录",
       href: unit.announcement.officialUrl,
       external: true,
     };

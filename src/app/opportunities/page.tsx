@@ -12,6 +12,7 @@ import {
   formatEvaluatedAt,
 } from "@/lib/opportunities/list-view";
 import { OpportunityListItem } from "@/components/opportunities/OpportunityListItem";
+import { CoverageBanner } from "@/components/opportunities/CoverageBanner";
 
 const NO_PROFILE_COPY: Record<string, { title: string; description: string }> = {
   no_draft: {
@@ -65,12 +66,9 @@ export default function OpportunitiesPage() {
 
   // 最近的报名截止（只在初步符合中找）：7 天内给出必须级风险提示
   let risk: { tone: "must" | "info"; text: string } | null = null;
-  const nearest = view.priority
-    ? daysUntil(
-        view.priority.version.timeline.registrationEnd,
-        evaluatedAt,
-      )
-    : null;
+  const priorityEnd = view.priority?.version.timeline.registrationEnd;
+  const nearest =
+    view.priority && priorityEnd ? daysUntil(priorityEnd, evaluatedAt) : null;
   if (nearest !== null && nearest >= 0 && nearest <= 7) {
     risk = {
       tone: "must",
@@ -103,6 +101,8 @@ export default function OpportunitiesPage() {
             : undefined
         }
       />
+
+      <CoverageBanner coverage={view.coverage} />
 
       {actionError && (
         <p
@@ -181,6 +181,32 @@ export default function OpportunitiesPage() {
               onToggleFollow={toggleFollow}
             />
           ))}
+        </section>
+      )}
+
+      {view.realMonitored.length > 0 && (
+        <section
+          id="real-monitored"
+          data-testid="real-monitored"
+          className="space-y-3 scroll-mt-20"
+        >
+          <LayerHeading
+            title="真实监测记录（杭州 / 宁波 · AI 初核待人工复核）"
+            count={view.realMonitored.length}
+          />
+          {view.realMonitored.map((unit) => (
+            <OpportunityListItem
+              key={unit.unit.id}
+              unit={unit}
+              evaluatedAt={evaluatedAt}
+              followBusy={followBusyId === unit.unit.id}
+              onToggleFollow={toggleFollow}
+            />
+          ))}
+          <p className="text-xs leading-relaxed text-slate-400">
+            这些记录来自政府官网公告原文与岗位表附件，可逐卡片点开「官方原文 /
+            岗位表附件」核对；在人工复核完成前，它们不会进入「初步符合」推荐。
+          </p>
         </section>
       )}
 

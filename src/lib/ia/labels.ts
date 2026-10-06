@@ -84,22 +84,41 @@ export function dateWithWeekday(dateIso: string): string {
 }
 
 export interface DeadlineText {
-  /** 完整一句话，如“10月20日截止，还剩 16 天” */
+  /** 完整一句话，如“10月20日截止，还剩 16 天”；预告批次为“报名时间待官方通知” */
   text: string;
   closed: boolean;
-  /** 剩余天数（0 表示今天截止） */
-  daysLeft: number;
+  /** 官方未公布报名时间时为 null（绝不臆造日期） */
+  daysLeft: number | null;
+  /** 官方尚未公布具体报名时间（预告批次） */
+  unconfirmed: boolean;
 }
 
-/** 报名截止文案；未开始/进行中/已截止三态都有文字，不只靠颜色 */
-export function deadlineText(registrationEnd: string, nowIso: string): DeadlineText {
+/** 报名截止文案；未公布/未开始/进行中/已截止四态都有文字，不只靠颜色 */
+export function deadlineText(
+  registrationEnd: string | undefined,
+  nowIso: string,
+): DeadlineText {
+  // 官方尚未公布具体报名日期：不得用“预计”“参考往年”等措辞冒充确定时间
+  if (!registrationEnd) {
+    return {
+      text: "报名时间待官方通知",
+      closed: false,
+      daysLeft: null,
+      unconfirmed: true,
+    };
+  }
   const daysLeft = daysUntil(registrationEnd, nowIso);
   const dateText = dateWithWeekday(registrationEnd);
   if (daysLeft < 0) {
-    return { text: `${dateText} 已截止`, closed: true, daysLeft };
+    return { text: `${dateText} 已截止`, closed: true, daysLeft, unconfirmed: false };
   }
   if (daysLeft === 0) {
-    return { text: `${dateText} 今天截止`, closed: false, daysLeft };
+    return { text: `${dateText} 今天截止`, closed: false, daysLeft, unconfirmed: false };
   }
-  return { text: `${dateText} 截止，还剩 ${daysLeft} 天`, closed: false, daysLeft };
+  return {
+    text: `${dateText} 截止，还剩 ${daysLeft} 天`,
+    closed: false,
+    daysLeft,
+    unconfirmed: false,
+  };
 }

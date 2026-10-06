@@ -52,10 +52,14 @@ export interface RegionRefDTO {
 export interface GateDTO {
   code:
     | "subject_not_open"
+    | "registration_unconfirmed"
     | "registration_closed"
     | "out_of_scope_nature"
     | "announcement_withdrawn"
-    | "no_official_source";
+    | "source_unavailable"
+    | "no_official_source"
+    | "evidence_not_reviewed"
+    | "evidence_stale";
   passed: boolean;
   reason: string;
 }
@@ -113,6 +117,8 @@ export interface UnitMatchDTO {
     allocation: { code: string; description: string };
     teachingScope?: string;
     registerUrl?: string;
+    /** 岗位表行级证据锚点（附件 + 工作表/序号/行 + 摘录） */
+    sourceRow?: EvidenceAnchorDTO;
   };
   announcement: {
     id: string;
@@ -120,6 +126,11 @@ export interface UnitMatchDTO {
     publisher: string;
     organizationType: string;
     officialUrl: string;
+    /** demo=演示数据；real=真实监测台账数据 */
+    dataset: "demo" | "real";
+    reviewStatus: "ai_reviewed_pending" | "human_reviewed";
+    reviewedBy: string | null;
+    reviewedAt: string | null;
   };
   version: {
     id: string;
@@ -128,8 +139,9 @@ export interface UnitMatchDTO {
     publishedAt: string;
     changeNote?: string;
     timeline: {
-      registrationStart: string;
-      registrationEnd: string;
+      /** 官方未公布具体日期时留空（预告批次），绝不臆造日期 */
+      registrationStart?: string;
+      registrationEnd?: string;
       paymentDeadline?: string;
       admitTicketStart?: string;
       writtenExamDate?: string;
@@ -150,11 +162,42 @@ export interface MetaDTO {
   ruleVersion: string;
   majorAliasVersion: string;
   catalogVersion: string;
+  realCatalogVersion: string;
   evaluatedAt: string;
+}
+
+/** 真实监测覆盖说明（覆盖地区/核对时间/当前在报数） */
+export interface CoverageSourceDTO {
+  id: string;
+  name: string;
+  url: string;
+  lastCheckedAt: string;
+  ok: boolean;
+  failReason?: string | null;
+}
+
+export interface CoverageRegionDTO {
+  code: string;
+  label: string;
+  authority: string;
+  sources: CoverageSourceDTO[];
+}
+
+export interface CoverageDTO {
+  version: string;
+  subject: string;
+  subjectLabel: string;
+  status: "monitoring_no_open" | "open_batch_exists" | "paused";
+  regions: CoverageRegionDTO[];
+  lastCheckedAt: string;
+  openOpportunityCount: number;
+  nextWindowNote: string;
+  scopeNote: string;
 }
 
 export interface MatchResponse {
   meta: MetaDTO;
+  coverage: CoverageDTO;
   primaryTargetUnitId: string | null;
   groups: {
     preliminary: UnitMatchDTO[];
@@ -199,8 +242,8 @@ export interface GoalDTO {
     versionNumber: number;
     publishedAt: string;
     timeline: {
-      registrationStart: string;
-      registrationEnd: string;
+      registrationStart?: string;
+      registrationEnd?: string;
       paymentDeadline?: string;
       admitTicketStart?: string;
       writtenExamDate?: string;

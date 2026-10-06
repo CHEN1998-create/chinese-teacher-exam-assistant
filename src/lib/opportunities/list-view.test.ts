@@ -28,6 +28,10 @@ function makeUnit(
       publisher: "教育局",
       organizationType: "government_unified",
       officialUrl: "https://example.gov.cn/a",
+      dataset: "demo",
+      reviewStatus: "human_reviewed",
+      reviewedBy: null,
+      reviewedAt: null,
     },
     version: {
       id: `ann-${unitId}-v1`,
@@ -69,7 +73,19 @@ function makeResponse(
       ruleVersion: "kb-match-rules-1.1.0",
       majorAliasVersion: "kb-major-aliases-1.0.0",
       catalogVersion: "kb-opportunity-catalog-1.0.0",
+      realCatalogVersion: "kb-real-catalog-1.0.0",
       evaluatedAt: "2026-10-05T10:00:00+08:00",
+    },
+    coverage: {
+      version: "kb-monitoring-coverage-1.0.0",
+      subject: "chinese",
+      subjectLabel: "语文",
+      status: "monitoring_no_open",
+      regions: [],
+      lastCheckedAt: "2026-10-06T11:30:00+08:00",
+      openOpportunityCount: 0,
+      nextWindowNote: "",
+      scopeNote: "暂未收录不代表当地无招聘。",
     },
     primaryTargetUnitId,
     groups: {
@@ -184,5 +200,74 @@ describe("buildListViewModel：四类结果的列表叙事", () => {
     const text = formatEvaluatedAt("2026-10-05T10:00:00+08:00");
     expect(text).toContain("10月5日");
     expect(text).toMatch(/\d{2}:\d{2}/);
+  });
+
+  it("真实监测记录从演示已截止中分离到 realMonitored，且不计有效机会", () => {
+    const real = makeUnit("real-yz-2026-chinese-01", "preliminary_eligible", {
+      announcement: {
+        id: "real-yinzhou-2026-autumn",
+        title: "鄞州区公开招聘事业编制教师公告",
+        publisher: "宁波市鄞州区教育局",
+        organizationType: "government_unified",
+        officialUrl: "https://www.nbyz.gov.cn/x",
+        dataset: "real",
+        reviewStatus: "ai_reviewed_pending",
+        reviewedBy: null,
+        reviewedAt: null,
+      },
+      version: {
+        id: "real-yinzhou-2026-autumn-v1",
+        versionNumber: 1,
+        sourceKind: "original",
+        publishedAt: "2026-07-31T00:00:00+08:00",
+        timeline: {
+          pendingItems: ["具体报名时间另行通知"],
+        },
+        officialSource: {
+          id: "src",
+          locator: { kind: "url", url: "https://www.nbyz.gov.cn/x" },
+          state: "ai_extracted",
+          checkedAt: "2026-10-06T11:30:00+08:00",
+        },
+      },
+      gates: [
+        {
+          code: "registration_unconfirmed",
+          passed: false,
+          reason: "官方尚未公布具体报名时间，以官方后续通知为准",
+        },
+        { code: "registration_closed", passed: true, reason: "" },
+        { code: "out_of_scope_nature", passed: true, reason: "" },
+        { code: "announcement_withdrawn", passed: true, reason: "" },
+        {
+          code: "evidence_not_reviewed",
+          passed: false,
+          reason: "高影响字段尚未经人工复核",
+        },
+      ],
+    });
+    const demoClosed = makeUnit(
+      "unit-wenzhou-01",
+      "preliminary_eligible",
+      {
+        gates: [
+          { code: "subject_not_open", passed: true, reason: "" },
+          { code: "registration_closed", passed: false, reason: "已截止" },
+          { code: "out_of_scope_nature", passed: true, reason: "" },
+          { code: "announcement_withdrawn", passed: true, reason: "" },
+          { code: "no_official_source", passed: true, reason: "" },
+        ],
+      },
+    );
+    const response = makeResponse({} as never);
+    response.groups.closed = [real, demoClosed];
+
+    const view = buildListViewModel(response);
+    expect(view.realMonitored.map((u) => u.unit.id)).toEqual([
+      "real-yz-2026-chinese-01",
+    ]);
+    expect(view.closed.map((u) => u.unit.id)).toEqual(["unit-wenzhou-01"]);
+    expect(view.validCount).toBe(0);
+    expect(view.coverage.openOpportunityCount).toBe(0);
   });
 });

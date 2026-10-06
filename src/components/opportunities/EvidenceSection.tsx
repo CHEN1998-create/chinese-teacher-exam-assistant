@@ -92,10 +92,26 @@ export function EvidenceSection({
             </dd>
           </div>
           <div className="flex gap-2">
+            <dt className="shrink-0 font-medium text-slate-500">复核状态</dt>
+            <dd>
+              {unit.announcement.reviewStatus === "human_reviewed"
+                ? "已人工复核"
+                : "AI 初核 · 待人工复核（不作为正式推荐依据）"}
+              {unit.announcement.reviewedBy
+                ? ` · 复核人 ${unit.announcement.reviewedBy}`
+                : ""}
+              {unit.announcement.reviewedAt
+                ? ` · 复核于 ${formatDateTime(unit.announcement.reviewedAt)}`
+                : ""}
+            </dd>
+          </div>
+          <div className="flex gap-2">
             <dt className="shrink-0 font-medium text-slate-500">报名时间</dt>
             <dd>
-              {unit.version.timeline.registrationStart} 至{" "}
-              {unit.version.timeline.registrationEnd}
+              {unit.version.timeline.registrationStart &&
+              unit.version.timeline.registrationEnd
+                ? `${unit.version.timeline.registrationStart} 至 ${unit.version.timeline.registrationEnd}`
+                : "官方尚未公布具体报名时间，以官方后续通知为准"}
             </dd>
           </div>
           {unit.version.timeline.writtenExamDate && (
@@ -110,6 +126,31 @@ export function EvidenceSection({
             </div>
           ))}
         </dl>
+
+        {unit.unit.sourceRow && (
+          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <p className="text-xs font-semibold text-slate-700">
+              岗位表位置（行级锚点）
+            </p>
+            <p className="mt-1 text-xs text-slate-600">
+              {unit.unit.sourceRow.locator.anchor ??
+                unit.unit.sourceRow.locator.sheet ??
+                "官方岗位表附件"}
+            </p>
+            {unit.unit.sourceRow.excerpt && (
+              <p className="mt-1 border-l-2 border-slate-200 pl-2 text-xs text-slate-500">
+                “{unit.unit.sourceRow.excerpt}”
+              </p>
+            )}
+            <p className="mt-1.5 text-[11px] text-slate-400">
+              <EvidenceLink url={unit.unit.sourceRow.locator.url} /> ·{" "}
+              {unit.unit.sourceRow.state === "official"
+                ? "已核对"
+                : "AI 初核待人工核对"}{" "}
+              · {formatDateTime(unit.unit.sourceRow.checkedAt)}
+            </p>
+          </div>
+        )}
       </div>
 
       <Disclosure title="逐项条件的原文证据" count={evidences.length}>
@@ -164,8 +205,8 @@ export function EvidenceSection({
 
       <p className="rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-400">
         本结论由规则版本 {meta.ruleVersion}、专业别名表{" "}
-        {meta.majorAliasVersion} 与公告目录 {meta.catalogVersion}{" "}
-        于 {formatDateTime(meta.evaluatedAt)} 计算；
+        {meta.majorAliasVersion}、公告目录 {meta.catalogVersion} 与真实监测台账{" "}
+        {meta.realCatalogVersion} 于 {formatDateTime(meta.evaluatedAt)} 计算；
         公告更新或你修改画像后会重新计算。资格初审结果以招聘单位审核为准。
       </p>
     </section>

@@ -50,6 +50,10 @@ function makeUnit(overrides: Partial<UnitMatchDTO> = {}): UnitMatchDTO {
       publisher: "杭州市教育局",
       organizationType: "government_unified",
       officialUrl: "https://example.gov.cn/a",
+      dataset: "demo",
+      reviewStatus: "human_reviewed",
+      reviewedBy: null,
+      reviewedAt: null,
     },
     version: {
       id: "ann-hangzhou-v1",
