@@ -44,6 +44,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // 受邀环境 Docker 部署（根仓库 deploy/）：产出可独立运行的最小服务端目录
+  output: "standalone",
   async headers() {
     return [
       {

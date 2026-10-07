@@ -1,0 +1,8 @@
+.next
+.git
+.vercel
+.qa-harness
+# 环境变量严禁进入镜像：生产构建变量由 Dockerfile 以 ENV 显式设定（invited 模式）
+.env*
+*.tsbuildinfo
+*.md

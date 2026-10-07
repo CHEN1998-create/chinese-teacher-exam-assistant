@@ -159,6 +159,8 @@ npx vercel --prod
 
 ## 13. 轻量部署拓扑（单域名、单机起步）
 
+> **2026-10-06 落地记录**：受邀环境已按根仓库 `deploy/README.md` 的 Docker Compose + Caddy 方案执行。反代路径采用本文 §6 所述**已实测的 Next 同源 `/api` 反代**（`BACKEND_URL` + `INTERNAL_TOKEN`），数据库迁移由一次性 `migrate` 任务自动执行；下述 Nginx 直连后端方案（§13.1）保留为备选，两者不可混用。
+
 ```text
 受邀用户浏览器（家庭宽带 / 4G·5G）
         │  HTTPS，只请求同源
