@@ -62,7 +62,7 @@ curl http://localhost:3000/health
 | `TRUST_PROXY` | 反代部署时必填 | 设为 `true` 时信任一层反向代理的 `X-Forwarded-*`（Nginx 终止 TLS 场景） |
 | `CORS_ORIGINS` | 否 | 允许跨域来源，逗号分隔；默认 `http://localhost:3000`；受邀环境填备案产品域名 |
 | `INTERNAL_TOKEN` | 部署时必填 | 内部反代密钥；未设置时守卫放行，**仅限本地开发**，受邀/正式环境必须设置强随机值 |
-| `AUTH_MODE` | 受邀环境必填 | `demo`（默认，信任反代注入的演示身份头）/ `invited`（只认真实会话 cookie，忽略身份头）；必须与前端 `NEXT_PUBLIC_AUTH_MODE` 一致 |
+| `AUTH_MODE` | 受邀环境必填 | `demo` 只允许非生产且监听 loopback 的本地开发；生产必须为 `invited`，只认真实会话 cookie，忽略浏览器身份头；与前端 `NEXT_PUBLIC_AUTH_MODE` 一致 |
 | `ADMIN_BOOTSTRAP_TOKEN` | 首次初始化必填 | 创建首个管理员账号的引导令牌；只在初始化时使用，完成后应撤销/更换 |
 
 真实密钥只能通过部署平台环境变量或 Secret 管理注入，不提交仓库、不写入日志、不进入前端。
