@@ -18,13 +18,14 @@ import type { AuthenticatedRequest } from './identity.js';
 const COOKIE_NAME = 'sid';
 const COOKIE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
-function cookieOptions() {
-  const secure =
-    process.env.TRUST_PROXY === 'true' || process.env.NODE_ENV === 'production';
+function cookieOptions(req: AuthenticatedRequest) {
   return {
     httpOnly: true,
     sameSite: 'lax' as const,
-    secure,
+    // secure 仅在真实 HTTPS 请求下开启（由 trust proxy 解析 X-Forwarded-Proto 得到 req.secure）。
+    // 不再按 TRUST_PROXY/NODE_ENV 静态判断——否则 HTTP 演示环境登录会因 secure cookie 失效。
+    // HTTPS 生产（Caddy 终止 TLS）时 Caddy 会置 X-Forwarded-Proto: https，req.secure 自动为 true。
+    secure: req.secure,
     path: '/',
     maxAge: COOKIE_MAX_AGE_MS,
   };
@@ -56,7 +57,7 @@ export class AuthController {
       user.id,
       req.headers['user-agent'] as string | undefined,
     );
-    res.cookie(COOKIE_NAME, token, cookieOptions());
+    res.cookie(COOKIE_NAME, token, cookieOptions(req));
     return {
       user: {
         id: user.id,
