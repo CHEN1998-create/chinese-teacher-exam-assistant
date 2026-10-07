@@ -4,10 +4,12 @@
 
 | 形态 | 环境标识 | 数据去向 | 网络定位 | 当前状态 |
 |---|---|---|---|---|
-| **A. 公开演示环境** | `APP_ENV=demo`（`NEXT_PUBLIC_AUTH_MODE=demo`，默认） | 仅访客本机 localStorage（seed 演示数据/事件与真实 live 事件分字段标记） | Vercel（境外平台，仅用于功能展示） | ✅ 已部署（v6.1 P0 形态） |
+| **A. 公开演示环境** | `APP_ENV=demo`（`NEXT_PUBLIC_AUTH_MODE=demo`，默认） | 所有演示业务数据仅保存在当前浏览器 | Vercel（境外平台，仅用于功能展示） | 2026-10-07 已更新 [公开演示地址](https://frontend-exam-test.vercel.app)；线上 P0 25/25、断跨源 7/7、安全冒烟 2/2 通过 |
 | **B. 少量受邀用户环境** | `APP_ENV=invited`（`NEXT_PUBLIC_AUTH_MODE=invited`） | 境内服务器上的 PostgreSQL（公告快照当前落本地卷，对象存储未接入） | 中国大陆云服务，普通家庭/手机网络直连 | 🚧 前后端代码、迁移与受邀链路 E2E（服务端登录/HttpOnly 会话/画像迁移/账号隔离，29/29）均已验证；环境未落地。网络链路层已实测（2026-10-05）：中国移动家庭宽带与手机蜂窝无代理直连下本地同源全栈全部通过（[`../docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节）；备案域名公开访问待部署后补测 |
 
 > 公开演示环境**不是**受邀试用环境，不得用演示环境承接真实用户试用；受邀环境不得静默回退到 localStorage Mock。两种形态的产品口径见 [`../PRD-全国教师公开招聘与备考助手-v6.1.md`](../PRD-全国教师公开招聘与备考助手-v6.1.md)，网络可访问基线见 [`../docs/china-network-accessibility.md`](../docs/china-network-accessibility.md)。
+
+> 2026-10-07 部署记录：公开演示登录后的机会匹配、关注、日程与分析事件已改为浏览器本地路径；Vercel 已更新并完成线上 E2E。阿里云受邀环境仅完成部署前数据库备份、独立发布目录上传和后端镜像构建；**尚未迁移数据库、启动新容器或开放受邀地址**。
 
 ---
 
@@ -35,7 +37,7 @@
 - React 19.2.8
 - TypeScript 5（strict）
 - Tailwind CSS 4
-- 无浏览器侧服务端运行时依赖：页面为客户端组件；`/api/*` 反代路由在纯演示环境不配置 `BACKEND_URL` 时返回未配置错误，不影响 localStorage 演示流程
+- 无浏览器侧服务端运行时依赖：公开演示的核心流程不请求 `/api/*`；该路由在 demo 模式一律拒绝代理，即使误配后端地址也不会透传演示身份
 
 ## 3. 本地启动
 
@@ -96,12 +98,12 @@ npx vercel --prod
 | `NEXT_PUBLIC_APP_ENV` | `demo` / `invited` / `production` | 浏览器（会被内联） | 运行环境标识 |
 | `NEXT_PUBLIC_AUTH_MODE` | `demo`（默认）/ `invited` | 浏览器（会被内联） | 认证/数据通道切换：demo 用本地演示账号 + localStorage；invited 用服务端会话 + `/api/*`。须与后端 `AUTH_MODE` 一致 |
 | `NEXT_PUBLIC_DEMO_MODE` | `true` / 未设置 | 浏览器（会被内联） | 演示模式总开关；invited 不得设置 |
-| `BACKEND_URL` | 后端地址 | 仅服务端 | `/api/*` 反代目标；纯静态演示环境可不配置 |
-| `INTERNAL_TOKEN` | 强随机字符串 | 仅服务端 | 反代注入的内部密钥；不提交仓库、不进入浏览器 |
+| `BACKEND_URL` | 内网后端地址 | 仅服务端 | 仅 invited 模式配置；demo 模式不需要且不会代理 |
+| `INTERNAL_TOKEN` | 强随机字符串 | 仅服务端 | 仅 invited 模式配置；反代注入的内部密钥，不进入浏览器 |
 
 仅 `NEXT_PUBLIC_*` 变量会进入浏览器；服务端变量在部署平台设置中配置，不提交仓库，变量样例见 `.env.example`。
 
-> **demo + `BACKEND_URL` 联调形态**（2026-10-05 实测）：demo 构建配置 `BACKEND_URL` 指向本机/内网 NestJS 时，登录后业务数据（匹配、关注、日程、计划、通知）经同源 `/api/*` 代理读写该后端（PostgreSQL），身份以 `x-user-id` + `x-user-role` 头透传，`INTERNAL_TOKEN` 仅存在于服务端反代；公开演示部署未配置 `BACKEND_URL`，数据全部留在访客浏览器。
+> 2026-10-05 的 demo + 后端联调路径已停用：它会透传浏览器可伪造的身份头，不可用于公开链接。现仅 invited 模式允许 `/api/*` 代理；代理丢弃全部 `x-user-*` 头，身份仅由后端 HttpOnly 会话确定。后端在生产环境拒绝 `AUTH_MODE=demo` 启动。
 
 ## 7. 演示模式行为
 
@@ -159,7 +161,7 @@ npx vercel --prod
 
 ## 13. 轻量部署拓扑（单域名、单机起步）
 
-> **2026-10-06 落地记录**：受邀环境已按根仓库 `deploy/README.md` 的 Docker Compose + Caddy 方案执行。反代路径采用本文 §6 所述**已实测的 Next 同源 `/api` 反代**（`BACKEND_URL` + `INTERNAL_TOKEN`），数据库迁移由一次性 `migrate` 任务自动执行；下述 Nginx 直连后端方案（§13.1）保留为备选，两者不可混用。
+> **2026-10-07 状态说明**：根仓库 `deploy/README.md` 提供 Docker Compose + Caddy 方案，采用 Next 同源 `/api` 反代（`BACKEND_URL` + `INTERNAL_TOKEN`）；**本轮尚未在阿里云执行部署或迁移**。下述 Nginx 直连后端方案（§13.1）保留为备选，两者不可混用。
 
 ```text
 受邀用户浏览器（家庭宽带 / 4G·5G）
@@ -244,11 +246,11 @@ server {
 | `OSS_*`（或同等存储变量） | 后端 | **未接入**：对象存储落地前公告快照写本地卷（见 backend/README） |
 | `AI_*` / `OCR_*` | 后端 | **未接入**：境内 AI/OCR 供应商落地后再增加；浏览器不可见 |
 
-受邀环境的真实登录、会话与数据持久化代码（模块 8）已完成：后端预建账号 + 密码哈希 + HttpOnly `sid` 会话，前端 `HttpAuthProvider` 经 `/api/auth/*` 登录与会话恢复，访客画像与暂存分析事件登录后幂等迁移。**但尚未在真实 PostgreSQL 上完成全链路联调（待验收）**； invited 环境不得伪装成真实服务，也不得静默回退到 Mock。
+受邀环境的真实登录、会话与数据持久化代码（模块 8）已完成：后端预建账号 + 密码哈希 + HttpOnly `sid` 会话，前端 `HttpAuthProvider` 经 `/api/auth/*` 登录与会话恢复，访客画像与暂存分析事件登录后幂等迁移。历史本地 PostgreSQL 受邀链路曾通过 29/29；**本轮未重跑受邀全链路，也未在阿里云环境验证**。invited 环境不得伪装成真实服务，也不得静默回退到 Mock。
 
 ## 15. 受邀环境的发布与回滚
 
-- 发布门禁（在构建机执行，任一失败不发布）：`npm test`（前端 155 用例）→ `npx tsc --noEmit` → `npm run lint` → `npm run build`（postbuild 自动运行网络依赖扫描，发现 Google Fonts/境外 CDN/客户端密钥即失败，可用 `npm run check:external` 手动复跑）→ 后端 `npm run lint && npm run build && npm test`。Playwright 回归（`.qa-harness/m9-p0-flow.mjs`、`m9-blocked-runtime.mjs`）在有运行栈时执行并留存结果。
+- 发布门禁（在构建机执行，任一失败不发布）：`npm test`（2026-10-07 前端 207 用例）→ `npx tsc --noEmit` → `npm run lint` → `npm run build`（postbuild 自动运行网络依赖扫描，发现 Google Fonts/境外 CDN/客户端密钥即失败，可用 `npm run check:external` 手动复跑）→ 后端 `npm run lint && npm run build && npm test`。Playwright 回归（`.qa-harness/m9-p0-flow.mjs`、`m9-blocked-runtime.mjs`）在有运行栈时执行并留存结果。
 - 发布：构建并推送 Next.js 与 NestJS 镜像（或上传构建产物）→ 备份数据库 → 执行可重复执行的 Prisma 迁移 → 滚动重启 → 冒烟（经域名访问 `/api/health`、登录、核心页面）。
 - 回滚：Nginx 切回上一版本镜像；数据库迁移必须提供回滚方案，重要迁移前先创建恢复点；公告版本数据只追加不原地覆盖，应用回滚不影响已发布版本留档。
 - 每次发布后在无代理的家庭网络与手机网络做一次核心路径冒烟，结果记录为“已验证/待验证”，不得把未实测写成“国内可用”；记录格式见 [`../docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节。

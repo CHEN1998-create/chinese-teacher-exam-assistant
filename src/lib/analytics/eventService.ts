@@ -117,8 +117,8 @@ const TRIAL_EVENTS_ENDPOINT = "/api/trial/events";
  * 把事件异步转发到服务端 trial_events（受邀试用看板的唯一真实数据源）。
  *
  * - fire-and-forget：失败静默，绝不影响业务流程与本地 Mock；
- * - invited 模式不发送身份头（HttpOnly 会话 cookie 自动携带）；
- *   demo 模式按既有约定携带 x-user-id / x-user-role；
+ * - 仅受邀模式上报；公开演示数据始终留在本机，不触发无后端的请求；
+ * - 身份由 HttpOnly 会话 cookie 自动携带，不发送客户端身份头；
  * - 服务端只接受白名单事件与标量维度，资格原文 / 证件字段会被拒绝；
  * - once-per-user 去重由服务端按 (userId, dedupKey) 唯一约束保证，
  *   重复点击 / 跨设备重报不会重复计数。
@@ -130,14 +130,10 @@ function forwardToServer(event: {
   props?: Record<string, string | number | boolean>;
   at: string;
 }): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || AUTH_MODE !== "invited") return;
   const session = authService.getSession();
   if (!session) return;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (AUTH_MODE !== "invited") {
-    headers["x-user-id"] = session.userId;
-    headers["x-user-role"] = session.role;
-  }
   try {
     void fetch(TRIAL_EVENTS_ENDPOINT, {
       method: "POST",

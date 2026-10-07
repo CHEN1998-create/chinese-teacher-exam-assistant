@@ -7,7 +7,7 @@ import { useCurrentUser } from "@/lib/auth";
 import { guestSessionService } from "@/lib/guest/guestSession";
 import { buildGuestPreview, type GuestPreview } from "@/lib/guest/previewEngine";
 import { GUEST_COVERAGE } from "@/lib/guest/coverage";
-import { V61_NOW, V61_SEED_ANNOUNCEMENTS } from "@/lib/seed/v61-opportunities";
+import { getRollingDemoAnnouncements } from "@/lib/seed/demoTimeline";
 import { Hero } from "@/components/ia/Hero";
 import { OpportunityCard } from "@/components/ia/OpportunityCard";
 import { Disclosure, LayerHeading } from "@/components/ia/Layer";
@@ -37,8 +37,9 @@ export default function PreviewPage() {
     if (typeof window === "undefined") return { preview: null, intentionLeft: false };
     const session = guestSessionService.load();
     if (!session) return { preview: null, intentionLeft: false };
+    const now = new Date();
     return {
-      preview: buildGuestPreview(session.draft, V61_SEED_ANNOUNCEMENTS, V61_NOW),
+      preview: buildGuestPreview(session.draft, getRollingDemoAnnouncements(now), now.toISOString()),
       intentionLeft: session.draft.intentionLeft === true,
     };
   });

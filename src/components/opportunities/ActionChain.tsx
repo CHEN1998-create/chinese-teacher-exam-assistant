@@ -7,6 +7,7 @@ import type { FollowDTO } from "@/lib/opportunities/api-types";
 import { track } from "@/lib/analytics/eventService";
 import { materialProgressText } from "./MaterialsList";
 import type { MaterialItemDTO } from "@/lib/opportunities/api-types";
+import { safeOfficialLink } from "@/lib/links/official";
 
 interface ActionChainProps {
   follow: FollowDTO | null;
@@ -52,6 +53,7 @@ export function ActionChain({
 
   const status = follow.status;
   const progress = materialProgressText(materials, follow.materialStatuses);
+  const registrationLink = safeOfficialLink(officialUrl);
 
   const primary = (() => {
     if (status === "registered") {
@@ -71,13 +73,13 @@ export function ActionChain({
     }
     // preparing
     return {
-      label: "进入官方报名入口",
+      label: registrationLink ? "进入官方报名入口" : "模拟报名入口（无真实链接）",
       onClick: () => {
-        // 模块 7：进入官方报名入口（同一用户同机会只记一次，由服务端去重）
-        if (unitId) {
+        // 虚构示例绝不打开占位域名，也不计为真实进入报名入口。
+        if (unitId && registrationLink) {
           track("register_entry_opened", "opportunity", { targetId: unitId });
         }
-        window.open(officialUrl, "_blank", "noreferrer");
+        if (registrationLink) window.open(registrationLink, "_blank", "noreferrer");
         setConfirmRegistered(true);
       },
     };
@@ -108,13 +110,15 @@ export function ActionChain({
 
       {status === "preparing" && (
         <p className="text-xs text-slate-500">
-          报名始终在官方入口完成，产品不代理报名。进入官方入口后可在此标记「已报名」。
+          {registrationLink
+            ? "报名始终在官方入口完成，产品不代理报名。进入官方入口后可在此标记「已报名」。"
+            : "这是虚构演示机会，没有真实报名入口；下方状态仅用于体验操作。"}
         </p>
       )}
 
       {confirmRegistered && (
         <div className="flex items-center gap-2 rounded-lg bg-white p-3 ring-1 ring-slate-200">
-          <span className="text-sm text-slate-700">是否已在官方入口完成报名？</span>
+          <span className="text-sm text-slate-700">{registrationLink ? "是否已在官方入口完成报名？" : "是否模拟标记为已报名？"}</span>
           <Button
             size="sm"
             variant="outline"

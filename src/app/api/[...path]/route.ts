@@ -5,6 +5,10 @@ export const dynamic = 'force-dynamic';
 
 const BACKEND_URL = process.env.BACKEND_URL;
 const INTERNAL_TOKEN = process.env.INTERNAL_TOKEN;
+const INVITED_PROXY_ENABLED =
+  process.env.NEXT_PUBLIC_AUTH_MODE === 'invited' &&
+  process.env.NEXT_PUBLIC_APP_ENV !== 'demo' &&
+  process.env.NEXT_PUBLIC_DEMO_MODE !== 'true';
 
 type ForwardMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS' | 'HEAD';
 
@@ -12,7 +16,8 @@ async function proxy(
   request: NextRequest,
   context: { params: Promise<{ path?: string[] }> },
 ): Promise<NextResponse> {
-  if (!BACKEND_URL || !INTERNAL_TOKEN) {
+  // 公开 demo 的身份只在浏览器本机有效，绝不能拿它调用受保护的后端。
+  if (!INVITED_PROXY_ENABLED || !BACKEND_URL || !INTERNAL_TOKEN) {
     return NextResponse.json(
       { error: 'proxy not configured' },
       { status: 503 },
@@ -34,11 +39,6 @@ async function proxy(
     'accept-language',
     'cookie',
     'user-agent',
-    // 用户身份头：由前端从本地会话注入，供后端 AdminGuard 做服务端权限校验。
-    // 接入真实认证后，应由代理校验 token 后注入真实身份，而非透传客户端值。
-    'x-user-id',
-    'x-user-role',
-    'x-user-name',
   ];
   for (const name of passthrough) {
     const value = request.headers.get(name);

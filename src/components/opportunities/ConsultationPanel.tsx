@@ -7,6 +7,7 @@ import type {
   ConsultationTemplateDTO,
   ContactInfoDTO,
 } from "@/lib/opportunities/api-types";
+import { safeOfficialLink } from "@/lib/links/official";
 
 interface ConsultationPanelProps {
   templates: ConsultationTemplateDTO[];
@@ -57,14 +58,13 @@ export function ConsultationPanel({
             联系电话/邮箱请见公告原文末尾「报名咨询」栏目
           </p>
         )}
-        <a
-          href={contact.officialUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 inline-block text-xs text-blue-600 underline"
-        >
-          打开官方公告原文
-        </a>
+        {safeOfficialLink(contact.officialUrl) ? (
+          <a href={safeOfficialLink(contact.officialUrl)!} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-blue-600 underline">
+            打开官方公告原文
+          </a>
+        ) : (
+          <p className="mt-1 text-xs text-amber-700">虚构示例，无可访问的官方公告；请勿据此联系或报名。</p>
+        )}
       </div>
 
       {templates.length === 0 ? (

@@ -42,4 +42,9 @@ export function clearAllStorage(): void {
   Object.values(STORAGE_KEYS).forEach((key) => {
     removeFromStorage(key);
   });
+  if (typeof window !== "undefined") {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("kb_demo_opportunities_v1_")) removeFromStorage(key);
+    }
+  }
 }

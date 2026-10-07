@@ -107,8 +107,14 @@ export function OpportunityListItem({
             closedGate || deadline.closed ? "text-slate-400" : "text-slate-600",
           )}
         >
-          报名{deadline.text}
+          {unit.announcement.dataset === "demo" ? "示例报名" : "报名"}{deadline.text}
         </p>
+
+        {unit.announcement.dataset === "demo" && (
+          <p className="mt-2 text-xs font-medium text-amber-700">
+            虚构演示机会 · 日期随演示时间移动 · 不可用于真实报名
+          </p>
+        )}
 
         {/* 一条关键依据或风险：闸门失败时优先显示异常原因 */}
         <p

@@ -2,6 +2,7 @@
 
 import { Disclosure } from "@/components/ia/Layer";
 import { cn } from "@/lib/utils";
+import { safeOfficialLink } from "@/lib/links/official";
 import type {
   MaterialItemDTO,
   MaterialStatus,
@@ -102,9 +103,9 @@ export function MaterialsList({
             <Disclosure title="查看官方来源">
               <p className="text-xs leading-5 text-slate-600">
                 来源：
-                {m.source.locator.url ? (
+                {safeOfficialLink(m.source.locator.url) ? (
                   <a
-                    href={m.source.locator.url}
+                    href={safeOfficialLink(m.source.locator.url)!}
                     target="_blank"
                     rel="noreferrer"
                     className="text-blue-600 underline"
@@ -112,7 +113,7 @@ export function MaterialsList({
                     {m.source.locator.anchor ?? m.source.locator.url}
                   </a>
                 ) : (
-                  m.source.locator.anchor ?? "公告原文"
+                  m.source.locator.anchor ?? "演示示例，无可访问的官方原文"
                 )}
               </p>
               {m.source.excerpt && (

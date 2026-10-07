@@ -144,6 +144,7 @@ export default function Home() {
         <div className="mt-8 text-center">
           <Link
             href="/onboarding"
+            data-testid="start-onboarding"
             className="inline-flex h-12 w-full max-w-xs items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-medium text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             开始免登录资格预筛

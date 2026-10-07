@@ -11,6 +11,7 @@ import {
   removeGuestFollow,
 } from "@/lib/guest/guestFollows";
 import { GateTag, MatchStatusTag } from "./MatchStatusTag";
+import { safeOfficialLink } from "@/lib/links/official";
 
 /**
  * 访客机会卡（模块 5 信息层级：首层七要素 + 一个下一步）：
@@ -49,6 +50,7 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
   const panelId = useId();
   const closed = row.gateCode !== null;
   const step = guestCardNextStep(row);
+  const officialLink = safeOfficialLink(row.officialUrl);
   const [guestFollowed, setGuestFollowed] = useState(() =>
     isGuestFollowing(row.unitId),
   );
@@ -83,10 +85,10 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
         </Link>
       );
     }
-    if (step.kind === "official") {
+    if (step.kind === "official" && officialLink) {
       return (
         <a
-          href={row.officialUrl}
+          href={officialLink}
           target="_blank"
           rel="noopener noreferrer"
           className={PRIMARY_ACTION_CLASS}
@@ -94,6 +96,9 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
           {step.label}
         </a>
       );
+    }
+    if (step.kind === "official") {
+      return <button type="button" onClick={onToggle} className={PRIMARY_ACTION_CLASS}>查看演示依据</button>;
     }
     return (
       <button type="button" onClick={onToggle} className={PRIMARY_ACTION_CLASS}>
@@ -143,7 +148,7 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
 
         {/* 截止时间 */}
         <p className={cn("mt-1 text-sm", closed ? "text-slate-400" : "text-slate-600")}>
-          报名{row.deadline}
+          示例报名{row.deadline}
         </p>
 
         {/* 一条关键依据或风险 */}
@@ -183,7 +188,7 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
       {expanded && (
         <div id={panelId} className="border-t border-slate-200 px-4 py-3">
           {/* 长证据 1：逐项条件，官方事实与系统判断分两栏 */}
-          <p className="text-xs font-semibold text-slate-500">条件核对（官方表述 / 系统预筛判断）</p>
+          <p className="text-xs font-semibold text-slate-500">条件核对（虚构公告表述 / 系统预筛判断）</p>
           <ul className="mt-2 divide-y divide-slate-100">
             {row.dimensions.map((dim) => {
               const meta = DIMENSION_VALUE_META[dim.value];
@@ -198,7 +203,7 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
                   </div>
                   <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
                     <p className="rounded-md bg-slate-50 p-2 text-xs leading-5 text-slate-700">
-                      <span className="block font-medium text-slate-500">公告怎么写（官方事实）</span>
+                      <span className="block font-medium text-slate-500">示例公告怎么写（非官方事实）</span>
                       {dim.officialRequirement ?? (
                         <span className="text-slate-400">
                           该条件无单独原文摘录，岗位地区以岗位表对应行为准
@@ -226,27 +231,24 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
           </ul>
 
           {/* 长证据 2：官方来源与核对时间 */}
-          <p className="mt-3 text-xs font-semibold text-slate-500">官方来源与核对</p>
+          <p className="mt-3 text-xs font-semibold text-slate-500">示例来源与时间</p>
           <dl className="mt-1.5 space-y-1 text-xs text-slate-500">
             <div className="flex gap-2">
               <dt className="shrink-0">发布单位</dt>
               <dd>{row.publisher}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="shrink-0">核对时间</dt>
+              <dt className="shrink-0">模拟核对时间</dt>
               <dd>{row.checkedAtText}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="shrink-0">公告原文</dt>
+              <dt className="shrink-0">公告来源</dt>
               <dd>
-                <a
-                  href={row.officialUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-700 underline underline-offset-2"
-                >
-                  打开官方公告（新窗口）
-                </a>
+                {officialLink ? (
+                  <a href={officialLink} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline underline-offset-2">
+                    打开公告（新窗口）
+                  </a>
+                ) : "虚构示例，无可访问的官方公告"}
               </dd>
             </div>
           </dl>

@@ -1,11 +1,12 @@
 /**
  * 机会发现模块 API 客户端（模块 5）。
  *
- * 浏览器只调用同源 /api/opportunities/*（由 Next 路由代理到后端），
- * 身份头从本地会话注入；判定逻辑全部在后端，这里只负责收发与错误归一。
+ * demo 只读浏览器本地示例；invited 只调用同源 /api/opportunities/*，
+ * 身份由后端 HttpOnly 会话确定。正式判定逻辑在后端。
  */
-import { authService, AUTH_MODE } from "@/lib/auth";
+import { AUTH_MODE } from "@/lib/auth";
 import type { UserRecruitmentProfile } from "@/lib/profile/types";
+import { demoOpportunitiesApi } from "./demoApi";
 import type {
   FollowDTO,
   FollowStatus,
@@ -20,24 +21,11 @@ import type {
 
 const API_BASE = "/api/opportunities";
 
-function authHeaders(): Record<string, string> {
-  // invited 模式：身份由 HttpOnly 会话 cookie 承载，绝不发送客户端可伪造的 x-user-id；
-  // demo 模式：发送 x-user-id + x-user-role（后端两者缺一即 401）。
-  if (AUTH_MODE === "invited") return {};
-  const session = authService.getSession();
-  if (!session) return {};
-  return {
-    "x-user-id": session.userId,
-    "x-user-role": session.role,
-  };
-}
-
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      ...authHeaders(),
       ...(init.headers ?? {}),
     },
   });
@@ -56,6 +44,7 @@ export const opportunitiesApi = {
   /** 机会列表（按当前画像即时计算，四档分组 + 关注状态 + 版本信息）。
    *  invited 模式下不发送画像，由后端读取已持久化的画像（跨浏览器一致）。 */
   match(profile: UserRecruitmentProfile): Promise<MatchResponse> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.match(profile);
     return request<MatchResponse>("/match", {
       method: "POST",
       body: AUTH_MODE === "invited" ? JSON.stringify({}) : JSON.stringify({ profile }),
@@ -68,6 +57,7 @@ export const opportunitiesApi = {
     unitId: string,
     profile: UserRecruitmentProfile,
   ): Promise<UnitDetailResponse> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.unitDetail(unitId, profile);
     return request<UnitDetailResponse>(`/units/${encodeURIComponent(unitId)}/detail`, {
       method: "POST",
       body: AUTH_MODE === "invited" ? JSON.stringify({}) : JSON.stringify({ profile }),
@@ -75,6 +65,7 @@ export const opportunitiesApi = {
   },
 
   listFollows(): Promise<FollowDTO[]> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.listFollows();
     return request<FollowDTO[]>("/follows");
   },
 
@@ -85,6 +76,7 @@ export const opportunitiesApi = {
     materialStatuses?: Record<string, string>;
     consultationNotes?: Record<string, string>;
   }[]): Promise<{ merged: number; skipped: number }> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.mergeGuestFollows(items);
     return request<{ merged: number; skipped: number }>("/follows/merge", {
       method: "POST",
       body: JSON.stringify({ items }),
@@ -93,11 +85,13 @@ export const opportunitiesApi = {
 
   /** 备考目标列表（模块 7）：活跃关注 + 公告版本聚合 */
   getGoals(): Promise<GoalsResponse> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.getGoals();
     return request<GoalsResponse>("/goals");
   },
 
   /** 关注：后端保证初始状态为 considering（收藏 ≠ 准备报名），重复关注幂等 */
   follow(unitId: string): Promise<FollowDTO> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.follow(unitId);
     return request<FollowDTO>(
       `/units/${encodeURIComponent(unitId)}/follow`,
       { method: "POST" },
@@ -109,6 +103,7 @@ export const opportunitiesApi = {
     status: FollowStatus,
     options?: { note?: string; abandonReason?: string; version?: number },
   ): Promise<FollowDTO> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.transition(unitId, status, options);
     return request<FollowDTO>(
       `/units/${encodeURIComponent(unitId)}/follow`,
       {
@@ -130,6 +125,7 @@ export const opportunitiesApi = {
     status: MaterialStatus,
     version: number,
   ): Promise<FollowDTO> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.setMaterialStatus(unitId, itemId, status, version);
     return request<FollowDTO>(
       `/units/${encodeURIComponent(unitId)}/materials`,
       {
@@ -146,6 +142,7 @@ export const opportunitiesApi = {
     note: string,
     version: number,
   ): Promise<FollowDTO> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.saveConsultationNote(unitId, dimensionKey, note, version);
     return request<FollowDTO>(
       `/units/${encodeURIComponent(unitId)}/consultation`,
       {
@@ -156,6 +153,7 @@ export const opportunitiesApi = {
   },
 
   unfollow(unitId: string): Promise<{ ok: true }> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.unfollow(unitId);
     return request<{ ok: true }>(
       `/units/${encodeURIComponent(unitId)}/follow`,
       { method: "DELETE" },
@@ -163,6 +161,7 @@ export const opportunitiesApi = {
   },
 
   setRole(unitId: string, role: StudyTargetRole): Promise<FollowDTO> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.setRole(unitId, role);
     return request<FollowDTO>(
       `/units/${encodeURIComponent(unitId)}/role`,
       { method: "PUT", body: JSON.stringify({ role }) },
@@ -171,6 +170,7 @@ export const opportunitiesApi = {
 
   /** 开启/关闭单个机会的站内提醒（日程仍可见，只控制通知生成） */
   setRemindersMuted(unitId: string, muted: boolean): Promise<FollowDTO> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.setRemindersMuted(unitId, muted);
     return request<FollowDTO>(
       `/units/${encodeURIComponent(unitId)}/reminders`,
       { method: "PATCH", body: JSON.stringify({ muted }) },
@@ -181,6 +181,7 @@ export const opportunitiesApi = {
     unitId: string,
     input: { fieldPath: string; content: string; contact?: string },
   ): Promise<{ id: string; status: string }> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.submitCorrection(unitId, input);
     return request<{ id: string; status: string }>(
       `/units/${encodeURIComponent(unitId)}/corrections`,
       { method: "POST", body: JSON.stringify(input) },
@@ -189,6 +190,7 @@ export const opportunitiesApi = {
 
   /** 我提交过的纠错与员工处理状态（我的页） */
   listMyCorrections(): Promise<OpportunityCorrectionDTO[]> {
+    if (AUTH_MODE === "demo") return demoOpportunitiesApi.listMyCorrections();
     return request<OpportunityCorrectionDTO[]>("/corrections/mine");
   },
 

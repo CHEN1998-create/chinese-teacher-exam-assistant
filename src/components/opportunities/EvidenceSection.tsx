@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ia/Layer";
 import { dimensionLabel } from "@/lib/ia/labels";
 import type { UnitDetailResponse } from "@/lib/opportunities/api-types";
+import { safeOfficialLink } from "@/lib/links/official";
 
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
@@ -19,10 +20,11 @@ const SOURCE_KIND_LABELS: Record<string, string> = {
 };
 
 function EvidenceLink({ url }: { url?: string }) {
-  if (!url) return <span className="text-slate-400">无链接</span>;
+  const link = safeOfficialLink(url);
+  if (!link) return <span className="text-slate-400">虚构示例，无可访问的官方原文</span>;
   return (
     <a
-      href={url}
+      href={link}
       target="_blank"
       rel="noopener noreferrer"
       className="break-all text-blue-700 underline underline-offset-2"
@@ -45,13 +47,15 @@ export function OfficialSourceSection({
   const { unit } = detail;
   const evidences = unit.dimensions.filter((d) => d.evidence);
   const source = unit.version.officialSource;
+  const isDemo = unit.announcement.dataset === "demo";
 
   return (
     <section className="space-y-3">
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-800">
-          官方原文与岗位表位置
+          {isDemo ? "示例公告与岗位表位置" : "官方原文与岗位表位置"}
         </h3>
+        {isDemo && <p className="mt-1 text-xs font-medium text-amber-700">以下内容和日期均为虚构演示，不代表官方招聘信息。</p>}
         <p className="mt-0.5 text-xs text-slate-500">
           当前依据：
           {SOURCE_KIND_LABELS[unit.version.sourceKind] ??
@@ -63,13 +67,13 @@ export function OfficialSourceSection({
 
         <dl className="mt-3 space-y-2 text-xs text-slate-600">
           <div>
-            <dt className="font-medium text-slate-500">官方来源</dt>
+            <dt className="font-medium text-slate-500">{isDemo ? "示例来源" : "官方来源"}</dt>
             <dd className="mt-0.5">
               <EvidenceLink url={source.locator.url} />
             </dd>
           </div>
           <div className="flex gap-2">
-            <dt className="shrink-0 font-medium text-slate-500">报名时间（公告口径）</dt>
+            <dt className="shrink-0 font-medium text-slate-500">{isDemo ? "示例报名时间" : "报名时间（公告口径）"}</dt>
             <dd>
               {unit.version.timeline.registrationStart &&
               unit.version.timeline.registrationEnd
@@ -85,7 +89,7 @@ export function OfficialSourceSection({
           )}
           {unit.version.timeline.pendingItems?.map((item) => (
             <div key={item} className="text-slate-500">
-              待官方明确：{item}
+              {isDemo ? "示例待定：" : "待官方明确："}{item}
             </div>
           ))}
         </dl>
@@ -157,6 +161,7 @@ export function VerificationSection({
 }) {
   const { unit, previousVersions, meta } = detail;
   const source = unit.version.officialSource;
+  const isDemo = unit.announcement.dataset === "demo";
 
   return (
     <section className="space-y-3">
@@ -178,18 +183,22 @@ export function VerificationSection({
 
         <dl className="mt-3 space-y-2 text-xs text-slate-600">
           <div className="flex gap-2">
-            <dt className="shrink-0 font-medium text-slate-500">官方来源核对</dt>
+            <dt className="shrink-0 font-medium text-slate-500">{isDemo ? "示例来源" : "官方来源核对"}</dt>
             <dd>
-              {source.state === "official"
+              {isDemo
+                ? "虚构演示，未核对真实公告"
+                : source.state === "official"
                 ? "已与官方公告核对"
                 : "待人工核对（不作为正式依据）"}
-              ，核对时间 {formatDateTime(source.checkedAt)}
+              ，{isDemo ? "演示基准时间" : "核对时间"} {formatDateTime(source.checkedAt)}
             </dd>
           </div>
           <div className="flex gap-2">
             <dt className="shrink-0 font-medium text-slate-500">人工复核</dt>
             <dd>
-              {unit.announcement.reviewStatus === "human_reviewed"
+              {isDemo
+                ? "不适用（虚构示例）"
+                : unit.announcement.reviewStatus === "human_reviewed"
                 ? "已人工复核"
                 : "AI 初核 · 待人工复核（不作为正式推荐依据）"}
               {unit.announcement.reviewedBy

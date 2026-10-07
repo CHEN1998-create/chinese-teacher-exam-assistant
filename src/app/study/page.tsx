@@ -47,6 +47,7 @@ import type { NextStepSummary } from "@/lib/plans/replanEngine";
 import type { PlanTask, TaskFeedback } from "@/types";
 import { formatDateWithWeekday, formatTime, getGreeting } from "@/lib/utils";
 import { trackOncePerUser } from "@/lib/analytics/eventService";
+import { safeOfficialLink } from "@/lib/links/official";
 
 /** 任务使用的资料/资源名称（与 today 页同口径） */
 function sourceNameOf(task: PlanTask): string | null {
@@ -275,6 +276,7 @@ function ExamUnverifiedGate({
   onConfirmed: (record: ExamContentConfirmation) => void;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const officialLink = safeOfficialLink(verifyTask.url);
 
   const handleConfirm = () => {
     setError(null);
@@ -304,16 +306,13 @@ function ExamUnverifiedGate({
           <TaskDefinition label="为什么先做" value={verifyTask.whyFirst} />
         </dl>
         <div className="mt-4 flex flex-wrap gap-2">
-          <a
-            href={verifyTask.url}
-            target="_blank"
-            rel="noreferrer noopener"
-            className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-white transition-colors"
-          >
-            打开官方公告（新窗口）
-          </a>
+          {officialLink ? (
+            <a href={officialLink} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 hover:bg-white transition-colors">
+              打开官方公告（新窗口）
+            </a>
+          ) : <p className="text-xs text-amber-700">虚构演示机会，无官方公告链接。</p>}
           <Button variant="primary" onClick={handleConfirm}>
-            我已核对，确认考试内容
+            {officialLink ? "我已核对，确认考试内容" : "继续演示：确认示例考情"}
           </Button>
         </div>
         {error && (

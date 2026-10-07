@@ -32,28 +32,30 @@
 
 两种运行模式，由 `NEXT_PUBLIC_AUTH_MODE` 切换：
 
-- **demo（默认）**：登录为内置演示账号本地明文比对；访客画像、设置、资料等存浏览器 `localStorage`（`kb_*` 键）+ 预置 seed 演示事件；**登录后**机会匹配、关注/推进、日程、计划、通知等业务数据经同源 `/api/*` 代理读写服务端（demo 会话以 `x-user-id` + `x-user-role` 头标识身份）。本地联调需配置 `BACKEND_URL` 指向 NestJS（未配置时登录后业务接口不可用，访客流程不受影响）；公开演示部署未配置后端。
+- **demo（默认）**：内置演示账号仅在本机浏览器生效；画像、示例机会匹配、关注/推进、日程、计划与事件均留在 `localStorage`，无需后端。`/api/*` 在此模式下拒绝代理；虚构公告链接不可点击，示例日期随当天滚动。
 - **invited**：`HttpAuthProvider` 经同源 `/api/*` 使用服务端预建账号与 HttpOnly 会话 cookie（身份不进浏览器），画像、关注、日程、计划等读写 NestJS + PostgreSQL；任何模式失败都不静默回退 Mock。
 
 > **验收状态（2026-10-05 模块 9 收口）**：登录后 P0 闭环 E2E 23/23（demo 会话）与 invited 受邀链路 E2E 29/29（服务端登录、HttpOnly 会话、画像迁移、账号隔离、登出失效；脚本 [`../.qa-harness/m9-invited-flow.mjs`](../.qa-harness/m9-invited-flow.mjs)）均在真实 NestJS + PostgreSQL 上通过；断跨源运行时回归用户侧 7/7、管理侧（非 demo 构建）2/2；无代理中国移动家庭宽带与手机蜂窝真实网络冒烟通过（[`../.qa-harness/m9-cn-smoke.mjs`](../.qa-harness/m9-cn-smoke.mjs)）。**仍待办**：公开受邀地址（境内部署 + ICP 备案 + HTTPS）未落地，上线后须按 [`docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节补测。
+
+> **2026-10-07 线上复测**：[公开 Vercel 演示地址](https://frontend-exam-test.vercel.app) 已更新，demo P0 闭环 25/25、断跨源 7/7、安全冒烟 2/2 通过；阿里云受邀地址尚未开放。2026-10-05 的 demo + 后端联调记录仅为历史记录，不再作为当前架构使用。
 
 ### 能力现状
 
 | 能力 | 状态 |
 |---|---|
-| 五组渐进式基础画像（地区/学历学位/专业/毕业就业/教资+用工形式）、访客 7 天恢复、返回修改重算 | ✅ demo localStorage；demo 登录后画像随匹配请求提交后端；invited 登录后幂等迁移到服务端（均 ✅ 2026-10-05 E2E 验证） |
+| 五组渐进式基础画像（地区/学历学位/专业/毕业就业/教资+用工形式）、访客 7 天恢复、返回修改重算 | ✅ demo 全程本机；invited 登录后幂等迁移到服务端 |
 | 访客初步机会预览（/preview），唯一主行动，关注时才要求登录 | ✅ |
-| 全国教师公开招聘机会发现、报考单元、四值资格匹配（PASS/FAIL/UNKNOWN/MANUAL_REVIEW）与四档总结果 | ✅ 访客预览为前端纯函数引擎；登录后（demo 与 invited）由后端 matching 引擎经同源代理计算（✅ 2026-10-05 E2E 验证）；缺失信息永不判不符合 |
+| 全国教师公开招聘机会发现、报考单元、四值资格匹配（PASS/FAIL/UNKNOWN/MANUAL_REVIEW）与四档总结果 | ✅ demo 由前端纯函数对虚构示例计算；invited 由后端 matching 引擎计算；缺失信息永不判不符合 |
 | 机会详情三层（结论与下一步 / 逐项资格核对 / 官方依据与版本）、关注与报名推进（考虑中/准备报名/已报名/放弃/结束） | ✅ |
 | 主要/备选目标、设主目标二次确认、主要目标同步到备考 | ✅ |
-| 报名与考试时间线、站内提醒（业务唯一键去重、时间待定显示“待官方通知”） | ✅ demo + 后端 schedule 模块 |
+| 报名与考试时间线、站内提醒（业务唯一键去重、时间待定显示“待官方通知”） | ✅ demo 本机示例日程（不发送提醒）；invited 走后端 schedule 模块 |
 | 备考页：考情核对门禁 → 资料/基线/诊断 → 7 天计划 → 今日一项任务 → 点选反馈 → 动态重排/周复盘 | ✅ 复用 v5.2 PlanEngine/ReplanEngine 纯函数，门禁改为“主要目标 + 考情已核对” |
 | 公告流水线：提交来源 → 快照留档（SHA-256）→ 确定性解析提取 → 候选待审核 → 人工审核 → 不可变版本发布 | ✅ 后端模块；当前解析器为确定性规则（❌ 未接真实 AI/OCR）；快照存服务端本地卷 `.data/snapshots`（❌ 未接对象存储）；提交方式为 URL + 粘贴正文（❌ 无二进制附件上传） |
 | 运营后台：指标看板（含 P0 漏斗）、考情审核、公告流水线、资源管理、纠错队列 | ✅ demo 本地数据；invited 走服务端角色校验；公开演示环境 `/admin` 整体关闭 |
 | 用户纠错、结论撤回留痕、通知偏好、数据删除申请 | ✅ demo；invited 服务端接口部分覆盖（❌ 真实删除流程未全链路验证） |
 | 分析指标：27 事件（含 8 个 P0 漏斗事件）、seed/live 分流、访客暂存迁移、P0 9 阶段漏斗与 7 日有效推进率 | ✅ 模块 9 口径，见下文“分析与指标” |
 | 运行时网络基线：CSP 同源、外部依赖扫描与守卫、断跨源核心操作回归 | ✅ 代码侧 + 真实网络实测：2026-10-05 中国移动家庭宽带与手机蜂窝无代理冒烟通过（[`docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节）；备案域名公开访问待部署后补测 |
-| 单元/领域测试 | ✅ Vitest，21 个测试文件、157 个用例全部通过（生产构建后守卫测试全部生效，无 skip），含网络基线守卫与模块 9 高风险回归 |
+| 单元/领域测试 | ✅ Vitest，26 个测试文件、207 个用例全部通过（2026-10-07 本机复测），含网络基线守卫与模块 9 高风险回归 |
 | 真实短信/微信/邮件/Web Push、自动全国爬虫、对象存储、真实 AI/OCR | ❌ 本轮明确不做/未接入 |
 
 ### 技术栈
@@ -75,19 +77,19 @@ npm run dev        # http://localhost:3000（demo 模式）
 质量检查：
 
 ```bash
-npm test                 # Vitest 全量：157 用例（含境外依赖阻断与高风险回归；构建后守卫测试全部生效）
+npm test                 # Vitest 全量：207 用例（2026-10-07 本机复测）
 npm run check:external   # 扫描源码与构建产物的运行时外部依赖（postbuild 自动执行）
 npx tsc --noEmit         # 类型检查
 npm run lint             # ESLint
 npm run build            # 生产构建（构建后自动外部依赖扫描）
 ```
 
-浏览器端到端脚本（需先启动 frontend；登录后业务数据需 backend + PostgreSQL，访客流程可纯前端）：
+浏览器端到端脚本（demo 只需启动 frontend；invited 需 backend + PostgreSQL）：
 
 ```bash
 cd .qa-harness
 npm install
-node m9-p0-flow.mjs                # P0 闭环：访客画像→初步机会→登录→依据→关注→日程→主目标→开始任务（2026-10-05 实测 23/23）
+node m9-p0-flow.mjs                # demo P0 闭环：访客画像→登录→关注→日程→主目标→开始任务（2026-10-07 本机 25/25）
 node m9-blocked-runtime.mjs        # 阻断全部跨源请求后，用户侧核心页面核心操作仍可用（7/7）
 node m9-blocked-runtime.mjs admin  # 管理侧：需非 demo 构建的 frontend（demo 构建按设计关闭 /admin）；2/2
 node m9-invited-flow.mjs      # 受邀链路：backend 以 AUTH_MODE=invited + PG，frontend 以 NEXT_PUBLIC_AUTH_MODE=invited，库内种子账号见脚本头注释（29/29）
