@@ -1,24 +1,27 @@
-# 教招有据（前端）
+# 教招有据（前后端单仓库）
 
 “教招有据”面向教师招聘意向用户，当前验证**可追溯的语文教师招聘机会、可解释资格预筛与报考推进**。现有 v6.1 代码另含备考计划能力，但该能力在 v7.0 验证目标中降为 P1，不是当前对外核心承诺。
 
+本仓库现在同时包含前端（仓库根目录）与后端（[`backend/`](./backend/)）；Docker 部署配置在 [`deploy/`](./deploy/)。旧后端仓库保留作历史记录，后续代码统一提交到这里。前端仍位于仓库根目录，现有 Vercel 项目的构建根目录无需因本次合并而改变。
+
 > **学科开放范围**：产品长期面向各学科，**当前版本只开放语文学科**；语文是首个验证板块，不是产品长期边界。
 
-> **品牌口径**：“教招有据”是产品名；“验证版”是阶段标签，仅用于试用说明与内部文档，不默认拼进 Logo；固定功能副标题为“教师招聘机会与资格预筛”；所有资格结论均为预筛，最终以官方公告和招聘单位审核为准。商标、域名与平台账号名称占用状态为**待核查**，对外发布前须完成近似查询，详见 [`../docs/教招有据-模块0-品牌清单与版本决策记录.md`](../docs/教招有据-模块0-品牌清单与版本决策记录.md)。
+> **品牌口径**：“教招有据”是产品名；“验证版”是阶段标签，仅用于试用说明与内部文档，不默认拼进 Logo；固定功能副标题为“教师招聘机会与资格预筛”；所有资格结论均为预筛，最终以官方公告和招聘单位审核为准。商标、域名与平台账号名称占用状态为**待核查**，对外发布前须完成近似查询，详见 [`docs/教招有据-模块0-品牌清单与版本决策记录.md`](./docs/教招有据-模块0-品牌清单与版本决策记录.md)。
 
-当前实现仍以根目录 [`PRD-全国教师公开招聘与备考助手-v6.1.md`](../PRD-全国教师公开招聘与备考助手-v6.1.md) 为历史基线；本轮验证目标见 [`PRD-全国教师公开招聘助手-v7.0-研究验证版.md`](../PRD-全国教师公开招聘助手-v7.0-研究验证版.md)。本 README 只描述前端仓库**当前实现了什么、计划迁移到什么状态**，不复写 PRD。
+当前实现仍以 [`v6.1 PRD`](./PRD-全国教师公开招聘与备考助手-v6.1.md) 为历史基线；本轮验证目标见 [`v7.0 研究验证版 PRD`](./PRD-全国教师公开招聘助手-v7.0-研究验证版.md)。本 README 主要描述前端部分**当前实现了什么、计划迁移到什么状态**，不复写 PRD；后端能力详见 [`backend/README.md`](./backend/README.md)。
 
 ## 文档地图
 
 | 文档 | 负责回答 |
 |---|---|
-| [`PRD-全国教师公开招聘与备考助手-v6.1.md`](../PRD-全国教师公开招聘与备考助手-v6.1.md) | 当前实现的历史需求基线 |
-| [`PRD-全国教师公开招聘助手-v7.0-研究验证版.md`](../PRD-全国教师公开招聘助手-v7.0-研究验证版.md) | 本轮验证的产品目标与验收标准 |
-| [`docs/PRD-v6.1-技术可行性与开发方案.md`](../docs/PRD-v6.1-技术可行性与开发方案.md) | 技术选型、架构与分阶段开发方案 |
-| [`docs/v6.1-migration-plan.md`](../docs/v6.1-migration-plan.md) | v5.2 → v6.1 的路由、领域对象、模块处置与阶段回退 |
-| [`docs/v6.1-information-architecture.md`](../docs/v6.1-information-architecture.md) | “机会 / 日程 / 备考”信息架构与页面内容预算 |
-| [`docs/v6.1-data-pipeline.md`](../docs/v6.1-data-pipeline.md) | 公告提交、提取、审核、发布与版本留痕流水线 |
-| [`docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) | 国内普通网络可访问基线、允许域名与验收方法 |
+| [`PRD-全国教师公开招聘与备考助手-v6.1.md`](./PRD-全国教师公开招聘与备考助手-v6.1.md) | 当前实现的历史需求基线 |
+| [`PRD-全国教师公开招聘助手-v7.0-研究验证版.md`](./PRD-全国教师公开招聘助手-v7.0-研究验证版.md) | 本轮验证的产品目标与验收标准 |
+| [`docs/PRD-v6.1-技术可行性与开发方案.md`](./docs/PRD-v6.1-技术可行性与开发方案.md) | 技术选型、架构与分阶段开发方案 |
+| [`docs/v6.1-migration-plan.md`](./docs/v6.1-migration-plan.md) | v5.2 → v6.1 的路由、领域对象、模块处置与阶段回退 |
+| [`docs/v6.1-information-architecture.md`](./docs/v6.1-information-architecture.md) | “机会 / 日程 / 备考”信息架构与页面内容预算 |
+| [`docs/v6.1-data-pipeline.md`](./docs/v6.1-data-pipeline.md) | 公告提交、提取、审核、发布与版本留痕流水线 |
+| [`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md) | 国内普通网络可访问基线、允许域名与验收方法 |
+| [`docs/教招有据-10人演示试用-用户访谈与旅程观察方案.md`](./docs/教招有据-10人演示试用-用户访谈与旅程观察方案.md) | 10 人演示试用方案与配套观察记录表 |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | 公开演示环境（现状）与少量受邀用户环境（目标）部署说明 |
 
 ---
@@ -27,14 +30,14 @@
 
 > 状态标识：✅ = 仓库中已实现并有自动化测试覆盖；🚧 = 代码已写但**尚未在真实环境验证**；❌ = 未实现，不得对外宣称完成。
 
-仓库已按[迁移计划](../docs/v6.1-migration-plan.md)完成模块 0—9 的**代码侧**工作：用户主线“机会发现 → 可解释资格匹配 → 关注与报名日程 → 主要目标 → 备考”在演示模式下端到端跑通，NestJS + PostgreSQL 受邀模式的服务端代码与迁移也已就位。
+仓库已按[迁移计划](./docs/v6.1-migration-plan.md)完成模块 0—9 的**代码侧**工作：用户主线“机会发现 → 可解释资格匹配 → 关注与报名日程 → 主要目标 → 备考”在演示模式下端到端跑通，NestJS + PostgreSQL 受邀模式的服务端代码与迁移也已就位。
 
 两种运行模式，由 `NEXT_PUBLIC_AUTH_MODE` 切换：
 
 - **demo（默认）**：内置演示账号仅在本机浏览器生效；画像、示例机会匹配、关注/推进、日程、计划与事件均留在 `localStorage`，无需后端。`/api/*` 在此模式下拒绝代理；虚构公告链接不可点击，示例日期随当天滚动。
 - **invited**：`HttpAuthProvider` 经同源 `/api/*` 使用服务端预建账号与 HttpOnly 会话 cookie（身份不进浏览器），画像、关注、日程、计划等读写 NestJS + PostgreSQL；任何模式失败都不静默回退 Mock。
 
-> **验收状态（2026-10-05 模块 9 收口）**：登录后 P0 闭环 E2E 23/23（demo 会话）与 invited 受邀链路 E2E 29/29（服务端登录、HttpOnly 会话、画像迁移、账号隔离、登出失效；脚本 [`../.qa-harness/m9-invited-flow.mjs`](../.qa-harness/m9-invited-flow.mjs)）均在真实 NestJS + PostgreSQL 上通过；断跨源运行时回归用户侧 7/7、管理侧（非 demo 构建）2/2；无代理中国移动家庭宽带与手机蜂窝真实网络冒烟通过（[`../.qa-harness/m9-cn-smoke.mjs`](../.qa-harness/m9-cn-smoke.mjs)）。**仍待办**：公开受邀地址（境内部署 + ICP 备案 + HTTPS）未落地，上线后须按 [`docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节补测。
+> **验收状态（2026-10-05 模块 9 收口）**：登录后 P0 闭环 E2E 23/23（demo 会话）与 invited 受邀链路 E2E 29/29（服务端登录、HttpOnly 会话、画像迁移、账号隔离、登出失效；脚本 [`.qa-harness/m9-invited-flow.mjs`](./.qa-harness/m9-invited-flow.mjs)）均在真实 NestJS + PostgreSQL 上通过；断跨源运行时回归用户侧 7/7、管理侧（非 demo 构建）2/2；无代理中国移动家庭宽带与手机蜂窝真实网络冒烟通过（[`.qa-harness/m9-cn-smoke.mjs`](./.qa-harness/m9-cn-smoke.mjs)）。**仍待办**：公开受邀地址（境内部署 + ICP 备案 + HTTPS）未落地，上线后须按 [`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md) 第 6.3 节补测。
 
 > **2026-10-07 线上复测**：[公开 Vercel 演示地址](https://frontend-exam-test.vercel.app) 已更新，demo P0 闭环 25/25、断跨源 7/7、安全冒烟 2/2 通过；阿里云受邀地址尚未开放。2026-10-05 的 demo + 后端联调记录仅为历史记录，不再作为当前架构使用。
 
@@ -53,7 +56,7 @@
 | 运营后台：指标看板（含 P0 漏斗）、考情审核、公告流水线、资源管理、纠错队列 | ✅ demo 本地数据；invited 走服务端角色校验；公开演示环境 `/admin` 整体关闭 |
 | 用户纠错、结论撤回留痕、通知偏好、数据删除申请 | ✅ demo；invited 服务端接口部分覆盖（❌ 真实删除流程未全链路验证） |
 | 分析指标：27 事件（含 8 个 P0 漏斗事件）、seed/live 分流、访客暂存迁移、P0 9 阶段漏斗与 7 日有效推进率 | ✅ 模块 9 口径，见下文“分析与指标” |
-| 运行时网络基线：CSP 同源、外部依赖扫描与守卫、断跨源核心操作回归 | ✅ 代码侧 + 真实网络实测：2026-10-05 中国移动家庭宽带与手机蜂窝无代理冒烟通过（[`docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节）；备案域名公开访问待部署后补测 |
+| 运行时网络基线：CSP 同源、外部依赖扫描与守卫、断跨源核心操作回归 | ✅ 代码侧 + 真实网络实测：2026-10-05 中国移动家庭宽带与手机蜂窝无代理冒烟通过（[`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md) 第 6.3 节）；备案域名公开访问待部署后补测 |
 | 单元/领域测试 | ✅ Vitest，26 个测试文件、207 个用例全部通过（2026-10-07 本机复测），含网络基线守卫与模块 9 高风险回归 |
 | 真实短信/微信/邮件/Web Push、自动全国爬虫、对象存储、真实 AI/OCR | ❌ 本轮明确不做/未接入 |
 
@@ -62,14 +65,13 @@
 - Next.js 16.3.8（App Router）+ React 19.2.8 + TypeScript 5（strict）+ Tailwind CSS 4
 - demo 数据：localStorage（`kb_*` 键），服务层 + `useSyncExternalStore` 订阅；invited 数据：NestJS 同源 API
 - 测试：Vitest 3 + jsdom；浏览器端到端脚本：Playwright（`.qa-harness/`，独立 `package.json`）
-- 后端：NestJS 12 + Prisma 6 + PostgreSQL（17 个模型、5 个迁移），详见 [`backend/README.md`](../backend/README.md)
+- 后端：NestJS 12 + Prisma 6 + PostgreSQL（17 个模型、5 个迁移），详见 [`backend/README.md`](./backend/README.md)
 - 浏览器只调用同源 `/api/*`（[`src/app/api/[...path]/route.ts`](./src/app/api/%5B...path%5D/route.ts) 服务端反代，注入 `x-internal-token`）；CSP `default-src/connect-src 'self'`，配置在 [`next.config.ts`](./next.config.ts)
 
 ### 快速开始
 
 ```bash
-cd frontend
-npm install
+npm ci
 npm run dev        # http://localhost:3000（demo 模式）
 ```
 
@@ -185,7 +187,7 @@ npm run start:dev
 
 资格匹配支持四种结果：**初步符合 / 补充信息后判断 / 建议人工确认 / 明确不符合**；缺失信息永远不能被判定为不符合。公告事实、机器提取候选、人工审核结论分开存储与呈现，机器候选不进主推荐。
 
-**仍未实现 / 不在本轮**：真实 AI/OCR 提取与附件二进制上传、对象存储、真实推送渠道、自动全国采集、多学科（当前仅语文）、多目标时间分配（PRD P1）、真实删除流程的服务端全链路。路由、领域对象的新旧对应与各模块处置见 [`docs/v6.1-migration-plan.md`](../docs/v6.1-migration-plan.md)。
+**仍未实现 / 不在本轮**：真实 AI/OCR 提取与附件二进制上传、对象存储、真实推送渠道、自动全国采集、多学科（当前仅语文）、多目标时间分配（PRD P1）、真实删除流程的服务端全链路。路由、领域对象的新旧对应与各模块处置见 [`docs/v6.1-migration-plan.md`](./docs/v6.1-migration-plan.md)。
 
 ---
 
@@ -196,7 +198,7 @@ npm run start:dev
 - 环境标识 `NEXT_PUBLIC_APP_ENV=demo`、`NEXT_PUBLIC_DEMO_MODE=true`；
 - 所有输入仅保存在访客本机浏览器，不上传服务器；页面顶部有固定提示横幅；
 - `/admin` 在演示环境整体关闭；`robots` 为 `noindex,nofollow`；
-- 该部署位于 Vercel，**仅用于功能展示，不是少量受邀用户的试用环境**；受邀用户环境必须在中国大陆普通网络可直接访问，见 [DEPLOYMENT.md](./DEPLOYMENT.md) 与[国内网络可访问性文档](../docs/china-network-accessibility.md)。
+- 该部署位于 Vercel，**仅用于功能展示，不是少量受邀用户的试用环境**；受邀用户环境必须在中国大陆普通网络可直接访问，见 [DEPLOYMENT.md](./DEPLOYMENT.md) 与[国内网络可访问性文档](./docs/china-network-accessibility.md)。
 
 ---
 

@@ -1,4 +1,4 @@
-name: Publish frontend image to GHCR
+name: Publish frontend and backend images to GHCR
 
 on:
   push:
@@ -9,12 +9,24 @@ permissions:
   packages: write
 
 concurrency:
-  group: docker-frontend-${{ github.ref }}
+  group: docker-monorepo-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: frontend
+            context: .
+            dockerfile: ./Dockerfile
+            suffix: ""
+          - component: backend
+            context: ./backend
+            dockerfile: ./backend/Dockerfile
+            suffix: -api
     steps:
       - uses: actions/checkout@v4
 
@@ -32,21 +44,21 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          images: ghcr.io/${{ github.repository }}
+          images: ghcr.io/${{ github.repository }}${{ matrix.suffix }}
           tags: |
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,format=long
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
 
-      - name: Build and push invited frontend
+      - name: Build and push ${{ matrix.component }}
         uses: docker/build-push-action@v7
         with:
-          context: .
-          file: ./Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}

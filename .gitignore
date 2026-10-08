@@ -44,3 +44,14 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# 受邀部署密钥仅保留在服务器；允许提交不含真实值的镜像选择模板
+/deploy/*.env
+!/deploy/.env.example
+
+# 浏览器端到端测试的本地依赖和运行产物
+/.qa-harness/node_modules/
+/.qa-harness/shots/
+/.qa-harness/test-results/
+/.qa-harness/playwright-report/
+/.qa-harness/.auth/

@@ -5,9 +5,9 @@
 | 形态 | 环境标识 | 数据去向 | 网络定位 | 当前状态 |
 |---|---|---|---|---|
 | **A. 公开演示环境** | `APP_ENV=demo`（`NEXT_PUBLIC_AUTH_MODE=demo`，默认） | 所有演示业务数据仅保存在当前浏览器 | Vercel（境外平台，仅用于功能展示） | 2026-10-07 已更新 [公开演示地址](https://frontend-exam-test.vercel.app)；线上 P0 25/25、断跨源 7/7、安全冒烟 2/2 通过 |
-| **B. 少量受邀用户环境** | `APP_ENV=invited`（`NEXT_PUBLIC_AUTH_MODE=invited`） | 境内服务器上的 PostgreSQL（公告快照当前落本地卷，对象存储未接入） | 中国大陆云服务，普通家庭/手机网络直连 | 🚧 前后端代码、迁移与受邀链路 E2E（服务端登录/HttpOnly 会话/画像迁移/账号隔离，29/29）均已验证；环境未落地。网络链路层已实测（2026-10-05）：中国移动家庭宽带与手机蜂窝无代理直连下本地同源全栈全部通过（[`../docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节）；备案域名公开访问待部署后补测 |
+| **B. 少量受邀用户环境** | `APP_ENV=invited`（`NEXT_PUBLIC_AUTH_MODE=invited`） | 境内服务器上的 PostgreSQL（公告快照当前落本地卷，对象存储未接入） | 中国大陆云服务，普通家庭/手机网络直连 | 🚧 前后端代码、迁移与受邀链路 E2E（服务端登录/HttpOnly 会话/画像迁移/账号隔离，29/29）均已验证；环境未落地。网络链路层已实测（2026-10-05）：中国移动家庭宽带与手机蜂窝无代理直连下本地同源全栈全部通过（[`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md) 第 6.3 节）；备案域名公开访问待部署后补测 |
 
-> 公开演示环境**不是**受邀试用环境，不得用演示环境承接真实用户试用；受邀环境不得静默回退到 localStorage Mock。两种形态的产品口径见 [`../PRD-全国教师公开招聘与备考助手-v6.1.md`](../PRD-全国教师公开招聘与备考助手-v6.1.md)，网络可访问基线见 [`../docs/china-network-accessibility.md`](../docs/china-network-accessibility.md)。
+> 公开演示环境**不是**受邀试用环境，不得用演示环境承接真实用户试用；受邀环境不得静默回退到 localStorage Mock。两种形态的产品口径见 [`PRD-全国教师公开招聘与备考助手-v6.1.md`](./PRD-全国教师公开招聘与备考助手-v6.1.md)，网络可访问基线见 [`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md)。
 
 > 2026-10-07 部署记录：公开演示登录后的机会匹配、关注、日程与分析事件已改为浏览器本地路径；Vercel 已更新并完成线上 E2E。阿里云受邀环境仅完成部署前数据库备份、独立发布目录上传和后端镜像构建；**尚未迁移数据库、启动新容器或开放受邀地址**。
 
@@ -147,7 +147,7 @@ npx vercel --prod
 2. 不以 Vercel 或其他境外平台作为必要运行依赖；字体、图标、脚本、样式、关键图片随应用部署或来自明确允许的境内地址。
 3. 浏览器只调用同源 `/api/*`；后端再访问数据库、文件存储和 AI/OCR 等第三方服务，密钥不进入前端。
 4. AI/OCR 仅通过后端适配器接入在境内可稳定访问的服务；供应商不可用时回退为人工录入/审核，核心页面不得白屏。
-5. 不引入 Kubernetes、微服务、Redis/BullMQ 等本轮不需要的基础设施（产品边界见[迁移计划](../docs/v6.1-migration-plan.md)）。
+5. 不引入 Kubernetes、微服务、Redis/BullMQ 等本轮不需要的基础设施（产品边界见[迁移计划](./docs/v6.1-migration-plan.md)）。
 
 ## 12. 前置事项（完成前只允许内部演示）
 
@@ -161,7 +161,7 @@ npx vercel --prod
 
 ## 13. 轻量部署拓扑（单域名、单机起步）
 
-> **2026-10-07 状态说明**：根仓库 `deploy/README.md` 提供 Docker Compose + Caddy 方案，采用 Next 同源 `/api` 反代（`BACKEND_URL` + `INTERNAL_TOKEN`）；**本轮尚未在阿里云执行部署或迁移**。下述 Nginx 直连后端方案（§13.1）保留为备选，两者不可混用。
+> **2026-10-07 状态说明**：本仓库 [`deploy/README.md`](./deploy/README.md) 提供 Docker Compose + Caddy 方案，采用 Next 同源 `/api` 反代（`BACKEND_URL` + `INTERNAL_TOKEN`）；**本轮尚未在阿里云执行部署或迁移**。下述 Nginx 直连后端方案（§13.1）保留为备选，两者不可混用。
 
 ```text
 受邀用户浏览器（家庭宽带 / 4G·5G）
@@ -179,7 +179,7 @@ https://你的产品域名/
 - **PostgreSQL**：首版可用同机 Docker（数据卷定期备份）；具备条件时直接使用同地域云托管 PostgreSQL（自动备份更省心）。开发、测试、试用使用不同数据库，不混用。
 - **文件存储**：使用同地域云对象存储私有 Bucket 保存公告原件与附件，开启版本控制，服务端签发短时 URL；上传校验类型与大小，不把大文件入库。极小规模临时联调可用服务器挂载卷过渡，但不得作为试用环境的长期方案。
 - **后端端口**：NestJS 只监听内网/回环地址（裸进程部署设 `HOST=127.0.0.1`；容器部署用内网网络且不映射公网端口），公网仅经 Nginx 的 `/api/*` 可达；沿用现有 `x-internal-token` 内部密钥守卫，Nginx 注入该头，外部直连返回 401。后端位于反代之后时设 `TRUST_PROXY=true`，以正确识别 TLS 与真实客户端 IP。
-- **CSP**：默认同源，仅按实测逐个加入确需的境内域名；不使用 `https:` 通配。允许域名清单与检查方法见 [`../docs/china-network-accessibility.md`](../docs/china-network-accessibility.md)。
+- **CSP**：默认同源，仅按实测逐个加入确需的境内域名；不使用 `https:` 通配。允许域名清单与检查方法见 [`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md)。
 
 ### 13.1 Nginx 参考配置（单域名、单机）
 
@@ -253,13 +253,13 @@ server {
 - 发布门禁（在构建机执行，任一失败不发布）：`npm test`（2026-10-07 前端 207 用例）→ `npx tsc --noEmit` → `npm run lint` → `npm run build`（postbuild 自动运行网络依赖扫描，发现 Google Fonts/境外 CDN/客户端密钥即失败，可用 `npm run check:external` 手动复跑）→ 后端 `npm run lint && npm run build && npm test`。Playwright 回归（`.qa-harness/m9-p0-flow.mjs`、`m9-blocked-runtime.mjs`）在有运行栈时执行并留存结果。
 - 发布：构建并推送 Next.js 与 NestJS 镜像（或上传构建产物）→ 备份数据库 → 执行可重复执行的 Prisma 迁移 → 滚动重启 → 冒烟（经域名访问 `/api/health`、登录、核心页面）。
 - 回滚：Nginx 切回上一版本镜像；数据库迁移必须提供回滚方案，重要迁移前先创建恢复点；公告版本数据只追加不原地覆盖，应用回滚不影响已发布版本留档。
-- 每次发布后在无代理的家庭网络与手机网络做一次核心路径冒烟，结果记录为“已验证/待验证”，不得把未实测写成“国内可用”；记录格式见 [`../docs/china-network-accessibility.md`](../docs/china-network-accessibility.md) 第 6.3 节。
+- 每次发布后在无代理的家庭网络与手机网络做一次核心路径冒烟，结果记录为“已验证/待验证”，不得把未实测写成“国内可用”；记录格式见 [`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md) 第 6.3 节。
 
 ---
 
 ## 16. 从演示走向真实能力的替换顺序
 
-按依赖顺序，与[迁移计划](../docs/v6.1-migration-plan.md)的模块编号对应：
+按依赖顺序，与[迁移计划](./docs/v6.1-migration-plan.md)的模块编号对应：
 
 1. **国内网络基线（模块 0A，2026-10-04 代码侧已完成）**：已移除 `next/font/google`，字体改用跨平台系统字体栈，收紧 CSP（去掉 `img-src https:` 通配），交付 `scripts/check-external-deps.mjs` 扫描与 Vitest 守卫，后端支持 `HOST`/`TRUST_PROXY`。模块 9 增补运行时断跨源 Playwright 回归。剩余未完成项是域名、ICP 备案与境内 ECS 落地后的真实网络冒烟（状态：待验证）。
 2. **领域模型与公告流水线（模块 1、2，代码已完成）**：后端 17 个模型/5 个迁移、公告版本、证据锚点、审核记录、确定性解析器均已落地；原件目前写本地卷，对象存储未接，真实 AI/OCR 未接。

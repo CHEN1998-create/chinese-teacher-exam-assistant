@@ -1,0 +1,14 @@
+# 教招有据 · 受邀环境反代
+#
+# 受邀账号入口只允许经配置的域名使用 HTTPS；不得通过 IP 明文 HTTP 登录。
+# 在 compose 的 .env 设置 SITE_DOMAIN=已备案域名；Caddy 会自动申请/续期证书。
+#
+# 安全响应头（CSP 等）由 Next.js 在 next.config.ts 统一输出，代理层不重复添加。
+
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# 全部流量交给 Next.js：页面由 Next 直接服务，
+	# /api/* 由 Next 服务端反代到 backend（自动携带 x-internal-token）。
+	reverse_proxy frontend:3000
+}
