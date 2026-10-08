@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, type ChangeEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -75,9 +75,14 @@ const STEP_FEEDBACK: Record<number, string> = {
   4: "毕业情况已记住，最后核对教师资格",
 };
 
-export default function OnboardingPage() {
+function OnboardingForm() {
   const router = useRouter();
   const { status } = useCurrentUser();
+  const searchParams = useSearchParams();
+  // 带 ?from= 进入（结果页/我的/机会页的"返回修改画像""填写报考信息"等）是明确
+  // 填写或修改意图，不触发自动跳转；否则画像已完成的访客弹回 /preview、
+  // 已登录用户弹回 /opportunities，永远无法进入修改
+  const editing = searchParams.has("from");
 
   // 惰性初始化从 localStorage 恢复，避免 effect 内 setState
   const [draft, setDraft] = useState<GuestProfileDraft>(() => {
@@ -110,13 +115,13 @@ export default function OnboardingPage() {
   useEffect(() => {
     if (status === "loading") return;
     if (status === "authenticated") {
-      router.replace("/opportunities");
+      if (!editing) router.replace("/opportunities");
       return;
     }
-    if (guestSessionService.isComplete()) {
+    if (!editing && guestSessionService.isComplete()) {
       router.replace("/preview");
     }
-  }, [status, router]);
+  }, [status, router, editing]);
 
   // 任何一组补填了实质内容，自动取消该组的「暂不提供」标记（由纯函数规整）
   const updateDraft = (patch: Partial<GuestProfileDraft>) => {
@@ -894,5 +899,14 @@ function StepCert({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  // useSearchParams 需要 Suspense 边界以支持静态预渲染
+  return (
+    <Suspense fallback={null}>
+      <OnboardingForm />
+    </Suspense>
   );
 }

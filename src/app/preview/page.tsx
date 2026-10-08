@@ -141,7 +141,7 @@ function NotOpenSubject({
         </Card>
         <p className="text-center text-sm text-ink-muted mt-6">
           想先看看语文机会？
-          <Link href="/onboarding" className="text-brand hover:underline ml-1">
+          <Link href="/onboarding?from=preview" className="text-brand hover:underline ml-1">
             返回修改学科
           </Link>
         </p>
@@ -274,7 +274,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
                 ；这不是不符合，补充至少一个地区后结论会立即重新计算。
               </p>
               <LinkButton
-                href="/onboarding"
+                href="/onboarding?from=preview"
                 variant="primary"
                 size="md"
                 className="mt-3"
@@ -291,7 +291,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             }
             description="可以修改地区或学历等条件再看；未覆盖地区不等于没有招聘，新公告核对后会出现在这里。"
             actionLabel="修改报考信息"
-            actionHref="/onboarding"
+            actionHref="/onboarding?from=preview"
           />
           <SummaryCard />
           <LimitationsCard limitations={limitations} />
@@ -408,7 +408,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
 
         <p className="text-center text-xs text-ink-muted">
           示例仅用于体验判断方式，不代表真实招聘。你填写的报考信息仅保存在这台设备，可随时
-          <Link href="/onboarding" className="text-brand hover:underline mx-1">
+          <Link href="/onboarding?from=preview" className="text-brand hover:underline mx-1">
             修改报考信息
           </Link>
           。
@@ -459,7 +459,7 @@ function SummaryCard() {
           {summary || "部分信息暂未填写"}
         </p>
       </div>
-      <Link href="/onboarding" className="shrink-0 text-xs font-medium text-brand hover:underline">
+      <Link href="/onboarding?from=preview" className="shrink-0 text-xs font-medium text-brand hover:underline">
         修改
       </Link>
     </div>
@@ -484,7 +484,7 @@ function UncoveredRegionsCard({ regionLabels }: { regionLabels: string[] }) {
         这里提供的是初步判断，报名前请以当地教育局或人社局官网为准。
       </p>
       <Link
-        href="/onboarding"
+        href="/onboarding?from=preview"
         className="mt-2 inline-block text-xs font-medium text-brand underline underline-offset-2"
       >
         修改报考地区
@@ -516,7 +516,7 @@ function LimitationsCard({ limitations }: { limitations: ProfileLimitation[] }) 
       </ul>
       <p className="mt-2 text-xs text-warn">
         没有填写的信息一律显示「补充信息后判断」，不会被判为不符合；
-        <Link href="/onboarding" className="font-medium underline underline-offset-2 ml-1">
+        <Link href="/onboarding?from=preview" className="font-medium underline underline-offset-2 ml-1">
           返回补填
         </Link>
         后结果自动更新。

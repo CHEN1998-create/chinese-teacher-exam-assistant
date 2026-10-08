@@ -65,7 +65,7 @@ export default function OpportunitiesPage() {
           title={copy.title}
           description={copy.description}
           actionLabel="填写报考信息"
-          actionHref="/onboarding"
+          actionHref="/onboarding?from=opportunities"
         />
       </div>
     );
@@ -181,7 +181,7 @@ export default function OpportunitiesPage() {
             这里提供的是初步判断，报名前请以当地教育局或人社局官网为准。
           </p>
           <Link
-            href="/onboarding"
+            href="/onboarding?from=opportunities"
             className="mt-2 inline-block text-xs font-medium text-brand underline underline-offset-2"
           >
             修改报考地区
@@ -194,7 +194,7 @@ export default function OpportunitiesPage() {
           title="当前已核对范围内没有可展示的机会"
           description={`已核对范围见上方监测说明（${view.coverage.scopeNote || "未覆盖地区不等于没有招聘"}）。你可以修改报考信息后重新判断，或稍后回来查看新公告。`}
           actionLabel="修改报考信息"
-          actionHref="/onboarding"
+          actionHref="/onboarding?from=opportunities"
         />
       )}
 

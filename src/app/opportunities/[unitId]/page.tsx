@@ -144,7 +144,7 @@ export default function OpportunityDetailPage() {
           title="先填写报考信息，才能查看这项机会的判断依据"
           description="机会详情会根据你填写的报考信息逐项核对。"
           actionLabel="填写报考信息"
-          actionHref="/onboarding"
+          actionHref="/onboarding?from=opportunity"
         />
       </div>
     );

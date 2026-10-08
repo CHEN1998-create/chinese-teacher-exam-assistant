@@ -197,7 +197,7 @@ function ProfileCard() {
           先填写报考信息
         </h2>
         <p className="mt-2 text-sm text-ink-muted">填写后才能看到与你有关的机会判断。</p>
-        <LinkButton href="/onboarding" variant="primary" size="lg" fullWidth className="mt-5">
+        <LinkButton href="/onboarding?from=me" variant="primary" size="lg" fullWidth className="mt-5">
           开始填写
         </LinkButton>
       </Card>
@@ -273,7 +273,7 @@ function ProfileCard() {
       <p className="mt-2 text-sm text-ink-muted">
         当前条件：{regionSummary}{targetSummary ? ` · ${targetSummary}` : ""}
       </p>
-      <LinkButton href="/onboarding" variant="outline" size="md" className="mt-4">
+      <LinkButton href="/onboarding?from=me" variant="outline" size="md" className="mt-4">
         {missingGraduationDate ? "补充报考信息" : "修改报考信息"}
       </LinkButton>
       <details className="group mt-3 rounded-xl border border-line bg-canvas/60">
