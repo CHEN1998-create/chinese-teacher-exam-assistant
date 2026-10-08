@@ -132,7 +132,7 @@ export function nextAction(unit: UnitMatchDTO): NextAction {
     case "preliminary_eligible": {
       const follow = unit.follow;
       if (!follow) {
-        return { kind: "follow", label: "关注这个机会（先加入考虑中）" };
+        return { kind: "follow", label: "保存这个机会" };
       }
       if (follow.status === "considering") {
         return { kind: "prepare", label: "标记为准备报名" };
@@ -148,7 +148,7 @@ export function nextAction(unit: UnitMatchDTO): NextAction {
           : { kind: "waiting", label: "已在准备报名：等待官方开放报名入口" };
       }
       if (follow.status === "registered") {
-        return { kind: "registered", label: "已报名：关注笔试与资格复审安排" };
+        return { kind: "registered", label: "已报名：查看笔试与资格复审安排" };
       }
       if (follow.status === "abandoned") {
         return { kind: "follow", label: "重新纳入考虑" };

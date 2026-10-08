@@ -74,7 +74,7 @@ function byUnit(data: DemoData, unitId: string): DemoFollow | undefined {
 function updateFollow(unitId: string, change: (follow: DemoFollow) => void): DemoFollow {
   const data = load();
   const follow = byUnit(data, unitId);
-  if (!follow) throw new Error("请先关注这个机会");
+  if (!follow) throw new Error("请先保存这个机会");
   change(follow);
   follow.version += 1;
   persist(data);
@@ -305,7 +305,7 @@ export const demoOpportunitiesApi = {
   async setRole(unitId: string, role: StudyTargetRole): Promise<FollowDTO> {
     const data = load();
     const follow = byUnit(data, unitId);
-    if (!follow) throw new Error("请先关注这个机会");
+    if (!follow) throw new Error("请先保存这个机会");
     if (role === "primary") {
       for (const item of data.follows) {
         if (item.role === "primary") item.role = "backup";

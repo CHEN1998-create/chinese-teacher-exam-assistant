@@ -321,7 +321,7 @@ export function guestCardNextStep(row: OpportunityRow): GuestCardNextStep {
   }
   switch (row.status) {
     case "preliminary_eligible":
-      return { kind: "login", label: "关注并登录后保存" };
+      return { kind: "login", label: "保存这个机会" };
     case "need_more_info":
       return { kind: "onboarding", label: "补充信息后判断" };
     case "manual_review":

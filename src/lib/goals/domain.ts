@@ -133,7 +133,7 @@ export function evaluateStudyGate(
   if (!goal) {
     return {
       kind: "no_primary",
-      nextStep: "先到「机会」页从已关注机会中选择一个主要备考目标，再回到这里开始备考。",
+      nextStep: "先到「机会」页从已保存机会中选择一个重点准备的机会，再回来开始备考。",
     };
   }
 
@@ -181,13 +181,13 @@ export function describePrimarySwitchImpact(
 ): PrimarySwitchImpact {
   const points: string[] = [];
   if (currentPrimaryName && currentPrimaryName !== nextUnitName) {
-    points.push(`原主要目标「${currentPrimaryName}」将自动转为备选目标，可随时切换回来`);
-    points.push("当前主要目标已有的计划与学习记录会保留为历史，但不再出现在备考首页");
+    points.push(`原来重点准备的「${currentPrimaryName}」将转为备选机会，可随时切换回来`);
+    points.push("原有计划与学习记录会保留为历史，但不再出现在备考首页");
   }
-  points.push(`新主要目标「${nextUnitName}」需要重新确认考试内容后才会生成首个 7 天计划`);
-  points.push("其他备选目标保持不变，不会自动创建多套计划");
+  points.push(`新的重点机会「${nextUnitName}」需要重新确认考试内容后才会生成首个 7 天计划`);
+  points.push("其他备选机会保持不变，不会自动创建多套计划");
   return {
-    title: currentPrimaryName ? "更换主要备考目标？" : "设为主要备考目标？",
+    title: currentPrimaryName ? "更换重点准备的机会？" : "设为重点准备？",
     points,
   };
 }

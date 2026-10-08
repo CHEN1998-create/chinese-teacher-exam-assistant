@@ -262,7 +262,7 @@ function AccountDangerZoneCard() {
       <div className="space-y-4">
         <div>
           <p className="text-sm text-ink-muted">
-            删除测试数据会清空你的画像、关注、目标、计划与反馈，账号与登录状态保留。
+            删除测试数据会清空你的报考信息、已保存机会、目标、计划与反馈，账号与登录状态保留。
           </p>
           {confirmTarget === "data" ? (
             <div className="mt-3 flex flex-wrap items-center gap-3">

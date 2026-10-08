@@ -395,7 +395,7 @@ describe("buildListViewModel：模块 5 异常态与地区分流", () => {
   it("listCardNextStepLabel：四档与闸门态各给一个下一步文案", () => {
     expect(
       listCardNextStepLabel(makeUnit("u1", "preliminary_eligible")),
-    ).toBe("查看依据并关注");
+    ).toBe("查看依据并保存");
     expect(listCardNextStepLabel(makeUnit("u2", "need_more_info"))).toBe(
       "查看要补充的信息",
     );

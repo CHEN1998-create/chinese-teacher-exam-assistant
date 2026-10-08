@@ -102,7 +102,7 @@ export function SupplementForm({
         </h3>
         <p className="mt-1 text-xs text-ink-muted">
           以下信息只在需要时按机会补问；留空表示暂不提供，该条件会继续保持“待确认”，
-          不会被判定为不符合。保存后立即用新画像重新计算。
+          不会被判定为不符合。保存后会立即根据新信息重新判断。
         </p>
       </div>
 

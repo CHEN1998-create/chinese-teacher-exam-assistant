@@ -239,7 +239,7 @@ export function VerificationSection({
         本结论由规则版本 {meta.ruleVersion}、专业别名表{" "}
         {meta.majorAliasVersion}、公告目录 {meta.catalogVersion} 与真实监测台账{" "}
         {meta.realCatalogVersion} 于 {formatDateTime(meta.evaluatedAt)} 计算；
-        公告更新或你修改画像后会重新计算。资格初审结果以招聘单位审核为准。
+        公告更新或你修改报考信息后会重新判断。最终资格以招聘单位审核为准。
       </p>
     </section>
   );

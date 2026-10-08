@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCurrentUser } from "@/lib/auth";
-import { guestSessionService, type GuestProfileDraft } from "@/lib/guest/guestSession";
+import {
+  CREDENTIAL_LEVEL_OPTIONS,
+  guestSessionService,
+  subjectLabel,
+  type GuestProfileDraft,
+} from "@/lib/guest/guestSession";
 import { buildGuestPreview, type GuestPreview } from "@/lib/guest/previewEngine";
 import { GUEST_COVERAGE } from "@/lib/guest/coverage";
 import { getRollingDemoAnnouncements } from "@/lib/seed/demoTimeline";
@@ -18,6 +23,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
 import { track, trackOncePerUser } from "@/lib/analytics/eventService";
 import { USER_COPY } from "@/lib/ux/userCopy";
+import { stageLabel } from "@/lib/ia/labels";
 import type { GuestPreviewReady } from "@/lib/guest/previewEngine";
 import type { ProfileLimitation } from "@/lib/guest/guestSession";
 
@@ -155,15 +161,6 @@ function formatCoverageLine(): string {
   return `杭州、宁波语文教师渠道 · ${day}核对 · 当前在报 ${GUEST_COVERAGE.openOpportunityCount} 个`;
 }
 
-/** 这些维度属于「条件画像」，本就不在基础五组中采集；基础五组被跳过时不显示该行 */
-const CONDITIONAL_DIMENSIONS = new Set([
-  "hukou",
-  "age",
-  "social_security",
-  "work_experience",
-  "other",
-]);
-
 function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
   const { view, followUps, limitations, primaryAction } = preview;
 
@@ -195,19 +192,20 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
     });
   };
 
-  // 留档分区：即使没有有效机会（空态），地区不重叠/明确不符合/异常桶仍可追溯，
-  // 不能因为无优先机会就把这些记录藏掉。
-  const archiveSections = (
-    <>
-      {view.regionOutOfScope.length > 0 && (
-        <Disclosure
-          title="岗位地区不在你选择的范围（不是资格不符合）"
-          count={view.regionOutOfScope.length}
-        >
-          <div className="space-y-3">
+  const archivedCount =
+    view.regionOutOfScope.length +
+    view.notEligible.length +
+    view.closedBuckets.reduce((sum, bucket) => sum + bucket.rows.length, 0);
+
+  // 不适合优先展示的示例统一收进一个入口，避免页面先铺满多个结果分区。
+  const archiveSections = archivedCount > 0 ? (
+    <Disclosure title="查看暂不推荐的示例" count={archivedCount}>
+      <div className="space-y-6">
+        {view.regionOutOfScope.length > 0 && (
+          <section className="space-y-3">
+            <LayerHeading title="地区不在你选择的范围" count={view.regionOutOfScope.length} />
             <p className="text-xs leading-5 text-ink-muted">
-              这些岗位只是地点不在你勾选的可接受地区内，其他条件没有被判为不符合；
-              修改画像地区后会重新评估。
+              这些岗位只是地点不在你填写的可接受地区内，并不代表其他条件不符合。
             </p>
             {view.regionOutOfScope.map((row) => (
               <OpportunityCard
@@ -218,13 +216,12 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
                 onToggle={() => toggleRow(row.unitId)}
               />
             ))}
-          </div>
-        </Disclosure>
-      )}
+          </section>
+        )}
 
-      {view.notEligible.length > 0 && (
-        <Disclosure title="明确不符合（资格条件本身不满足）" count={view.notEligible.length}>
-          <div className="space-y-3">
+        {view.notEligible.length > 0 && (
+          <section className="space-y-3">
+            <LayerHeading title="条件暂不符合" count={view.notEligible.length} />
             {view.notEligible.map((row) => (
               <OpportunityCard
                 key={row.unitId}
@@ -233,13 +230,12 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
                 onToggle={() => toggleRow(row.unitId)}
               />
             ))}
-          </div>
-        </Disclosure>
-      )}
+          </section>
+        )}
 
-      {view.closedBuckets.map((bucket) => (
-        <Disclosure key={bucket.key} title={bucket.label} count={bucket.rows.length}>
-          <div className="space-y-3">
+        {view.closedBuckets.map((bucket) => (
+          <section key={bucket.key} className="space-y-3">
+            <LayerHeading title={bucket.label} count={bucket.rows.length} />
             {bucket.rows.map((row) => (
               <OpportunityCard
                 key={row.unitId}
@@ -248,14 +244,11 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
                 onToggle={() => toggleRow(row.unitId)}
               />
             ))}
-          </div>
-          <p className="mt-3 text-xs text-ink-muted">
-            该状态只表示当前不进入推荐，历史留档仍可追溯；它不是资格不符合结论。
-          </p>
-        </Disclosure>
-      ))}
-    </>
-  );
+          </section>
+        ))}
+      </div>
+    </Disclosure>
+  ) : null;
 
   // 空数据：画像完整但已覆盖公告中没有可考虑机会
   if (!view.priority) {
@@ -297,11 +290,11 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
                 : "当前已覆盖的公告里还没有你能考虑的机会"
             }
             description="可以修改地区或学历等条件再看；未覆盖地区不等于没有招聘，新公告核对后会出现在这里。"
-            actionLabel="返回修改画像"
+            actionLabel="修改报考信息"
             actionHref="/onboarding"
           />
-          <LimitationsCard limitations={limitations} />
           <SummaryCard />
+          <LimitationsCard limitations={limitations} />
           {archiveSections}
         </div>
       </div>
@@ -309,125 +302,123 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
   }
 
   const priority = view.priority;
+  const priorityStatusText =
+    priority.status === "preliminary_eligible"
+      ? "可能适合"
+      : priority.status === "need_more_info"
+        ? "补充信息后再判断"
+        : priority.status === "manual_review"
+          ? "需要向招聘单位确认"
+          : "暂不符合";
   const otherPreliminary = view.preliminary.filter((row) => row.unitId !== priority.unitId);
+  const moreResultCount =
+    otherPreliminary.length +
+    view.needInfoGroups.reduce((sum, group) => sum + group.rows.length, 0) +
+    view.manualReview.length;
 
   return (
     <div className="min-h-screen bg-canvas">
-      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* 第一层：一句结论 + 一个风险 + 唯一主行动（关注才登录） */}
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+        {/* 真实监测事实与虚构示例彻底分开，避免把示例误认成可报名机会。 */}
         <Hero
-          meta={formatCoverageLine()}
-          conclusion={view.conclusion}
-          risk={view.risk}
+          meta="真实机会监测"
+          conclusion={
+            GUEST_COVERAGE.openOpportunityCount > 0
+              ? `当前监测到 ${GUEST_COVERAGE.openOpportunityCount} 个正在报名的真实机会`
+              : "当前没有监测到正在报名的真实机会"
+          }
+          risk={{ tone: "info", text: GUEST_COVERAGE.nextWindowNote }}
           action={
             primaryAction
               ? { label: primaryAction.label, href: primaryAction.href }
               : undefined
           }
         >
-          <div className="space-y-1 text-xs leading-relaxed text-ink-muted">
-            <p>先看最值得推进的一项；登录后可以保存画像、关注机会并跟踪报名。</p>
-            <p>下方岗位是功能演示示例，不代表当前真实在报岗位。</p>
-          </div>
+          <p className="text-xs leading-relaxed text-ink-muted">{formatCoverageLine()}</p>
         </Hero>
 
-        {/* 优先机会：首屏只保留一张概要卡，逐项依据按需展开 */}
-        <div id="priority-opportunity" className="space-y-2">
-          <LayerHeading title="最值得先看的机会" />
+        {/* 示例判断：只解释产品会怎样帮助，不提供保存或报名动作。 */}
+        <section id="demo-opportunity" className="scroll-mt-20 space-y-3">
+          <div>
+            <span className="inline-flex rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn">
+              功能示例 · 不是当前真实岗位
+            </span>
+            <h2 className="mt-2 text-lg font-semibold text-ink">看看以后会怎样帮你判断</h2>
+            <p className="mt-1 text-sm leading-6 text-ink-muted">
+              按你填写的信息，这个虚构机会会被标为「{priorityStatusText}」。
+            </p>
+          </div>
           <OpportunityCard
             row={priority}
             priority
             expanded={priorityOpen}
             onToggle={() => setPriorityOpen((v) => !v)}
           />
-        </div>
+          <SummaryCard />
+        </section>
 
-        {/* 判断输入和限制都放到优先机会之后，避免用户先读表单回顾。 */}
-        <SummaryCard />
-        <LimitationsCard limitations={limitations} />
-        <UncoveredRegionsCard
-          regionLabels={view.uncoveredRegions.map((region) => region.label)}
-        />
+        {moreResultCount > 0 && (
+          <Disclosure title="查看其他示例判断" count={moreResultCount}>
+            <div className="space-y-6">
+              {otherPreliminary.length > 0 && (
+                <section className="space-y-3">
+                  <LayerHeading title="其他可能适合" count={otherPreliminary.length} />
+                  {otherPreliminary.map((row) => (
+                    <OpportunityCard key={row.unitId} row={row} expanded={openIds.has(row.unitId)} onToggle={() => toggleRow(row.unitId)} />
+                  ))}
+                </section>
+              )}
 
-        {/* 其他初步符合 */}
-        {otherPreliminary.length > 0 && (
-          <section className="space-y-3">
-            <LayerHeading title="其他初步符合" count={otherPreliminary.length} />
-            {otherPreliminary.map((row) => (
-              <OpportunityCard
-                key={row.unitId}
-                row={row}
-                expanded={openIds.has(row.unitId)}
-                onToggle={() => toggleRow(row.unitId)}
-              />
-            ))}
-          </section>
+              {followUps.map((followUp) => {
+                const group = view.needInfoGroups.find((g) => g.dimension === followUp.dimension);
+                if (!group) return null;
+                return (
+                  <section key={followUp.dimension} className="space-y-3">
+                    <LayerHeading title={`补充${followUp.dimensionText}后再判断`} count={followUp.affectsCount} />
+                    <p className="text-xs leading-5 text-ink-muted">{followUp.reason}</p>
+                    {group.rows.map((row) => (
+                      <OpportunityCard key={row.unitId} row={row} expanded={openIds.has(row.unitId)} onToggle={() => toggleRow(row.unitId)} />
+                    ))}
+                  </section>
+                );
+              })}
+
+              {view.manualReview.length > 0 && (
+                <section className="space-y-3">
+                  <LayerHeading title="需要向招聘单位确认" count={view.manualReview.length} />
+                  {view.manualReview.map((row) => (
+                    <OpportunityCard key={row.unitId} row={row} expanded={openIds.has(row.unitId)} onToggle={() => toggleRow(row.unitId)} />
+                  ))}
+                </section>
+              )}
+            </div>
+          </Disclosure>
         )}
 
-        {/* 按需补问：按缺失条件分组，说明原因与影响面；不补 ≠ 不符合 */}
-        {followUps.map((followUp) => {
-          const group = view.needInfoGroups.find((g) => g.dimension === followUp.dimension);
-          if (!group) return null;
-          return (
-            <section key={followUp.dimension} className="space-y-3">
-              <LayerHeading
-                title={`补充${followUp.dimensionText}信息后判断`}
-                count={followUp.affectsCount}
-              />
-              <Card className="bg-warn-soft/60 border-warn/30">
-                <p className="text-sm text-warn leading-relaxed">
-                  有 {followUp.affectsCount} 个机会需要这条信息。{followUp.reason}
-                </p>
-                {CONDITIONAL_DIMENSIONS.has(followUp.dimension) && (
-                  <p className="text-xs text-warn/80 mt-1">
-                    年龄、户籍、社保和工作经历只在具体机会需要时补问，不需要在基础信息里一次填完。
-                  </p>
-                )}
-              </Card>
-              {group.rows.map((row) => (
-                <OpportunityCard
-                  key={row.unitId}
-                  row={row}
-                  expanded={openIds.has(row.unitId)}
-                  onToggle={() => toggleRow(row.unitId)}
-                />
-              ))}
-            </section>
-          );
-        })}
-
-        {/* 建议人工确认 */}
-        {view.manualReview.length > 0 && (
-          <section className="space-y-3">
-            <LayerHeading title="建议向招聘单位确认" count={view.manualReview.length} />
-            {view.manualReview.map((row) => (
-              <OpportunityCard
-                key={row.unitId}
-                row={row}
-                expanded={openIds.has(row.unitId)}
-                onToggle={() => toggleRow(row.unitId)}
-              />
-            ))}
-          </section>
-        )}
-
-        {/* 留档分区：仅地区不重叠 / 明确不符合 / 异常态分桶 */}
         {archiveSections}
 
+        {(limitations.length > 0 || view.uncoveredRegions.length > 0) && (
+          <Disclosure title="为什么结果可能不完整">
+            <div className="space-y-4">
+              <LimitationsCard limitations={limitations} />
+              <UncoveredRegionsCard regionLabels={view.uncoveredRegions.map((region) => region.label)} />
+            </div>
+          </Disclosure>
+        )}
+
         <p className="text-center text-xs text-ink-muted">
-          初步匹配结果不等于保证可以报名，最终资格以招聘单位审核为准。
-          演示机会与画像均保存在这台设备，可随时
+          示例仅用于体验判断方式，不代表真实招聘。你填写的报考信息仅保存在这台设备，可随时
           <Link href="/onboarding" className="text-brand hover:underline mx-1">
-            返回修改画像
+            修改报考信息
           </Link>
-          ，结果会重新计算。
+          。
         </p>
       </div>
     </div>
   );
 }
 
-/* ================== 顶部回答摘要：根据这些信息为你判断（模块 0A §7.4） ================== */
+/* ================== 报考信息摘要：只保留一行关键内容 ================== */
 
 /** 从访客草稿中拉取五项摘要，缺失项标"还不能判断" */
 function SummaryCard() {
@@ -444,46 +435,33 @@ function SummaryCard() {
     ? [draft.educationLevel, draft.degree].filter(Boolean).join(" / ")
     : USER_COPY.MATCH_STATUS.UNKNOWN;
   const majorText = draft?.majorFullName?.trim() || USER_COPY.MATCH_STATUS.UNKNOWN;
-  const graduationText = draft?.graduationDate || draft?.employmentStatus
-    ? [draft.graduationDate?.slice(0, 7), draft.employmentStatus].filter(Boolean).join(" · ")
-    : USER_COPY.MATCH_STATUS.UNKNOWN;
-  const certText = draft?.teacherCert?.status
-    ? draft.teacherCert.status
-    : USER_COPY.MATCH_STATUS.UNKNOWN;
-
-  const rows: { step: number; label: string; value: string }[] = [
-    { step: 1, label: "地区", value: regionText },
-    { step: 2, label: "学历学位", value: educationText },
-    { step: 3, label: "专业", value: majorText },
-    { step: 4, label: "毕业/就业", value: graduationText },
-    { step: 5, label: "教师资格", value: certText },
-  ];
+  const educationLabel =
+    CREDENTIAL_LEVEL_OPTIONS.find((option) => option.value === draft?.educationLevel)?.label ??
+    educationText;
+  const targetText = [
+    draft?.teacherCert?.subject ? subjectLabel(draft.teacherCert.subject) : null,
+    draft?.teacherCert?.stage ? stageLabel(draft.teacherCert.stage) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const summary = [regionText, educationLabel, majorText, targetText]
+    .filter((value) => value && value !== USER_COPY.MATCH_STATUS.UNKNOWN)
+    .join(" · ");
 
   return (
-    <div data-testid="preview-summary">
-      <Disclosure title="本次判断使用的 5 项信息">
-        <div className="mb-3 flex justify-end">
-          <LinkButton href="/onboarding" variant="link" className="text-sm">
-            修改信息
-          </LinkButton>
-        </div>
-        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-          {rows.map((row) => (
-            <div key={row.step} className="flex gap-2 text-sm">
-              <dt className="shrink-0 text-ink-muted">{row.label}</dt>
-              <dd
-                className={
-                  row.value === USER_COPY.MATCH_STATUS.UNKNOWN
-                    ? "text-warn"
-                    : "text-ink"
-                }
-              >
-                {row.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </Disclosure>
+    <div
+      data-testid="preview-summary"
+      className="flex items-start justify-between gap-4 rounded-xl border border-line bg-surface px-4 py-3"
+    >
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-ink-muted">根据你的报考信息判断</p>
+        <p className="mt-1 line-clamp-2 text-sm text-ink">
+          {summary || "部分信息暂未填写"}
+        </p>
+      </div>
+      <Link href="/onboarding" className="shrink-0 text-xs font-medium text-brand hover:underline">
+        修改
+      </Link>
     </div>
   );
 }
@@ -503,13 +481,13 @@ function UncoveredRegionsCard({ regionLabels }: { regionLabels: string[] }) {
       <p className="mt-1 text-xs text-ink-muted">{regionLabels.join("、")}</p>
       <p className="mt-1.5 text-xs leading-5 text-ink-muted">
         暂未收录不等于当地没有招聘：可能公告尚未发布，或还没进入演示数据的覆盖范围。
-        结果是预筛而非官方资格认定，报名前请以当地教育局/人社局官网为准。
+        这里提供的是初步判断，报名前请以当地教育局或人社局官网为准。
       </p>
       <Link
         href="/onboarding"
         className="mt-2 inline-block text-xs font-medium text-brand underline underline-offset-2"
       >
-        修改画像地区
+        修改报考地区
       </Link>
     </section>
   );
@@ -537,7 +515,7 @@ function LimitationsCard({ limitations }: { limitations: ProfileLimitation[] }) 
         ))}
       </ul>
       <p className="mt-2 text-xs text-warn">
-        缺失信息一律显示「补充信息后判断」，不会被判为不符合；
+        没有填写的信息一律显示「补充信息后判断」，不会被判为不符合；
         <Link href="/onboarding" className="font-medium underline underline-offset-2 ml-1">
           返回补填
         </Link>

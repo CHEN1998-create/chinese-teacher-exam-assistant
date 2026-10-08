@@ -60,7 +60,7 @@ export function ConditionRows({
                 </p>
                 <p className="rounded-md bg-surface p-2 text-xs leading-5 text-ink-muted ring-1 ring-line">
                   <span className="block font-medium text-ink-muted">
-                    系统预筛判断（基于你填写的画像）
+                    根据你填写的报考信息判断
                   </span>
                   {dim.reason}
                   {dim.value === "UNKNOWN" && (

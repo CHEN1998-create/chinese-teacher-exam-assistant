@@ -25,7 +25,7 @@ interface OpportunityListItemProps {
   evaluatedAt: string;
   priority?: boolean;
   defaultExpanded?: boolean;
-  /** 关注/取消关注（卡片上的快捷操作）；缺省时只展示关注状态 */
+  /** 保存/移除（卡片上的快捷操作）；缺省时只展示保存状态 */
   onToggleFollow?: (unit: UnitMatchDTO) => void;
   followBusy?: boolean;
   /**
@@ -38,7 +38,7 @@ interface OpportunityListItemProps {
 /**
  * 登录态机会列表卡片（模块 5：首层七要素 + 一个下一步）。
  * 主行动始终是「进详情完成下一步」（文案说明进去做什么），
- * 关注与展开条件降为次级文本操作；闸门失败时显示具体异常态名称与原因。
+ * 保存与展开条件降为次级文本操作；闸门失败时显示具体异常态名称与原因。
  */
 export function OpportunityListItem({
   unit,
@@ -171,7 +171,7 @@ export function OpportunityListItem({
           </p>
         )}
 
-        {/* 一个下一步（主样式，进详情完成）+ 关注/展开（次级文本） */}
+        {/* 一个下一步（主样式，进详情完成）+ 保存/展开（次级文本） */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
             href={`/opportunities/${unit.unit.id}`}
@@ -186,7 +186,7 @@ export function OpportunityListItem({
               disabled={followBusy}
               className="text-xs font-medium text-ink-muted underline underline-offset-2 hover:text-brand disabled:opacity-50"
             >
-              {follow ? "取消关注" : "关注"}
+              {follow ? "移除保存" : "保存"}
             </button>
           )}
           <button

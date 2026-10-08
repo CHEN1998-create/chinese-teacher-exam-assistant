@@ -174,7 +174,7 @@ export default function StudyPage() {
       <div className="mx-auto max-w-2xl pb-2">
         <EmptyState
           title="登录后开始备考"
-          description="备考首页按你关注的机会生成每日任务，需要先登录。"
+          description="备考首页按你保存的机会生成每日任务，需要先登录。"
           actionLabel="去登录"
           actionHref="/login"
         />
@@ -239,7 +239,7 @@ function NoPrimaryGate({ nextStep }: { nextStep: string }) {
       </div>
       <p className="mt-5 text-xs font-semibold tracking-wide text-brand">备考结论</p>
       <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
-        先确定一个主要备考目标
+        先选择一个重点准备的机会
       </h2>
       <p className="mt-2 text-sm leading-relaxed text-ink-muted">{nextStep}</p>
       <Link
@@ -252,7 +252,7 @@ function NoPrimaryGate({ nextStep }: { nextStep: string }) {
         </svg>
       </Link>
       <p className="mt-3 text-center text-xs text-ink-muted">
-        选定前不会生成计划，其他关注机会仍会保留
+        选定前不会生成计划，其他已保存机会仍会保留
       </p>
     </Card>
   );
@@ -692,7 +692,7 @@ function ReadySection({
       <div>
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-xs text-ink-muted">主要备考目标</p>
+            <p className="text-xs text-ink-muted">重点准备</p>
             <p className="truncate text-sm font-semibold text-ink">{goal.unitName}</p>
           </div>
           <Link
@@ -791,7 +791,7 @@ function ReadySection({
         <Card>
           <CardHeader
             title="备选目标"
-            description="其他已关注机会继续保留为备选，不会自动创建计划"
+            description="其他已保存机会继续保留为备选，不会自动创建计划"
           />
           {backups.length === 0 ? (
             <p className="text-sm text-ink-muted">还没有备选目标。</p>

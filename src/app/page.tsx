@@ -77,7 +77,7 @@ export default function Home() {
         <section>
           <p className="inline-flex items-center gap-2 rounded-full border border-brand/15 bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand">
             <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
-            教师招聘资格预筛
+            教师招聘报考助手
           </p>
 
           <h1 className="mt-5 max-w-2xl text-[34px] font-bold leading-[1.18] tracking-[-0.035em] text-ink sm:text-[42px] md:text-5xl">
@@ -101,7 +101,7 @@ export default function Home() {
                 </svg>
               }
             >
-              开始资格预筛
+              看看我可能能报哪些
             </Button>
             <LinkButton
               href="/learn"
@@ -127,14 +127,14 @@ export default function Home() {
 
         <section
           className="relative overflow-hidden rounded-[28px] border border-line bg-surface p-5 shadow-[0_24px_70px_rgba(42,69,112,0.1)] sm:p-7"
-          aria-label="预筛结果示例"
+          aria-label="初步判断示例"
         >
           <div className="absolute right-0 top-0 h-28 w-28 rounded-bl-full bg-brand-soft" aria-hidden="true" />
           <div className="relative">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">完成后你会看到</p>
-                <h2 className="mt-1.5 text-xl font-bold text-ink">清楚的预筛结论</h2>
+                <h2 className="mt-1.5 text-xl font-bold text-ink">清楚的初步判断</h2>
               </div>
               <span className="rounded-full bg-success-soft px-3 py-1 text-xs font-semibold text-success">结果示例</span>
             </div>
@@ -147,7 +147,7 @@ export default function Home() {
                   </svg>
                 </div>
                 <div>
-                  <p className="text-xs font-medium text-success">资格预筛</p>
+                  <p className="text-xs font-medium text-success">初步判断</p>
                   <p className="mt-0.5 text-lg font-bold text-ink">初步符合</p>
                   <p className="mt-1 text-sm leading-6 text-ink-muted">适合你的机会优先显示，风险条件单独提醒。</p>
                 </div>
@@ -187,7 +187,7 @@ export default function Home() {
               <div className="sm:col-span-2"><dt className="text-xs text-ink-muted">下一窗口</dt><dd className="mt-0.5 font-medium text-ink">{GUEST_COVERAGE.nextWindowNote}</dd></div>
             </dl>
             <p className="mt-3 border-t border-line pt-3 text-xs">{GUEST_COVERAGE.scopeNote}</p>
-            <p className="mt-2 text-xs">资格预筛不是官方审核，最终以招聘单位认定为准。</p>
+            <p className="mt-2 text-xs">初步判断不是官方审核，最终以招聘单位认定为准。</p>
           </Disclosure>
         </div>
       </footer>

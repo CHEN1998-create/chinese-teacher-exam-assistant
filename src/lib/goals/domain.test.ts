@@ -78,7 +78,7 @@ describe("evaluateStudyGate：门禁三态", () => {
     const state = evaluateStudyGate([makeGoal({ role: "backup" })], null, null);
     expect(state.kind).toBe("no_primary");
     if (state.kind === "no_primary") {
-      expect(state.nextStep).toContain("主要备考目标");
+      expect(state.nextStep).toContain("重点准备的机会");
     }
   });
 
@@ -160,7 +160,7 @@ describe("describePrimarySwitchImpact：更换主要目标前的影响说明", (
   it("已有主要目标时说明旧目标转为备选、记录保留为历史、需重新确认考试内容", () => {
     const impact = describePrimarySwitchImpact("杭州市直属初中语文教师岗", "宁波鄞州小学语文岗");
     expect(impact.title).toContain("更换");
-    expect(impact.points.join("\n")).toContain("转为备选目标");
+    expect(impact.points.join("\n")).toContain("转为备选机会");
     expect(impact.points.join("\n")).toContain("保留为历史");
     expect(impact.points.join("\n")).toContain("重新确认考试内容");
     expect(impact.points.join("\n")).toContain("不会自动创建多套计划");
@@ -170,7 +170,7 @@ describe("describePrimarySwitchImpact：更换主要目标前的影响说明", (
     const impact = describePrimarySwitchImpact(null, "宁波鄞州小学语文岗");
     expect(impact.title).not.toContain("更换");
     expect(impact.points.join("\n")).toContain("首个 7 天计划");
-    expect(impact.points.some((p) => p.includes("转为备选目标"))).toBe(false);
+    expect(impact.points.some((p) => p.includes("转为备选机会"))).toBe(false);
   });
 });
 

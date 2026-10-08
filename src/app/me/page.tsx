@@ -29,6 +29,7 @@ import type {
   OpportunityCorrectionStatus,
 } from "@/lib/opportunities/api-types";
 import type { UserRecruitmentProfile } from "@/lib/profile/types";
+import { buildMyProgressView } from "@/lib/me/progress-view";
 
 const AUTH_MODE_INVITED = AUTH_MODE === "invited";
 
@@ -43,7 +44,7 @@ const CORRECTION_STATUS_META: Record<
 };
 
 /**
- * 「我的」（v7.0 信息架构）：个人画像、报考偏好、备考次级入口、
+ * 「我的」（v7.0 信息架构）：报考信息、已保存机会、备考次级入口、
  * 纠错记录、通知、隐私与账号设置的统一入口。
  * 不设置独立「备考」主导航：备考入口仅在用户已设置主要目标时出现。
  */
@@ -55,18 +56,18 @@ export default function MePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-4 pb-4">
       <header>
-        <p className="text-xs font-semibold tracking-wide text-brand">我的空间</p>
+        <p className="text-xs font-semibold tracking-wide text-brand">我的</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">
           {user.name}
         </h1>
-        <p className="mt-1 text-sm text-ink-muted">管理画像、备考入口与提醒偏好</p>
+        <p className="mt-1 text-sm text-ink-muted">查看当前进度，继续最重要的一步</p>
       </header>
 
-      {/* 个人画像 */}
-      <ProfileCard />
+      {/* 当前进度：首屏只推动一个下一步 */}
+      <MyProgressCard />
 
-      {/* 备考（次级入口：仅已设置主要目标时出现） */}
-      <StudyEntryCard />
+      {/* 报考信息 */}
+      <ProfileCard />
 
       {/* 我的纠错 */}
       <MyCorrectionsCard />
@@ -74,8 +75,8 @@ export default function MePage() {
       {/* 次级入口集中收纳，避免与首屏主行动竞争 */}
       <Card>
         <CardHeader
-          title="更多管理"
-          description="资料、提醒、隐私与账号设置"
+          title="资料与设置"
+          description="不常用的内容统一放在这里"
         />
         <div className="divide-y divide-line">
           <SettingsRow
@@ -183,7 +184,7 @@ function ProfileCard() {
   if (!loaded) {
     return (
       <Card>
-        <p className="text-sm text-ink-muted">画像加载中…</p>
+        <p className="text-sm text-ink-muted">正在读取报考信息…</p>
       </Card>
     );
   }
@@ -191,13 +192,13 @@ function ProfileCard() {
   if (!profile) {
     return (
       <Card className="rounded-3xl border-brand/15 p-5 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
-        <p className="text-xs font-semibold tracking-wide text-brand">当前结论</p>
+        <p className="text-xs font-semibold tracking-wide text-brand">报考信息</p>
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
-          先完成基础画像
+          先填写报考信息
         </h2>
-        <p className="mt-2 text-sm text-ink-muted">完成后才能看到与你有关的机会判断。</p>
+        <p className="mt-2 text-sm text-ink-muted">填写后才能看到与你有关的机会判断。</p>
         <LinkButton href="/onboarding" variant="primary" size="lg" fullWidth className="mt-5">
-          开始基础画像
+          开始填写
         </LinkButton>
       </Card>
     );
@@ -263,17 +264,17 @@ function ProfileCard() {
 
   return (
     <Card className="rounded-3xl border-brand/15 p-5 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
-      <p className="text-xs font-semibold tracking-wide text-brand">画像结论</p>
+      <p className="text-xs font-semibold tracking-wide text-brand">报考信息</p>
       <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
         {missingGraduationDate
           ? "补充毕业时间，机会判断会更准确"
-          : "画像已就绪，机会匹配会自动更新"}
+          : "信息已填写，筛选结果会自动更新"}
       </h2>
       <p className="mt-2 text-sm text-ink-muted">
-        当前画像：{regionSummary}{targetSummary ? ` · ${targetSummary}` : ""}
+        当前条件：{regionSummary}{targetSummary ? ` · ${targetSummary}` : ""}
       </p>
-      <LinkButton href="/onboarding" variant="primary" size="lg" fullWidth className="mt-5">
-        {missingGraduationDate ? "补充画像信息" : "编辑我的画像"}
+      <LinkButton href="/onboarding" variant="outline" size="md" className="mt-4">
+        {missingGraduationDate ? "补充报考信息" : "修改报考信息"}
       </LinkButton>
       <details className="group mt-3 rounded-xl border border-line bg-canvas/60">
         <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">
@@ -293,47 +294,93 @@ function ProfileCard() {
   );
 }
 
-/** 备考次级入口：只有已设置主要目标的用户才看得到；无后端/无目标时不渲染 */
-function StudyEntryCard() {
-  const [primary, setPrimary] = useState<GoalsResponse | null>(null);
+/** 个人进度中心：告诉用户现在进行到哪一步，以及接下来只做什么。 */
+function MyProgressCard() {
+  const [data, setData] = useState<GoalsResponse | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     opportunitiesApi
       .getGoals()
-      .then((data) => {
-        if (!cancelled && data.primaryTargetUnitId) setPrimary(data);
+      .then((response) => {
+        if (!cancelled) setData(response);
       })
       .catch(() => {
-        // 公开演示无后端或尚无关注：不展示备考入口（v7.0 不设独立备考主导航）
+        if (!cancelled) setFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [reloadKey]);
 
-  if (!primary || !primary.primaryTargetUnitId) return null;
-  const target = primary.goals.find((g) => g.unitId === primary.primaryTargetUnitId);
+  if (failed) {
+    return (
+      <Card className="rounded-3xl">
+        <p className="text-xs font-semibold tracking-wide text-brand">当前进度</p>
+        <h2 className="mt-2 text-xl font-semibold text-ink">进度暂时没有加载出来</h2>
+        <p className="mt-1 text-sm text-ink-muted">你的记录没有丢失，可以稍后再试。</p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="mt-4"
+          onClick={() => {
+            setFailed(false);
+            setData(null);
+            setReloadKey((value) => value + 1);
+          }}
+        >
+          重新加载
+        </Button>
+      </Card>
+    );
+  }
+
+  if (!data) {
+    return (
+      <Card className="rounded-3xl">
+        <p className="text-sm text-ink-muted">正在整理你的进度…</p>
+      </Card>
+    );
+  }
+
+  const view = buildMyProgressView(data);
 
   return (
-    <Card className="border-brand/15 bg-brand-soft/35">
-      <Link
-        href="/study"
-        className="-m-1 flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-brand-soft"
+    <Card className="rounded-3xl border-brand/15 p-5 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+      <p className="text-xs font-semibold tracking-wide text-brand">当前进度</p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{view.conclusion}</h2>
+      <p className="mt-2 text-sm leading-6 text-ink-muted">{view.description}</p>
+
+      <dl className="mt-4 divide-y divide-line border-y border-line text-sm">
+        <div className="flex items-center justify-between gap-4 py-2.5">
+          <dt className="text-ink-muted">已保存机会</dt>
+          <dd className="font-medium text-ink">{view.savedCount} 个</dd>
+        </div>
+        <div className="flex items-center justify-between gap-4 py-2.5">
+          <dt className="text-ink-muted">重点准备</dt>
+          <dd className="max-w-[65%] truncate text-right font-medium text-ink">
+            {view.primaryName ?? "尚未选择"}
+          </dd>
+        </div>
+        {view.nearestDeadline && (
+          <div className="flex items-center justify-between gap-4 py-2.5">
+            <dt className="text-ink-muted">最近截止</dt>
+            <dd className="font-medium text-ink">{view.nearestDeadline}</dd>
+          </div>
+        )}
+      </dl>
+
+      <LinkButton
+        href={view.actionHref}
+        variant={view.actionVariant}
+        size="lg"
+        fullWidth
+        className="mt-5"
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface text-brand" aria-hidden="true">
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V5.5A2.5 2.5 0 0 1 6.5 3H20v14H6.5A2.5 2.5 0 0 0 4 19.5Zm0 0A1.5 1.5 0 0 0 5.5 21H20" /></svg>
-        </span>
-        <span className="flex-1 min-w-0">
-          <span className="block text-sm font-medium text-ink">我的备考</span>
-          <span className="block text-xs text-ink-muted mt-0.5 truncate">
-            {target ? `${target.unitName} · 备考计划与材料` : "备考计划与材料"}
-          </span>
-        </span>
-        <span className="text-ink-muted" aria-hidden="true">
-          ›
-        </span>
-      </Link>
+        {view.actionLabel}
+      </LinkButton>
     </Card>
   );
 }

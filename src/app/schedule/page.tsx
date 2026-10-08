@@ -32,7 +32,7 @@ export default function SchedulePage() {
       <div className="mx-auto max-w-2xl">
         <EmptyState
           title="还没有不能错过的事"
-          description="关注机会后，报名开始/截止、笔试等官方节点才会出现在这里。未关注的机会不会凭空产生提醒。"
+          description="保存机会后，报名开始、截止和笔试等官方节点才会出现在这里。"
           actionLabel="去看看机会"
           actionHref="/opportunities"
         />
@@ -90,7 +90,7 @@ export default function SchedulePage() {
             text: "时间未定的事项会等待官方通知，不会用推测日期催促你。",
           }}
           action={{
-            label: "检查关注机会",
+            label: "查看已保存机会",
             href: `/opportunities/${view.groups[0]!.unitId}`,
           }}
         />

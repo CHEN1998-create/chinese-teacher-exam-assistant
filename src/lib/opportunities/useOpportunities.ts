@@ -15,6 +15,7 @@ import type {
   StudyTargetRole,
   UnitMatchDTO,
 } from "./api-types";
+import { USER_COPY } from "@/lib/ux/userCopy";
 
 /** invited 模式占位画像：后端会忽略请求体，读取已持久化画像 */
 const INVITED_PLACEHOLDER_PROFILE = {} as UserRecruitmentProfile;
@@ -44,6 +45,8 @@ export interface OpportunitiesApi {
   reload: () => Promise<void>;
   followBusyId: string | null;
   actionError: string | null;
+  actionFeedback: { kind: "saved" | "removed"; message: string } | null;
+  clearActionFeedback: () => void;
   toggleFollow: (unit: UnitMatchDTO) => Promise<void>;
 }
 
@@ -66,6 +69,10 @@ export function useOpportunities(): OpportunitiesApi {
   const [state, setState] = useState<OpportunitiesLoadState>(computeInitialState);
   const [followBusyId, setFollowBusyId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{
+    kind: "saved" | "removed";
+    message: string;
+  } | null>(null);
 
   const reload = useCallback(async (silent = false) => {
     if (!silent) setState({ status: "loading" });
@@ -133,11 +140,14 @@ export function useOpportunities(): OpportunitiesApi {
     async (unit: UnitMatchDTO) => {
       setFollowBusyId(unit.unit.id);
       setActionError(null);
+      setActionFeedback(null);
       try {
         if (unit.follow) {
           await opportunitiesApi.unfollow(unit.unit.id);
+          setActionFeedback({ kind: "removed", message: USER_COPY.FOLLOW.REMOVED });
         } else {
           await opportunitiesApi.follow(unit.unit.id);
+          setActionFeedback({ kind: "saved", message: USER_COPY.FOLLOW.ADDED });
         }
         await reload(true);
       } catch (error) {
@@ -154,6 +164,8 @@ export function useOpportunities(): OpportunitiesApi {
     reload: () => reload(false),
     followBusyId,
     actionError,
+    actionFeedback,
+    clearActionFeedback: () => setActionFeedback(null),
     toggleFollow,
   };
 }

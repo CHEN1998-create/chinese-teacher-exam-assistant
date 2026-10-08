@@ -240,7 +240,7 @@ export default function OnboardingPage() {
         </div>
 
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-sm font-semibold text-ink">资格预筛</p>
+          <p className="text-sm font-semibold text-ink">报考信息</p>
           <p className="text-xs text-ink-muted">{STEP_LABELS[view - 1]}</p>
         </div>
 
@@ -383,7 +383,7 @@ export default function OnboardingPage() {
 
           <div className="mt-7 border-t border-line pt-5">
             <Button onClick={goNext} disabled={!canContinue} size="lg" fullWidth>
-              {view >= TOTAL_PROFILE_STEPS ? "查看我的预筛结果" : "下一步"}
+              {view >= TOTAL_PROFILE_STEPS ? "查看筛选结果" : "下一步"}
             </Button>
             {!canContinue && (
               <p className="mt-2 text-center text-xs text-ink-muted">

@@ -58,6 +58,6 @@ export const FOLLOW_STATUS_LABELS: Record<FollowStatus, string> = {
 };
 
 export const STUDY_TARGET_ROLE_LABELS: Record<StudyTargetRole, string> = {
-  primary: "主要目标",
-  backup: "备选目标",
+  primary: "重点准备",
+  backup: "备选机会",
 };

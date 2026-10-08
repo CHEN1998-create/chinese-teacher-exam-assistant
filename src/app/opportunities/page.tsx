@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Hero } from "@/components/ia/Hero";
 import { Disclosure, LayerHeading } from "@/components/ia/Layer";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -15,26 +17,42 @@ import {
 } from "@/lib/opportunities/list-view";
 import { OpportunityListItem } from "@/components/opportunities/OpportunityListItem";
 import { CoverageBanner } from "@/components/opportunities/CoverageBanner";
+import { StatusMessage, StatusMessageRegion } from "@/components/ui/StatusMessage";
 
 const NO_PROFILE_COPY: Record<string, { title: string; description: string }> = {
   no_draft: {
-    title: "先完成基础画像，才能看到为你匹配的机会",
+    title: "先填写报考信息，才能看到适合你的机会",
     description:
-      "完成可接受地区、学历学位、专业、毕业与就业状态、教师资格五组基础信息后，系统会即时匹配已发布公告。",
+      "填写地区、学历、专业、毕业情况和教师资格后，系统会立即核对已发布公告。",
   },
   incomplete: {
-    title: "基础画像还差几步",
-    description: "回到画像向导补全五组基础信息，机会列表会立即重新计算。",
+    title: "报考信息还差几步",
+    description: "补全剩余信息后，机会列表会立即更新。",
   },
   subject_not_open: {
     title: "当前只开放语文学科的机会匹配",
     description:
-      "你的意向学科尚未开放。可以在画像向导中登记意向，开放后会优先评估。",
+      "你的意向学科尚未开放。可以先登记意向，开放后会优先评估。",
   },
 };
 
 export default function OpportunitiesPage() {
-  const { state, reload, followBusyId, actionError, toggleFollow } =
+  const router = useRouter();
+  const [loginNotice, setLoginNotice] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const message = window.sessionStorage.getItem("kb_post_login_notice");
+    if (message) window.sessionStorage.removeItem("kb_post_login_notice");
+    return message;
+  });
+  const {
+    state,
+    reload,
+    followBusyId,
+    actionError,
+    actionFeedback,
+    clearActionFeedback,
+    toggleFollow,
+  } =
     useOpportunities();
 
   if (state.status === "loading") return <LoadingPage />;
@@ -46,7 +64,7 @@ export default function OpportunitiesPage() {
         <EmptyState
           title={copy.title}
           description={copy.description}
-          actionLabel="去完成基础画像"
+          actionLabel="填写报考信息"
           actionHref="/onboarding"
         />
       </div>
@@ -85,7 +103,7 @@ export default function OpportunitiesPage() {
   if (nearest !== null && nearest >= 0 && nearest <= 7) {
     risk = {
       tone: "must",
-      text: `优先机会报名还有 ${nearest} 天截止，请尽快完成关注与报名准备。`,
+      text: `优先机会报名还有 ${nearest} 天截止，请尽快保存并准备报名。`,
     };
   } else if (view.needInfoGroups.length > 0 || view.manualReview.length > 0) {
     risk = {
@@ -101,6 +119,29 @@ export default function OpportunitiesPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-2">
+      {actionFeedback && (
+        <StatusMessageRegion>
+          <StatusMessage
+            tone="success"
+            message={actionFeedback.message}
+            action={
+              actionFeedback.kind === "saved"
+                ? { label: "查看日程", onClick: () => router.push("/schedule") }
+                : undefined
+            }
+            onDismiss={clearActionFeedback}
+          />
+        </StatusMessageRegion>
+      )}
+      {loginNotice && (
+        <StatusMessageRegion anchor="top">
+          <StatusMessage
+            tone="success"
+            message={loginNotice}
+            onDismiss={() => setLoginNotice(null)}
+          />
+        </StatusMessageRegion>
+      )}
       <Hero
         meta={`机会结论 · ${formatEvaluatedAt(evaluatedAt)} 更新`}
         conclusion={heroConclusion}
@@ -137,13 +178,13 @@ export default function OpportunitiesPage() {
           </p>
           <p className="mt-2 text-xs leading-5 text-ink-muted">
             暂未收录不等于当地没有招聘：可能公告尚未发布，或还没进入我们的监测范围。
-            结果是预筛而非官方资格认定，报名前请以当地教育局/人社局官网为准。
+            这里提供的是初步判断，报名前请以当地教育局或人社局官网为准。
           </p>
           <Link
             href="/onboarding"
             className="mt-2 inline-block text-xs font-medium text-brand underline underline-offset-2"
           >
-            修改画像地区
+            修改报考地区
           </Link>
         </div>
       )}
@@ -151,8 +192,8 @@ export default function OpportunitiesPage() {
       {view.emptyResult && (
         <EmptyState
           title="当前已核对范围内没有可展示的机会"
-          description={`已核对范围见上方监测说明（${view.coverage.scopeNote || "未覆盖地区不等于没有招聘"}）。你可以修改画像条件后重新评估，或稍后回来查看新公告。`}
-          actionLabel="修改我的画像"
+          description={`已核对范围见上方监测说明（${view.coverage.scopeNote || "未覆盖地区不等于没有招聘"}）。你可以修改报考信息后重新判断，或稍后回来查看新公告。`}
+          actionLabel="修改报考信息"
           actionHref="/onboarding"
         />
       )}
@@ -171,7 +212,7 @@ export default function OpportunitiesPage() {
           <LayerHeading
             title={
               view.priority.unit.id === view.primaryTargetUnitId
-                ? "主要备考目标"
+                ? "重点准备的机会"
                 : "优先机会"
             }
           />
@@ -247,8 +288,8 @@ export default function OpportunitiesPage() {
         >
           <div className="space-y-3">
             <p className="text-xs leading-5 text-ink-muted">
-              这些岗位只是地点不在你画像勾选的可接受地区内，学历、专业等条件并未判定为不符合。
-              调整画像地区后会重新评估。
+              这些岗位只是地点不在你填写的可接受地区内，学历、专业等条件并未判定为不符合。
+              调整报考地区后会重新判断。
             </p>
             {view.regionOutOfScope.map((unit) => (
               <OpportunityListItem

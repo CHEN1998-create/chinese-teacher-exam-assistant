@@ -25,7 +25,7 @@ import { USER_COPY } from "@/lib/ux/userCopy";
  * 可流转按钮由状态机推导（前端只做展示门禁，后端会再次校验非法边）；
  * “已结束”为终态，不展示任何转出按钮。
  *
- * 关注从无到有：用非阻塞 StatusMessage 反馈“已加入关注，时间已加入日程”，
+ * 保存从无到有：用非阻塞 StatusMessage 反馈“已保存，时间已加入日程”，
  * 提供撤销；不弹模态、不打断后续操作（模块 0A §10 / §7.7）。
  */
 const NEXT_BUTTONS: Array<{
@@ -67,7 +67,7 @@ export function FollowControls({
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
   const [primaryImpact, setPrimaryImpact] = useState<PrimarySwitchImpact | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
-  // 关注从无到有 → 非阻塞成功反馈 + 撤销（模块 0A §10/§7.7）
+  // 保存从无到有 → 非阻塞成功反馈 + 撤销（模块 0A §10/§7.7）
   const [followJustAdded, setFollowJustAdded] = useState(false);
   const prevFollowRef = useRef<FollowDTO | null>(follow);
   const mountedRef = useRef(false);
@@ -79,7 +79,7 @@ export function FollowControls({
       prevFollowRef.current = follow;
       return;
     }
-    // 仅在 follow 从 null 变为非 null 时视为"刚刚关注成功"
+    // 仅在 follow 从 null 变为非 null 时视为“刚刚保存成功”
     if (!prevFollowRef.current && follow) {
       setFollowJustAdded(true);
     }
@@ -108,7 +108,7 @@ export function FollowControls({
     return (
       <div className="rounded-xl border border-line bg-surface p-4">
         <p className="text-sm text-ink-muted">
-          还没有关注这个机会。关注后可以在这里推进“考虑中 → 准备报名 →
+          还没有保存这个机会。保存后可以在这里推进“考虑中 → 准备报名 →
           已报名”，并把它设为主要或备选备考目标。
         </p>
         <Button
@@ -117,7 +117,7 @@ export function FollowControls({
           disabled={busy}
           onClick={onFollow}
         >
-          关注（加入考虑中）
+          保存这个机会
         </Button>
       </div>
     );
@@ -254,7 +254,7 @@ export function FollowControls({
             disabled={busy || impactLoading}
             onClick={() => void handleSetPrimaryClick()}
           >
-            ★ 设为主要备考目标
+            ★ 设为重点准备
           </Button>
         )}
         <button
@@ -262,10 +262,10 @@ export function FollowControls({
           className="text-xs text-ink-muted underline underline-offset-2 hover:text-danger"
           onClick={() => setConfirmUnfollow(true)}
         >
-          取消关注并删除记录
+          移除这个机会及记录
         </button>
         <span className="text-[11px] text-ink-muted">
-          设为主要目标后，原主要目标会自动转为备选。
+          设为重点准备后，原来的重点机会会自动转为备选。
         </span>
       </div>
 
@@ -276,9 +276,9 @@ export function FollowControls({
           setConfirmUnfollow(false);
           onUnfollow();
         }}
-        title="取消关注？"
-        description="将删除这个机会的关注与跟进状态，其他机会的关注记录不受影响。"
-        confirmLabel="取消关注"
+        title="移除这个机会？"
+        description="将删除这个机会的保存与跟进记录，其他机会不受影响。"
+        confirmLabel="确认移除"
         variant="danger"
       />
 
@@ -300,7 +300,7 @@ export function FollowControls({
                 onSetRole("primary");
               }}
             >
-              确认设为主要目标
+              确认设为重点准备
             </Button>
           </>
         }

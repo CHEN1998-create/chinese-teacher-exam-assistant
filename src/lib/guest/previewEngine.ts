@@ -33,8 +33,8 @@ import {
   type ProfileLimitation,
 } from "./guestSession";
 
-/** 关注/保存/提醒统一走的登录落点（未登录也能继续看结果） */
-export const GUEST_FOLLOW_LOGIN_HREF = "/login?next=/preview";
+/** 访客结果页只演示判断方式，不把虚构机会包装成可保存的真实机会。 */
+export const GUEST_PREVIEW_ACTION_HREF = "#demo-opportunity";
 
 /** 按需补问：一个缺失维度对应一组机会与“为什么要补”的说明 */
 export interface GuestFollowUp {
@@ -46,7 +46,7 @@ export interface GuestFollowUp {
   reason: string;
 }
 
-/** Preview 全页唯一的主要行动（关注优先机会时才要求登录） */
+/** Preview 全页唯一的主要行动：查看一个示例判断，不触发登录或保存。 */
 export interface GuestPrimaryAction {
   label: string;
   href: string;
@@ -63,7 +63,7 @@ export interface GuestPreviewReady {
    * 页面必须原样展示：让用户知道结论收窄到了什么程度，且这不是「不符合」。
    */
   limitations: ProfileLimitation[];
-  /** 整页唯一高强调行动；无有效机会时为 null（页面转空态） */
+  /** 整页唯一高强调行动；无可解释示例时为 null（页面转空态） */
   primaryAction: GuestPrimaryAction | null;
 }
 
@@ -128,17 +128,13 @@ function buildFollowUps(view: OpportunitiesView): GuestFollowUp[] {
 }
 
 /**
- * 唯一主行动：优先关注排序第一的机会；没有“初步符合”时，
- * 主行动是登录后补充信息并关注，仍然只有一个。已截止/明确不符合不产生行动。
+ * 唯一主行动：跳到排序第一的示例，帮助用户理解判断方式。
+ * seed 机会是虚构数据，不能引导关注、报名或以保存为由要求登录。
  */
 function buildPrimaryAction(view: OpportunitiesView): GuestPrimaryAction | null {
   const priority = view.priority;
   if (!priority) return null;
-  const label =
-    priority.status === "preliminary_eligible"
-      ? `关注${priority.regionText}这个机会，登录后保存并跟踪报名`
-      : "登录后补充信息并关注机会";
-  return { label, href: GUEST_FOLLOW_LOGIN_HREF };
+  return { label: "看看示例怎么判断", href: GUEST_PREVIEW_ACTION_HREF };
 }
 
 /**

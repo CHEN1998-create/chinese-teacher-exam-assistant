@@ -9,6 +9,7 @@ import { GateTag, MatchStatusTag } from "@/components/ia/MatchStatusTag";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { StatusMessage } from "@/components/ui/StatusMessage";
 import {
   deadlineText,
   natureShortLabel,
@@ -75,6 +76,7 @@ export default function OpportunityDetailPage() {
   const [savingFacts, setSavingFacts] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [correctionOpen, setCorrectionOpen] = useState(false);
   const [correctionSubmitting, setCorrectionSubmitting] = useState(false);
   const [correctionDone, setCorrectionDone] = useState(false);
@@ -139,9 +141,9 @@ export default function OpportunityDetailPage() {
     return (
       <div className="mx-auto max-w-2xl">
         <EmptyState
-          title="先完成基础画像，才能查看这项机会的匹配依据"
-          description="机会详情中的每个结论都由后端按你的画像即时计算。"
-          actionLabel="去完成基础画像"
+          title="先填写报考信息，才能查看这项机会的判断依据"
+          description="机会详情会根据你填写的报考信息逐项核对。"
+          actionLabel="填写报考信息"
           actionHref="/onboarding"
         />
       </div>
@@ -239,10 +241,11 @@ export default function OpportunityDetailPage() {
 
   async function runAction(
     fn: () => Promise<unknown>,
-    options?: { redirectAfter?: boolean },
+    options?: { redirectAfter?: boolean; successMessage?: string },
   ) {
     setBusy(true);
     setActionError(null);
+    setActionNotice(null);
     try {
       await fn();
       if (options?.redirectAfter) {
@@ -250,6 +253,7 @@ export default function OpportunityDetailPage() {
         return;
       }
       await refreshDetail();
+      if (options?.successMessage) setActionNotice(options.successMessage);
     } catch (e) {
       const err = e as Error & { status?: number; body?: { error?: string; current?: unknown } };
       // 乐观锁冲突：服务端已有更新版本，拉取最新状态后提示用户，不丢进度
@@ -290,6 +294,17 @@ export default function OpportunityDetailPage() {
         targetId: unitId,
         props: { from, to: status },
       });
+    }, {
+      successMessage:
+        status === "preparing"
+          ? "已标记为准备报名，接下来可以核对材料与报名时间。"
+          : status === "registered"
+            ? "报名状态已更新为已报名。"
+            : status === "considering"
+              ? "已移回考虑中。"
+              : status === "abandoned"
+                ? "已记录为放弃，这不会影响其他机会。"
+                : "已标记为结束。",
     });
 
   const handleSetRole = (role: StudyTargetRole) =>
@@ -299,6 +314,11 @@ export default function OpportunityDetailPage() {
       if (role === "primary") {
         track("primary_target_set", "opportunity", { targetId: unitId });
       }
+    }, {
+      successMessage:
+        role === "primary"
+          ? "已设为重点准备的机会，接下来可以开始安排备考。"
+          : "已改为备选机会，原有记录会继续保留。",
     });
 
   /** 标记某报名材料项完成状态（带乐观锁）；材料完成进度进看板「材料完成」（模块 7） */
@@ -368,6 +388,11 @@ export default function OpportunityDetailPage() {
           },
         });
       }
+      setActionNotice(
+        fresh && beforeOverall !== fresh.unit.overall
+          ? "信息已保存，机会判断已经更新。"
+          : "信息已保存，当前判断暂时没有变化。",
+      );
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "保存失败");
     } finally {
@@ -429,7 +454,7 @@ export default function OpportunityDetailPage() {
         {/* 模块 7.5：dataset === "real" 已在加载后 early return，此处不再渲染提示 */}
         {unit.follow?.newerVersion && (
           <p className="rounded-lg bg-warn-soft px-3 py-1.5 text-xs text-warn">
-            你关注时依据的公告版本已有更新，当前展示的是最新已发布版本。
+            你保存时依据的公告版本已有更新，当前展示的是最新已发布版本。
           </p>
         )}
       </header>
@@ -472,6 +497,14 @@ export default function OpportunityDetailPage() {
           {actionError}
         </p>
       )}
+      {actionNotice && (
+        <StatusMessage
+          tone="success"
+          message={actionNotice}
+          duration={6000}
+          onDismiss={() => setActionNotice(null)}
+        />
+      )}
       {correctionDone && (
         <p
           role="status"
@@ -490,8 +523,8 @@ export default function OpportunityDetailPage() {
             <span className="block text-sm font-semibold text-ink">我的跟进</span>
             <span className="mt-0.5 block text-xs text-ink-muted">
               {unit.follow
-                ? `已关注 · ${unit.follow.role === "primary" ? "主要备考目标" : unit.follow.role === "backup" ? "备选目标" : "可继续推进报名状态"}`
-                : "关注后可记录报名进度并设为备考目标"}
+                ? `已保存 · ${unit.follow.role === "primary" ? "重点准备的机会" : unit.follow.role === "backup" ? "备选机会" : "可继续推进报名状态"}`
+                : "保存后可记录报名进度并设为重点准备的机会"}
             </span>
           </span>
           <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">

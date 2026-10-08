@@ -6,7 +6,7 @@ import {
 } from "./guestSession";
 import {
   buildGuestPreview,
-  GUEST_FOLLOW_LOGIN_HREF,
+  GUEST_PREVIEW_ACTION_HREF,
   type GuestPreviewReady,
 } from "./previewEngine";
 
@@ -203,10 +203,12 @@ describe("buildGuestPreview：非语文学科不产生伪造结果", () => {
 });
 
 describe("buildGuestPreview：Preview 只有一个主要行动，且不生成 7 天计划", () => {
-  it("整页只有一个主行动，指向关注登录；机会行不携带同等级行动", () => {
+  it("整页只有一个主行动，只查看示例判断，不保存虚构机会或触发登录", () => {
     const r = ready();
     expect(r.primaryAction).not.toBeNull();
-    expect(r.primaryAction!.href).toBe(GUEST_FOLLOW_LOGIN_HREF);
+    expect(r.primaryAction!.href).toBe(GUEST_PREVIEW_ACTION_HREF);
+    expect(r.primaryAction!.label).toContain("示例");
+    expect(r.primaryAction!.href).not.toContain("/login");
     expect([r.primaryAction].filter(Boolean)).toHaveLength(1);
 
     // 所有机会行只是数据行，不暴露任何主行动字段（展开为卡片自身的轻量交互）

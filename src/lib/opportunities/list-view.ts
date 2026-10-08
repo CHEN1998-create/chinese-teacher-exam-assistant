@@ -187,7 +187,7 @@ export function buildListViewModel(
   } else if (uncoveredRegions.length > 0) {
     conclusion = "你选择的地区当前暂未收录官方公告";
   } else {
-    conclusion = "当前没有与你画像匹配的有效机会，完善画像后会重新评估";
+    conclusion = "当前没有符合你报考信息的有效机会，完善信息后会重新判断";
   }
 
   return {
@@ -221,7 +221,7 @@ export function listCardNextStepLabel(unit: UnitMatchDTO): string {
   if (failed) return gateStateMeta(failed.code).cardAction;
   switch (unit.overall) {
     case "preliminary_eligible":
-      return unit.follow ? "查看跟进与报名准备" : "查看依据并关注";
+      return unit.follow ? "查看跟进与报名准备" : "查看依据并保存";
     case "need_more_info":
       return "查看要补充的信息";
     case "manual_review":

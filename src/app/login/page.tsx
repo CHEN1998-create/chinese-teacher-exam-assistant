@@ -40,6 +40,8 @@ function LoginForm() {
     if (!value.startsWith("/") || value.startsWith("//")) return null;
     return value;
   };
+  const nextPath = safeNext(nextParam);
+  const returningToOpportunity = nextPath?.startsWith("/opportunities/") === true;
 
   // 已登录用户访问登录页时直接跳转；登录成功后先合并访客本机关注，再跳转。
   useEffect(() => {
@@ -65,7 +67,17 @@ function LoginForm() {
       }
       if (cancelled) return;
       if (merged) clearGuestFollows();
-      router.replace(safeNext(nextParam) ?? "/opportunities");
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          "kb_post_login_notice",
+          guestItems.length > 0 && merged
+            ? "登录成功，刚才保存的机会已同步到账号。接下来可以查看报名时间。"
+            : returningToOpportunity
+              ? "登录成功，已回到刚才查看的机会。"
+              : "登录成功，已回到你的机会列表。",
+        );
+      }
+      router.replace(nextPath === "/preview" ? "/opportunities" : nextPath ?? "/opportunities");
     })();
     return () => {
       cancelled = true;
@@ -107,7 +119,11 @@ function LoginForm() {
         <div className="mb-7 text-center">
           <BrandMark size="lg" className="justify-center" />
           <h1 className="mt-5 text-2xl font-bold tracking-[-0.02em] text-ink">欢迎回来</h1>
-          <p className="mt-2 text-sm text-ink-muted">登录后继续查看关注机会与报考进度</p>
+          <p className="mt-2 text-sm text-ink-muted">
+            {returningToOpportunity
+              ? "登录后会回到刚才的机会，继续完成保存"
+              : "登录后继续查看已保存机会与报考进度"}
+          </p>
         </div>
 
         <div className="rounded-3xl border border-line bg-surface p-6 shadow-[0_18px_50px_rgba(42,69,112,0.08)]">
@@ -207,7 +223,7 @@ function LoginForm() {
             ? "未注册账号？Demo 阶段无需注册，请直接使用演示账号"
             : "仅限受邀测试用户，不开放公开注册"}
         </p>
-        {safeNext(nextParam) === "/preview" && (
+        {nextPath === "/preview" && (
           <p className="text-center text-xs mt-3">
             <a href="/preview" className="text-brand hover:underline">
               暂不登录，返回查看我的结果

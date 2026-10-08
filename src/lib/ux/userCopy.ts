@@ -18,9 +18,13 @@ export const USER_COPY = {
   /** 业务概念替换（第九节表） */
   CONCEPT: {
     BASIC_PROFILE: "你的报考信息",
+    PROFILE_SHORT: "报考信息",
+    CURRENT_PROFILE: "当前报考条件",
     MATCH_DIMENSION: "报考条件",
+    MATCH_RESULT: "筛选结果",
+    PRELIMINARY_RESULT: "初步判断",
     PUBLISHED_RESULT_REFRESH: "根据最新公告重新核对",
-    PRIMARY_GOAL: "主要备考目标",
+    PRIMARY_GOAL: "重点准备的机会",
     COVERAGE_SOURCE: "信息来源",
     RULE_VERSION: "判断依据更新于",
     SERVER_FINAL_RESULT: "最新结果",
@@ -54,15 +58,15 @@ export const USER_COPY = {
     ERROR_RETRY_HINT: "请稍后重试，或返回后重新打开。",
     ERROR_INPUT_NOT_SAVED: "你刚填的内容已保留在当前页面，不会丢失。",
     EMPTY_NO_OPPORTUNITY: "目前没有可推荐的机会",
-    EMPTY_HAS_FOLLOWED: "你关注的机会都在这里了",
+    EMPTY_HAS_FOLLOWED: "你保存的机会都在这里了",
   },
 
   /** 关注/取消/主要目标的影响说明（用于 StatusMessage 与详情） */
   FOLLOW: {
-    ADDED: "已加入关注，时间已加入日程",
-    REMOVED: "已取消关注",
+    ADDED: "已保存这个机会，相关时间已加入日程",
+    REMOVED: "已移除这个机会",
     UNDO: "撤销",
-    REMOVE_CONFIRM: "取消关注后，这个机会会从你的关注列表和日程中移除。",
+    REMOVE_CONFIRM: "移除后，这个机会会从已保存列表和日程中消失。",
     CHANGE_PRIMARY_IMPACT:
       "更换主要目标后，原目标的备考计划会进入暂停，新目标的备考会按当前信息重新生成。",
   },
@@ -76,7 +80,7 @@ export const USER_COPY = {
     CARD2_BODY: "每一条重要判断都可以回到官方公告查看依据。",
     CARD3_TITLE: "判断不了的条件会明确告诉你",
     CARD3_BODY:
-      "判断不了的地方，会明确告诉你需要补充或向招聘单位确认。预筛结果帮助你减少漏看，不替代招聘单位最终审核。",
+      "判断不了的地方，会明确告诉你需要补充或向招聘单位确认。初步判断帮助你减少漏看，不替代招聘单位最终审核。",
   },
 
   /** 主行动按钮文案规则（第六节）：少用笼统"下一步""确定""提交" */
@@ -86,7 +90,7 @@ export const USER_COPY = {
     ENTER_OPPORTUNITIES: "查看机会",
     VIEW_EVIDENCE: "查看判断依据",
     VIEW_PRIORITY: "查看优先机会",
-    FOLLOW: "关注",
+    FOLLOW: "保存这个机会",
     SCHEDULE_ACTION: "处理下一项",
     START_STUDY: "开始今日备考",
     SET_PRIMARY: "设为主要目标",
