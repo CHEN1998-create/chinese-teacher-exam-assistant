@@ -11,6 +11,9 @@ const PUBLIC_PATHS = new Set([
   '/health',
   '/auth/login',
   '/auth/session',
+  // 引导首个管理员的前提是系统尚无任何账号、无人持有会话，必须匿名可达；
+  // 安全性由控制器内 ADMIN_BOOTSTRAP_TOKEN 校验 + 已有管理员时接口自动关闭保证
+  '/admin/bootstrap-admin',
 ]);
 
 /**

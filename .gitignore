@@ -49,6 +49,9 @@ next-env.d.ts
 /deploy/*.env
 !/deploy/.env.example
 
+# standalone 部署的本地数据目录（PostgreSQL 库文件与公告快照）
+/deploy/data/
+
 # 浏览器端到端测试的本地依赖和运行产物
 /.qa-harness/node_modules/
 /.qa-harness/shots/

@@ -1,0 +1,118 @@
+# 教招有据：自包含单机部署（前端 + 后端 + 迁移 + PostgreSQL）
+#
+# 设计前提：整个栈只对外暴露一个前端 HTTP 端口（默认 3000），前面接你自己的
+# nginx（TLS 终止、域名都在 nginx 侧）。backend 与 db 没有任何主机端口映射，
+# 只在 compose 内网可达——因此数据库口令、前后端 INTERNAL_TOKEN 不构成攻击面，
+# 本文件直接给出固定默认值，无需当作密钥管理。唯一需要保密的是
+# ADMIN_BOOTSTRAP_TOKEN（它保护的引导接口经公网可达，直到首个管理员创建后
+# 自动永久关闭）。
+#
+# 快速开始（不建 .env 也能跑）：
+#   mkdir -p data/snapshots && chown 1000:1000 data/snapshots   # Linux 主机必需；Docker Desktop 可跳过
+#   docker compose -f docker-compose.standalone.yml pull
+#   docker compose -f docker-compose.standalone.yml up -d
+#   docker compose -f docker-compose.standalone.yml logs -f migrate backend
+# 启动后立刻按文件末尾引导首个管理员，然后访问 http://主机:3000。
+# 所有数据（PostgreSQL 库文件 + 公告快照）都在 ./data/ 下，整目录拷贝即备份。
+#
+# .env 全部可选，只有这些值得关心：
+#   IMAGE_TAG   前后端镜像标签，生产建议固定为同一次构建的 sha-<完整提交SHA>
+#   WEB_PORT    对外端口（默认 3000）
+#   REGISTRY    应用镜像拉取前缀，默认南京大学 GHCR 镜像站 ghcr.nju.edu.cn
+#               （仅限公开可匿名拉取的 Package，勿向镜像站发令牌）；
+#               Package 为私有或镜像站不稳时改回 ghcr.io 并 docker login 官方 GHCR
+#   DB_IMAGE    postgres 镜像，默认 Docker Hub 官方 postgres:17-alpine；
+#               境内拉不动时可设 docker.nju.edu.cn/postgres:17-alpine
+#   ADMIN_BOOTSTRAP_TOKEN  想自己掌控引导口令时再设；不设则用文件内默认值
+
+name: jiaozhao-standalone
+
+x-database-url: &database-url
+  DATABASE_URL: postgresql://${POSTGRES_USER:-jiaozhao}:${POSTGRES_PASSWORD:-jiaozhao-pg-local}@db:5432/${POSTGRES_DB:-jiaozhao}
+
+services:
+  db:
+    # 默认 Docker Hub 官方镜像；境内拉不动时 .env 设 DB_IMAGE=docker.nju.edu.cn/postgres:17-alpine
+    image: ${DB_IMAGE:-postgres:17-alpine}
+    environment:
+      # 仅内网可达，固定默认值即可。注意：POSTGRES_* 只在数据库首次初始化时生效，
+      # 事后修改不会改变已有库的口令（需进库 ALTER ROLE 或重建数据卷）。
+      POSTGRES_USER: ${POSTGRES_USER:-jiaozhao}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-jiaozhao-pg-local}
+      POSTGRES_DB: ${POSTGRES_DB:-jiaozhao}
+    volumes:
+      # 数据直接落在 compose 文件旁的 ./data/postgres（postgres 入口会自动 chown，无需手动处理）
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # 一次性迁移服务：成功后退出，backend 等它完成才启动
+  migrate:
+    image: ${REGISTRY:-ghcr.nju.edu.cn}/${GHCR_OWNER:-chen1998-create}/chinese-teacher-exam-assistant-api:${IMAGE_TAG:-latest}
+    command: npx prisma migrate deploy
+    environment:
+      <<: *database-url
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  backend:
+    image: ${REGISTRY:-ghcr.nju.edu.cn}/${GHCR_OWNER:-chen1998-create}/chinese-teacher-exam-assistant-api:${IMAGE_TAG:-latest}
+    environment:
+      <<: *database-url
+      PORT: "3000"
+      # 位于 Next.js 同源反代（以及你的 nginx）之后
+      TRUST_PROXY: "true"
+      AUTH_MODE: invited
+      # 生产镜像要求 INTERNAL_TOKEN 非空；backend 不暴露端口，固定默认值即可。
+      # 若哪天给 backend 加了 ports 映射，必须改成强随机值。
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-jiaozhao-internal-local}
+      # 唯一需要保密的值：/api/admin/bootstrap-admin 经公网可达，直到首个管理员
+      # 创建成功（接口随之永久关闭）。启动后请立即引导；公网开放前来不及引导的
+      # 话，在 .env 里自设强随机值（openssl rand -hex 32）。
+      ADMIN_BOOTSTRAP_TOKEN: ${ADMIN_BOOTSTRAP_TOKEN:-jiaozhao-bootstrap-change-me}
+      # 不设置 CORS_ORIGINS：浏览器永远经 frontend 同源反代，从不直连 backend，
+      # 后端 CORS 白名单在此拓扑下不起任何作用。
+    volumes:
+      # 公告快照留档，落在 ./data/snapshots。backend 以 node（uid=1000）非 root 运行，
+      # Linux 主机首次启动前必须：mkdir -p data/snapshots && chown 1000:1000 data/snapshots
+      # （Windows/macOS 的 Docker Desktop 由桌面虚拟机处理权限，不需要这一步）
+      - ./data/snapshots:/app/.data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # 全局 InternalTokenGuard 会拦截一切未带令牌的请求（含 /health），健康检查必须带头；
+      # $$ 转义后由容器内 shell 展开环境变量
+      test: ["CMD-SHELL", 'wget -qO- --header="x-internal-token: $${INTERNAL_TOKEN}" http://127.0.0.1:3000/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  frontend:
+    image: ${REGISTRY:-ghcr.nju.edu.cn}/${GHCR_OWNER:-chen1998-create}/chinese-teacher-exam-assistant:${IMAGE_TAG:-latest}
+    environment:
+      # 镜像构建期已固定 NEXT_PUBLIC_* 为 invited 生产模式，这里只有运行时变量
+      BACKEND_URL: http://backend:3000
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-jiaozhao-internal-local}
+    ports:
+      # 唯一对外端口。nginx 与本机同主机时可改成 "127.0.0.1:3000:3000" 进一步收口。
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+# 首次启动后立即引导首个管理员（密码至少 8 位；系统一旦存在管理员该接口永久关闭）：
+#   curl -X POST http://localhost:3000/api/admin/bootstrap-admin \
+#     -H 'Content-Type: application/json' \
+#     -d '{"email":"admin@example.com","password":"替换为强密码","token":"<ADMIN_BOOTSTRAP_TOKEN>"}'
+# 未在 .env 设置时，token 为上面的默认值 jiaozhao-bootstrap-change-me。
+# 之后用管理员登录网页调 /api/admin/users 创建普通用户账号；受邀模式不开放公开注册。

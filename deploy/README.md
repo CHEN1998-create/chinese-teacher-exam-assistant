@@ -2,6 +2,13 @@
 
 本仓库根目录是 Next.js 前端，`backend/` 是 NestJS 后端。本目录的 Compose 文件使用 GitHub Actions 构建的 GHCR 镜像，适合只负责拉取和运行镜像的轻量服务器；不要在现有约 1.6 GiB 内存服务器上构建 Next.js。
 
+## 两种部署文件
+
+| 文件 | 适用场景 |
+|---|---|
+| `docker-compose.standalone.yml` | **自包含一键部署**：前端 + 后端 + 迁移 + PostgreSQL 全在一个文件里，干净机器（或本地 Docker Desktop）`docker compose -f docker-compose.standalone.yml up -d` 即可运行；数据库为全新空库，需引导首个管理员。**完整操作步骤见 [STANDALONE.md](./STANDALONE.md)** |
+| `docker-compose.ghcr.yml`（+ `docker-compose.internal.yml` / `--profile public`） | 现有阿里云服务器：复用已有 `kaobian-postgres` 容器与 `kaobian-net` 网络，分内部验收与公开 HTTPS 两阶段，见下文 |
+
 镜像发布地址：
 
 - 前端：`ghcr.io/chen1998-create/chinese-teacher-exam-assistant`
