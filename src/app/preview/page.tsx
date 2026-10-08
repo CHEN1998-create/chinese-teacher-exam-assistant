@@ -254,6 +254,32 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
   if (!view.priority) {
     const missingRegion = limitations.some((item) => item.step === 1);
     const regionFollowUp = followUps.find((f) => f.dimension === "region");
+    if (missingRegion) {
+      return (
+        <div className="min-h-screen bg-canvas">
+          <div className="mx-auto max-w-lg px-4 py-10">
+            <Card className="rounded-3xl border-brand/20 p-6 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+              <p className="text-xs font-semibold tracking-wide text-brand">还差一个信息</p>
+              <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
+                先选择一个能接受的地区
+              </h1>
+              <p className="mt-3 text-sm leading-6 text-ink-muted">
+                没有地区时，我们无法判断哪些岗位值得你看
+                {regionFollowUp ? `，当前有 ${regionFollowUp.affectsCount} 个示例机会在等这个信息` : ""}。
+                学历、专业、毕业情况和教师资格都可以稍后再补。
+              </p>
+              <LinkButton href="/onboarding?from=preview" variant="primary" size="lg" className="mt-5 w-full">
+                补充地区
+              </LinkButton>
+              <p className="mt-4 text-xs leading-5 text-ink-muted">
+                缺少信息不会被当作不符合；补充地区后会立即重新计算。
+              </p>
+            </Card>
+            <p className="mt-4 text-center text-xs text-ink-muted">{formatCoverageLine()}</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-canvas">
         <div className="mx-auto max-w-2xl space-y-4 py-6 px-4">
@@ -263,32 +289,8 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             <p className="mt-1 text-xs text-ink-muted">{formatCoverageLine()}</p>
           </header>
           <UncoveredRegionsCard regionLabels={view.uncoveredRegions.map((r) => r.label)} />
-          {missingRegion && (
-            <Card className="border-warn/30 bg-warn-soft/70" data-testid="missing-region-notice">
-              <h2 className="text-sm font-semibold text-warn">
-                你选择了暂不提供「能接受的地区」
-              </h2>
-              <p className="mt-1.5 text-sm leading-relaxed text-warn">
-                没有地区意向时不会给出任何「初步符合」结果
-                {regionFollowUp ? `（当前 ${regionFollowUp.affectsCount} 个示例岗位都在等你补充地区）` : ""}
-                ；这不是不符合，补充至少一个地区后结论会立即重新计算。
-              </p>
-              <LinkButton
-                href="/onboarding?from=preview"
-                variant="primary"
-                size="md"
-                className="mt-3"
-              >
-                返回补充地区
-              </LinkButton>
-            </Card>
-          )}
           <EmptyState
-            title={
-              missingRegion
-                ? "补充地区后才能看到可考虑的机会"
-                : "当前已覆盖的公告里还没有你能考虑的机会"
-            }
+            title="当前已覆盖的公告里还没有你能考虑的机会"
             description="可以修改地区或学历等条件再看；未覆盖地区不等于没有招聘，新公告核对后会出现在这里。"
             actionLabel="修改报考信息"
             actionHref="/onboarding?from=preview"

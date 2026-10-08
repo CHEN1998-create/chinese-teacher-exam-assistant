@@ -119,6 +119,24 @@ describe('资格匹配引擎：时效闸门与版本治理', () => {
 });
 
 describe('资格匹配引擎：画像修改后即时重算', () => {
+  it('只填写地区时其余基础字段都保持 UNKNOWN，不会崩溃或误判不符合', () => {
+    const partial: UserRecruitmentProfile = {
+      regions: BASE_PROFILE.regions,
+      acceptedEmploymentNatures: BASE_PROFILE.acceptedEmploymentNatures,
+    };
+    const match = matchOf(candidatesFor(partial), SCENARIO_IDS.eligible);
+    expect(match.overall).toBe('need_more_info');
+    expect(
+      match.dimensions
+        .filter((dimension) =>
+          ['education', 'major', 'graduate_status', 'teacher_cert'].includes(
+            dimension.dimension,
+          ),
+        )
+        .every((dimension) => dimension.value === 'UNKNOWN'),
+    ).toBe(true);
+  });
+
   it('补充宁波户籍后，鄞州从 need_more_info 变为 preliminary_eligible', () => {
     const before = matchOf(candidatesFor(BASE_PROFILE), SCENARIO_IDS.needHukou);
     expect(before.overall).toBe('need_more_info');

@@ -18,7 +18,7 @@ export function DemoBanner() {
       className="fixed inset-x-0 top-0 z-[100] h-11 md:h-8 flex items-center bg-amber-400 text-amber-950 border-b border-amber-500"
     >
       <p className="w-full px-3 text-[11px] md:text-xs leading-4 font-medium text-center">
-        📢 产品演示环境：数据仅用于功能展示，请勿填写真实个人信息；输入仅保存在本机浏览器，不会上传服务器。
+        演示模式｜招聘机会均为虚构示例，不可用于真实报名；请勿填写真实个人信息，输入仅保存在本机。
       </p>
     </div>
   );

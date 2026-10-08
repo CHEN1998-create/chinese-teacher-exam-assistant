@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Hero } from "@/components/ia/Hero";
-import { Disclosure, LayerHeading } from "@/components/ia/Layer";
+import { Disclosure } from "@/components/ia/Layer";
 import { GateTag, MatchStatusTag } from "@/components/ia/MatchStatusTag";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -169,7 +169,10 @@ export default function OpportunityDetailPage() {
   // 模块 7.5 合规过滤：用户端不展示 AI 初核待人工复核记录（dataset === "real"）。
   // 列表已不输出 real；用户直接访问详情 URL 时同样退出，显示"尚未正式发布"。
   // 真正解决需后端 unitDetail() 加 status 过滤（见最终报告"后续任务"）。
-  if (unit.announcement.dataset === "real") {
+  if (
+    unit.announcement.dataset === "real" &&
+    unit.announcement.reviewStatus !== "human_reviewed"
+  ) {
     return (
       <div className="mx-auto max-w-2xl">
         <EmptyState
@@ -489,6 +492,32 @@ export default function OpportunityDetailPage() {
         )}
       </Hero>
 
+      <section aria-labelledby="eligibility-summary" className="space-y-3">
+        <div>
+          <h2 id="eligibility-summary" className="text-base font-semibold text-ink">
+            资格摘要
+          </h2>
+          <p className="mt-0.5 text-xs leading-5 text-ink-muted">
+            缺少信息不是不符合；存在歧义的条件必须向招聘单位确认，系统不会自动下结论。
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            { label: "已满足", count: groups.satisfied.length, tone: "text-success bg-success-soft" },
+            { label: "待补充", count: groups.missingInfo.length, tone: "text-warn bg-warn-soft" },
+            { label: "需确认", count: groups.confirmOfficial.length, tone: "text-warn bg-warn-soft" },
+            { label: "不符合", count: groups.unsatisfied.length, tone: "text-danger bg-danger-soft" },
+          ].map((item) => (
+            <div key={item.label} className={`rounded-xl px-3 py-3 ${item.tone}`}>
+              <p className="text-xs font-medium">{item.label}</p>
+              <p className="mt-1 text-xl font-semibold" aria-label={`${item.label} ${item.count} 项`}>
+                {item.count}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {actionError && (
         <p
           role="alert"
@@ -561,57 +590,33 @@ export default function OpportunityDetailPage() {
         </div>
 
         {groups.missingInfo.length > 0 && (
-          <div
+          <Disclosure
             id="missing-info"
-            className="scroll-mt-20 rounded-xl border border-warn/30 bg-surface"
+            title="需要补充的信息"
+            count={groups.missingInfo.length}
           >
-            <div className="border-b border-warn/30 px-4 py-2.5">
-              <LayerHeading
-                title="需要补充的信息（补充后重新判断，不是不符合）"
-                count={groups.missingInfo.length}
-              />
-            </div>
-            <div className="px-4 py-2">
-              <ConditionRows dimensions={groups.missingInfo} showDescription />
-            </div>
-          </div>
+            <ConditionRows dimensions={groups.missingInfo} showDescription />
+          </Disclosure>
         )}
 
         {groups.confirmOfficial.length > 0 && (
-          <div
+          <Disclosure
             id="to-confirm"
-            className="scroll-mt-20 rounded-xl border border-warn/30 bg-surface"
+            title="需要向招聘单位确认"
+            count={groups.confirmOfficial.length}
           >
-            <div className="border-b border-warn/30 px-4 py-2.5">
-              <LayerHeading
-                title="需要向招聘单位确认的歧义项（系统不能自动判定）"
-                count={groups.confirmOfficial.length}
-              />
-            </div>
-            <div className="px-4 py-2">
-              <ConditionRows
-                dimensions={groups.confirmOfficial}
-                showDescription
-              />
-            </div>
-          </div>
+            <ConditionRows dimensions={groups.confirmOfficial} showDescription />
+          </Disclosure>
         )}
 
         {groups.unsatisfied.length > 0 && (
-          <div
+          <Disclosure
             id="unsatisfied"
-            className="scroll-mt-20 rounded-xl border border-danger/30 bg-surface"
+            title="明确不符合项"
+            count={groups.unsatisfied.length}
           >
-            <div className="border-b border-danger/30 px-4 py-2.5">
-              <LayerHeading title="明确不符合项（依据公告原文）" count={groups.unsatisfied.length} />
-            </div>
-            <div className="px-4 py-2">
-              <ConditionRows
-                dimensions={groups.unsatisfied}
-                showDescription
-              />
-            </div>
-          </div>
+            <ConditionRows dimensions={groups.unsatisfied} showDescription />
+          </Disclosure>
         )}
 
         {groups.satisfied.length > 0 && (

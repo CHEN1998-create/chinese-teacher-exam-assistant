@@ -53,18 +53,18 @@ export type EmploymentStatus =
 export interface BaseRecruitmentProfile {
   /** 1. 可接受就业地区 */
   regions: RegionPreference[];
-  /** 2. 最高学历 */
-  educationLevel: CredentialLevel;
-  /** 2. 最高学位（无学位可为 none） */
-  degree: DegreeCode;
-  /** 3. 毕业证上的专业全称 */
-  majorFullName: string;
+  /** 2. 最高学历；暂不提供时缺省，匹配只能得到 UNKNOWN */
+  educationLevel?: CredentialLevel;
+  /** 2. 最高学位（无学位可为 none）；暂不提供时缺省 */
+  degree?: DegreeCode;
+  /** 3. 毕业证上的专业全称；暂不提供时缺省 */
+  majorFullName?: string;
   /** 4. 毕业（或预计毕业）时间 ISO 日期 */
   graduationDate?: string;
   /** 4. 当前就业状态 */
-  employmentStatus: EmploymentStatus;
-  /** 5. 教师资格情况 */
-  teacherCert: TeacherCertInfo;
+  employmentStatus?: EmploymentStatus;
+  /** 5. 教师资格情况；暂不提供时缺省 */
+  teacherCert?: TeacherCertInfo;
   /** 对事业编及其他官方用工形式的接受程度（白名单） */
   acceptedEmploymentNatures: EmploymentNatureCode[];
 }

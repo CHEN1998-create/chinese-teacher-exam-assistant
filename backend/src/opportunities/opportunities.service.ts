@@ -820,14 +820,26 @@ export class OpportunitiesService {
       'master',
       'doctorate',
     ];
-    if (!educationLevels.includes(p.educationLevel as CredentialLevel)) {
+    if (
+      p.educationLevel !== undefined &&
+      p.educationLevel !== null &&
+      !educationLevels.includes(p.educationLevel as CredentialLevel)
+    ) {
       throw new BadRequestException('画像 educationLevel 取值非法');
     }
     const degrees: DegreeCode[] = ['none', 'bachelor', 'master', 'doctorate'];
-    if (!degrees.includes(p.degree as DegreeCode)) {
+    if (
+      p.degree !== undefined &&
+      p.degree !== null &&
+      !degrees.includes(p.degree as DegreeCode)
+    ) {
       throw new BadRequestException('画像 degree 取值非法');
     }
-    if (typeof p.majorFullName !== 'string') {
+    if (
+      p.majorFullName !== undefined &&
+      p.majorFullName !== null &&
+      typeof p.majorFullName !== 'string'
+    ) {
       throw new BadRequestException('画像 majorFullName 必须是字符串');
     }
     const employmentStatuses: EmploymentStatus[] = [
@@ -837,19 +849,33 @@ export class OpportunitiesService {
       'employed_parttime',
       'other',
     ];
-    if (!employmentStatuses.includes(p.employmentStatus as EmploymentStatus)) {
+    if (
+      p.employmentStatus !== undefined &&
+      p.employmentStatus !== null &&
+      !employmentStatuses.includes(p.employmentStatus as EmploymentStatus)
+    ) {
       throw new BadRequestException('画像 employmentStatus 取值非法');
     }
-    if (typeof p.teacherCert !== 'object' || p.teacherCert === null) {
+    if (
+      p.teacherCert !== undefined &&
+      p.teacherCert !== null &&
+      typeof p.teacherCert !== 'object'
+    ) {
       throw new BadRequestException('画像 teacherCert 结构不正确');
     }
-    const cert = p.teacherCert as Record<string, unknown>;
+    const cert =
+      typeof p.teacherCert === 'object' && p.teacherCert !== null
+        ? (p.teacherCert as Record<string, unknown>)
+        : undefined;
     const certStatuses: TeacherCertStatus[] = [
       'obtained',
       'in_progress',
       'none',
     ];
-    if (!certStatuses.includes(cert.status as TeacherCertStatus)) {
+    if (
+      cert?.status !== undefined &&
+      !certStatuses.includes(cert.status as TeacherCertStatus)
+    ) {
       throw new BadRequestException('画像 teacherCert.status 取值非法');
     }
     if (
@@ -889,20 +915,25 @@ export class OpportunitiesService {
 
     return {
       regions,
-      educationLevel: p.educationLevel as CredentialLevel,
-      degree: p.degree as DegreeCode,
-      majorFullName: p.majorFullName,
+      educationLevel: p.educationLevel as CredentialLevel | undefined,
+      degree: p.degree as DegreeCode | undefined,
+      majorFullName:
+        typeof p.majorFullName === 'string' && p.majorFullName.trim()
+          ? p.majorFullName.trim()
+          : undefined,
       graduationDate: optionalIso('graduationDate'),
-      employmentStatus: p.employmentStatus as EmploymentStatus,
-      teacherCert: {
-        status: cert.status as TeacherCertStatus,
-        subject: typeof cert.subject === 'string' ? cert.subject : undefined,
-        stage: typeof cert.stage === 'string' ? cert.stage : undefined,
-        expectedDate:
-          typeof cert.expectedDate === 'string'
-            ? cert.expectedDate
-            : undefined,
-      },
+      employmentStatus: p.employmentStatus as EmploymentStatus | undefined,
+      teacherCert: cert?.status
+        ? {
+            status: cert.status as TeacherCertStatus,
+            subject: typeof cert.subject === 'string' ? cert.subject : undefined,
+            stage: typeof cert.stage === 'string' ? cert.stage : undefined,
+            expectedDate:
+              typeof cert.expectedDate === 'string'
+                ? cert.expectedDate
+                : undefined,
+          }
+        : undefined,
       acceptedEmploymentNatures:
         p.acceptedEmploymentNatures as EmploymentNatureCode[],
       birthDate: optionalIso('birthDate'),

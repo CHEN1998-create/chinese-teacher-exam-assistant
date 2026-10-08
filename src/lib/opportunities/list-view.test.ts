@@ -201,6 +201,30 @@ describe("buildListViewModel：四类结果的列表叙事", () => {
     expect(view.closed).toHaveLength(1);
   });
 
+  it("主推荐会二次校验：已截止、无官方来源和明确不符合都不能混入", () => {
+    const valid = makeUnit("unit-valid", "preliminary_eligible");
+    const closed = makeUnit("unit-closed", "preliminary_eligible", {
+      gates: [
+        { code: "registration_closed", passed: false, reason: "已截止" },
+      ],
+    });
+    const noSource = makeUnit("unit-no-source", "preliminary_eligible", {
+      announcement: {
+        ...valid.announcement,
+        id: "ann-no-source",
+        officialUrl: "",
+      },
+    });
+    const notEligible = makeUnit("unit-not-eligible", "not_eligible");
+    const response = makeResponse({} as never);
+    response.groups.preliminary = [closed, noSource, notEligible, valid];
+
+    const view = buildListViewModel(response);
+    expect(view.priority?.unit.id).toBe("unit-valid");
+    expect(view.otherPreliminary).toEqual([]);
+    expect(view.validCount).toBe(1);
+  });
+
   it("评估时间格式化为月日时分", () => {
     const text = formatEvaluatedAt("2026-10-05T10:00:00+08:00");
     expect(text).toContain("10月5日");

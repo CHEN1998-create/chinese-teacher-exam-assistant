@@ -289,12 +289,12 @@ export type EmploymentStatus =
 /** 匹配接口入参：五组基础画像 + 按需补充的条件事实（未提供即 UNKNOWN） */
 export interface UserRecruitmentProfile {
   regions: RegionPreference[];
-  educationLevel: CredentialLevel;
-  degree: DegreeCode;
-  majorFullName: string;
+  educationLevel?: CredentialLevel;
+  degree?: DegreeCode;
+  majorFullName?: string;
   graduationDate?: string;
-  employmentStatus: EmploymentStatus;
-  teacherCert: TeacherCertInfo;
+  employmentStatus?: EmploymentStatus;
+  teacherCert?: TeacherCertInfo;
   acceptedEmploymentNatures: EmploymentNatureCode[];
   // 条件画像：缺省只能得到 UNKNOWN，绝不转 FAIL
   birthDate?: string;

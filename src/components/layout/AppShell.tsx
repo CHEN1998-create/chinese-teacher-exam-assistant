@@ -2,9 +2,9 @@
 
 import { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Sidebar } from "./Sidebar";
 import { BottomNav } from "./BottomNav";
 import { Header } from "./Header";
+import { DesktopNav } from "./DesktopNav";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { DemoBanner, DEMO_BANNER_SPACER_CLASS } from "@/components/demo/DemoBanner";
 
@@ -53,11 +53,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-canvas">
       <DemoBanner />
-      <Sidebar />
+      <div className={DEMO_BANNER_SPACER_CLASS} />
+      <DesktopNav />
       <Header />
-      <main className="md:pl-56 pb-16 md:pb-0">
-        <div className={DEMO_BANNER_SPACER_CLASS} />
-        <div className="max-w-4xl mx-auto px-4 py-6 md:px-8">
+      <main className="pb-16 md:pb-0">
+        <div className="mx-auto max-w-5xl px-4 py-6 md:px-8">
           <RequireAuth>{children}</RequireAuth>
         </div>
       </main>

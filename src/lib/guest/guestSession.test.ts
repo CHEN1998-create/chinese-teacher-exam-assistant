@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProfileLimitations,
   draftToProfile,
+  hasMinimumPreviewProfile,
   isStepComplete,
   isStepSkipped,
   pruneSkippedSteps,
@@ -50,6 +51,17 @@ describe("跳过门禁：isStepComplete / isStepSkipped", () => {
     }
     // 未选意向学科 + 第 5 步跳过：按当前唯一开放的语文处理
     expect(draftToProfile(draft)).not.toBeNull();
+  });
+
+  it("查看结果只要求一个最低字段：至少选择一个地区", () => {
+    expect(hasMinimumPreviewProfile(partialDraft({ skippedSteps: [1, 2, 3, 4, 5] }))).toBe(false);
+    expect(
+      hasMinimumPreviewProfile(
+        partialDraft({
+          regions: [{ code: "330000", province: "浙江省", level: "consider" }],
+        }),
+      ),
+    ).toBe(true);
   });
 });
 

@@ -24,6 +24,8 @@ interface OpportunityListItemProps {
   /** 评估时间（截止文案的参照时间，由后端 meta.evaluatedAt 提供） */
   evaluatedAt: string;
   priority?: boolean;
+  /** 次级结果使用紧凑卡片，只保留决策所需信息。 */
+  compact?: boolean;
   defaultExpanded?: boolean;
   /** 保存/移除（卡片上的快捷操作）；缺省时只展示保存状态 */
   onToggleFollow?: (unit: UnitMatchDTO) => void;
@@ -44,6 +46,7 @@ export function OpportunityListItem({
   unit,
   evaluatedAt,
   priority = false,
+  compact = false,
   defaultExpanded = false,
   onToggleFollow,
   followBusy = false,
@@ -110,12 +113,6 @@ export function OpportunityListItem({
           {unit.announcement.dataset === "demo" ? "示例报名" : "报名"}{deadline.text}
         </p>
 
-        {unit.announcement.dataset === "demo" && (
-          <p className="mt-2 text-xs font-medium text-warn">
-            虚构演示机会 · 日期随演示时间移动 · 不可用于真实报名
-          </p>
-        )}
-
         {/* 一条关键依据或风险：闸门失败时优先显示异常原因 */}
         <p
           className={cn(
@@ -126,10 +123,12 @@ export function OpportunityListItem({
           {closedGate ? closedGate.reason : unit.summary}
         </p>
 
-        {unit.announcement.dataset === "real" && (
+        {!compact && unit.announcement.dataset === "real" && (
           <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
             <span className="inline-flex items-center rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
-              真实记录 · AI 初核待人工复核
+              {unit.announcement.reviewStatus === "human_reviewed"
+                ? "真实公告 · 已人工核对"
+                : "真实记录 · AI 初核待人工复核"}
             </span>
             <a
               href={unit.announcement.officialUrl}
@@ -152,7 +151,7 @@ export function OpportunityListItem({
           </p>
         )}
 
-        {follow && (
+        {!compact && follow && (
           <p className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
             <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 font-medium text-ink-muted">
               {FOLLOW_STATUS_LABELS[follow.status]}
@@ -175,11 +174,16 @@ export function OpportunityListItem({
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <Link
             href={`/opportunities/${unit.unit.id}`}
-            className="inline-flex items-center justify-center rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white transition hover:bg-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+            className={cn(
+              "inline-flex items-center justify-center rounded-lg text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2",
+              compact
+                ? "py-1 text-brand hover:text-brand-strong"
+                : "bg-brand px-3.5 py-2 text-white hover:bg-brand-strong",
+            )}
           >
             {listCardNextStepLabel(unit)}
           </Link>
-          {onToggleFollow && (
+          {!compact && onToggleFollow && (
             <button
               type="button"
               onClick={() => onToggleFollow(unit)}
@@ -189,36 +193,38 @@ export function OpportunityListItem({
               {follow ? "移除保存" : "保存"}
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            aria-controls={panelId}
-            className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted underline underline-offset-2 hover:text-ink"
-          >
-            {expanded ? "收起条件核对" : "展开条件核对"}
-            <svg
-              aria-hidden="true"
-              className={cn(
-                "h-3.5 w-3.5 transition-transform",
-                expanded && "rotate-180",
-              )}
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+          {!compact && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              aria-controls={panelId}
+              className="inline-flex items-center gap-1 text-xs font-medium text-ink-muted underline underline-offset-2 hover:text-ink"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 9l-7 7-7-7"
-              />
-            </svg>
-          </button>
+              {expanded ? "收起条件核对" : "展开条件核对"}
+              <svg
+                aria-hidden="true"
+                className={cn(
+                  "h-3.5 w-3.5 transition-transform",
+                  expanded && "rotate-180",
+                )}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      {expanded && (
+      {!compact && expanded && (
         <div
           id={panelId}
           className="border-t border-line px-4 py-2"

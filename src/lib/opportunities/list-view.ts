@@ -80,6 +80,28 @@ function pickPriority(
   return primary ?? preliminary[0]!;
 }
 
+/** 用户端只展示已通过人工发布门槛的真实公告；演示数据不受此限制。 */
+function isPublishedForUser(unit: UnitMatchDTO): boolean {
+  return (
+    unit.announcement.dataset === "demo" ||
+    unit.announcement.reviewStatus === "human_reviewed"
+  );
+}
+
+/** 主推荐比“可展示”更严格：闸门、官方链接与官方证据必须同时成立。 */
+function isActionableRecommendation(
+  unit: UnitMatchDTO,
+  expectedOverall: UnitMatchDTO["overall"],
+): boolean {
+  return (
+    isPublishedForUser(unit) &&
+    unit.overall === expectedOverall &&
+    unit.gates.every((gate) => gate.passed) &&
+    unit.announcement.officialUrl.trim().length > 0 &&
+    unit.version.officialSource.state === "official"
+  );
+}
+
 /**
  * 区划层级前缀：省级码（330000）→ ["33"]；市级/区县级（330100/330102）→ ["3301","33"]。
  * 画像选浙江省时，省内任何城市岗位都算覆盖；选城市时只认该城市前缀。
@@ -140,50 +162,68 @@ export function buildListViewModel(
   profile?: UserRecruitmentProfile,
 ): OpportunityListViewModel {
   const { groups, primaryTargetUnitId, meta, coverage } = response;
-  const priority = pickPriority(groups.preliminary, primaryTargetUnitId);
-  const otherPreliminary = groups.preliminary.filter(
+  const preliminary = groups.preliminary.filter((unit) =>
+    isActionableRecommendation(unit, "preliminary_eligible"),
+  );
+  const needInfoGroups = groups.needInfo
+    .map((group) => {
+      const units = group.units.filter((unit) =>
+        isActionableRecommendation(unit, "need_more_info"),
+      );
+      return { ...group, count: units.length, units };
+    })
+    .filter((group) => group.units.length > 0);
+  const manualReview = groups.manualReview.filter((unit) =>
+    isActionableRecommendation(unit, "manual_review"),
+  );
+  const priority = pickPriority(preliminary, primaryTargetUnitId);
+  const otherPreliminary = preliminary.filter(
     (u) => u.unit.id !== priority?.unit.id,
   );
-  const needInfoCount = groups.needInfo.reduce((sum, g) => sum + g.count, 0);
-  const validCount =
-    groups.preliminary.length + needInfoCount + groups.manualReview.length;
+  const needInfoCount = new Set(
+    needInfoGroups.flatMap((group) => group.units.map((unit) => unit.unit.id)),
+  ).size;
+  const validCount = new Set([
+    ...preliminary.map((unit) => unit.unit.id),
+    ...needInfoGroups.flatMap((group) => group.units.map((unit) => unit.unit.id)),
+    ...manualReview.map((unit) => unit.unit.id),
+  ]).size;
   // 模块 7.5 合规过滤：用户端不显示 AI 初核待人工复核记录（dataset === "real"）。
   // 后端 PUBLISHED_ANNOUNCEMENTS 仍包含 real 记录（用于管理端复核），
   // 这里在前端兜底过滤：closed 不包含 real，realMonitored 字段保留为稳定类型但永远为空。
   // 真正解决需后端在用户端 API 加 status 过滤（见最终报告"后续任务"）。
-  const closed = groups.closed.filter(
-    (u) => u.announcement.dataset !== "real",
-  );
+  const closed = groups.closed.filter(isPublishedForUser);
   const realMonitored: UnitMatchDTO[] = [];
   // 地区偏好不重叠与资格不符合分离（仅前端叙事拆分，后端分组结构不变）
-  const regionOutOfScope = groups.notEligible.filter(isRegionOnlyMismatch);
-  const notEligible = groups.notEligible.filter(
+  const visibleNotEligible = groups.notEligible.filter(isPublishedForUser);
+  const regionOutOfScope = visibleNotEligible.filter(isRegionOnlyMismatch);
+  const notEligible = visibleNotEligible.filter(
     (u) => !isRegionOnlyMismatch(u),
   );
   const uncoveredRegions = computeUncoveredRegions(profile, response);
   const closedBuckets = bucketClosedUnits(closed, (u) => u.gates);
   const excludedCount =
-    groups.notEligible.length + groups.closed.length;
+    visibleNotEligible.length + closed.length;
   const emptyResult =
-    groups.preliminary.length === 0 &&
+    preliminary.length === 0 &&
     needInfoCount === 0 &&
-    groups.manualReview.length === 0 &&
-    groups.notEligible.length === 0 &&
-    groups.closed.length === 0;
+    manualReview.length === 0 &&
+    visibleNotEligible.length === 0 &&
+    closed.length === 0;
 
   let conclusion: string;
-  if (groups.preliminary.length > 0) {
+  if (preliminary.length > 0) {
     const extras: string[] = [];
     if (needInfoCount > 0) extras.push(`${needInfoCount} 个待补充信息`);
-    if (groups.manualReview.length > 0)
-      extras.push(`${groups.manualReview.length} 个建议人工确认`);
+    if (manualReview.length > 0)
+      extras.push(`${manualReview.length} 个建议人工确认`);
     conclusion =
-      `为你找到 ${groups.preliminary.length} 个初步符合的机会` +
+      `为你找到 ${preliminary.length} 个初步符合的机会` +
       (extras.length > 0 ? `（另有 ${extras.join("、")}）` : "");
   } else if (needInfoCount > 0) {
     conclusion = `还没有能直接判断的机会：补充 ${needInfoCount} 个机会缺失的信息后会重新判断`;
-  } else if (groups.manualReview.length > 0) {
-    conclusion = `有 ${groups.manualReview.length} 个机会的条件需要向招聘单位确认`;
+  } else if (manualReview.length > 0) {
+    conclusion = `有 ${manualReview.length} 个机会的条件需要向招聘单位确认`;
   } else if (uncoveredRegions.length > 0) {
     conclusion = "你选择的地区当前暂未收录官方公告";
   } else {
@@ -196,8 +236,8 @@ export function buildListViewModel(
     primaryTargetUnitId,
     priority,
     otherPreliminary,
-    needInfoGroups: groups.needInfo,
-    manualReview: groups.manualReview,
+    needInfoGroups,
+    manualReview,
     notEligible,
     regionOutOfScope,
     closed,

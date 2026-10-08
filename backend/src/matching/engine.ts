@@ -182,7 +182,8 @@ export function evaluateRequirement(
   const c = req.criterion;
   switch (c.kind) {
     case 'education': {
-      const rank = EDUCATION_RANK[profile.educationLevel];
+      const educationLevel = profile.educationLevel;
+      const rank = educationLevel ? EDUCATION_RANK[educationLevel] : undefined;
       if (rank == null) return unknown(req, '尚未填写最高学历');
       if (rank >= EDUCATION_RANK[c.minLevel]) {
         return pass(req, '你的学历满足公告要求的最低学历');
@@ -200,9 +201,9 @@ export function evaluateRequirement(
       return fail(req, '学位未达到公告要求');
     }
     case 'major': {
-      const profileMajor = normalizeMajor(profile.majorFullName);
+      const profileMajor = normalizeMajor(profile.majorFullName ?? '');
       if (!profileMajor) return unknown(req, '尚未填写毕业证专业全称');
-      if (majorNameMatches(profile.majorFullName, c.majorNames)) {
+      if (majorNameMatches(profile.majorFullName ?? '', c.majorNames)) {
         return pass(req, '专业与公告列明专业（或已审核等价专业）一致');
       }
       // 专业目录存在解释空间（“相关专业/师范类方向”等），不得自动判定
@@ -221,6 +222,12 @@ export function evaluateRequirement(
           req,
           '尚未填写毕业时间，无法按本公告口径判断应届身份',
         );
+      if (!profile.employmentStatus) {
+        return unknown(
+          req,
+          '尚未填写当前就业状态，补充后按本公告口径判断应届身份',
+        );
+      }
       if (
         profile.employmentStatus === 'employed_fulltime' &&
         (profile.socialSecurityMonths ?? 0) > 0
@@ -243,6 +250,9 @@ export function evaluateRequirement(
     }
     case 'teacher_cert': {
       const cert = profile.teacherCert;
+      if (!cert?.status) {
+        return unknown(req, '尚未填写教师资格情况，补充信息后判断');
+      }
       if (cert.status === 'none')
         return fail(req, '尚未取得公告要求的教师资格');
       if (cert.status === 'in_progress') {

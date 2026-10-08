@@ -63,16 +63,6 @@ export function ConditionRows({
                     根据你填写的报考信息判断
                   </span>
                   {dim.reason}
-                  {dim.value === "UNKNOWN" && (
-                    <span className="mt-1 block text-warn">
-                      缺少信息不是不符合，补充后会重新判断。
-                    </span>
-                  )}
-                  {dim.value === "MANUAL_REVIEW" && (
-                    <span className="mt-1 block text-warn">
-                      公告表述可能有多种解释，需招聘单位确认，系统不能自动判定。
-                    </span>
-                  )}
                 </p>
               </div>
             )}

@@ -20,11 +20,13 @@ export function LayerHeading({ title, count }: { title: string; count?: number }
  * 用于“明确不符合 / 已截止”等默认收起的二级分组。
  */
 export function Disclosure({
+  id,
   title,
   count,
   defaultOpen = false,
   children,
 }: {
+  id?: string;
   title: string;
   count?: number;
   defaultOpen?: boolean;
@@ -32,8 +34,9 @@ export function Disclosure({
 }) {
   return (
     <details
+      id={id}
       open={defaultOpen}
-      className="group rounded-xl border border-line bg-surface [&_summary::-webkit-details-marker]:hidden"
+      className="group scroll-mt-20 rounded-xl border border-line bg-surface [&_summary::-webkit-details-marker]:hidden"
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2 p-4 text-sm font-medium text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand rounded-t-xl">
         <span className="flex items-center gap-2">

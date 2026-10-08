@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
  * 品牌标记（模块 0A 5.3 品牌图形）：
  * - 用户端正式品牌位置不再使用 📝 等 Emoji；
  * - 使用文字 + 本地自包含 SVG/CSS 标记，不新增远程图片或图标依赖；
- * - 标记为墨蓝实心方块叠加白色"考"字风格图标，避免任何外部资源。
+ * - 标记为墨蓝实心方块叠加“公告文档 + 核对勾”，表达“官方依据可追溯”。
  */
 interface BrandMarkProps {
   className?: string;
@@ -42,7 +42,7 @@ export function BrandMark({
   );
 }
 
-/** 自包含 SVG 标记：墨蓝圆角方块 + 白色"考"字风格勾画 */
+/** 自包含 SVG 标记：墨蓝圆角方块 + 公告文档 + 核对勾。 */
 export function BrandGlyph({ className }: { className?: string }) {
   return (
     <svg
@@ -54,20 +54,19 @@ export function BrandGlyph({ className }: { className?: string }) {
       focusable="false"
     >
       <rect width="32" height="32" rx="7" fill="var(--color-brand)" />
-      {/* 简洁的"考"字意象：上方勾画 + 下方圆点，整体可读、无外部依赖 */}
       <path
-        d="M9 11.5h14M16 8.5v6"
+        d="M10 7.5h8l4 4v13H10z"
         stroke="#fff"
-        strokeWidth="2"
-        strokeLinecap="round"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
       />
       <path
-        d="M11 18.5c0 2.5 2.2 4.5 5 4.5s5-2 5-4.5"
+        d="M18 7.5v4h4M12.5 17l2.2 2.2 4.8-5"
         stroke="#fff"
-        strokeWidth="2"
+        strokeWidth="1.8"
         strokeLinecap="round"
+        strokeLinejoin="round"
       />
-      <circle cx="16" cy="24.5" r="1.6" fill="#fff" />
     </svg>
   );
 }

@@ -130,7 +130,8 @@ export function evaluateRequirement(
   const c = req.criterion;
   switch (c.kind) {
     case "education": {
-      const rank = EDUCATION_RANK[profile.educationLevel];
+      const educationLevel = profile.educationLevel;
+      const rank = educationLevel ? EDUCATION_RANK[educationLevel] : undefined;
       if (rank == null) return unknown(req, "尚未填写最高学历");
       if (rank >= EDUCATION_RANK[c.minLevel]) {
         return pass(req, `你的学历满足公告要求的最低学历`);
@@ -145,7 +146,8 @@ export function evaluateRequirement(
       return fail(req, "学位未达到公告要求");
     }
     case "major": {
-      const profileMajor = normalizeMajor(profile.majorFullName);
+      const majorFullName = profile.majorFullName ?? "";
+      const profileMajor = normalizeMajor(majorFullName);
       if (!profileMajor) return unknown(req, "尚未填写毕业证专业全称");
       const exact = c.majorNames.some((m) => normalizeMajor(m) === profileMajor);
       if (exact) return pass(req, "专业与公告列明专业一致");

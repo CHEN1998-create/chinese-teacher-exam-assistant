@@ -446,14 +446,19 @@ export function draftToProfile(draft: GuestProfileDraft): UserRecruitmentProfile
   return {
     regions: draft.regions,
     // 被跳过的字段保持 undefined：引擎对缺事实一律判 UNKNOWN，不得伪造默认值
-    educationLevel: draft.educationLevel as CredentialLevel,
-    degree: draft.degree as DegreeCode,
-    majorFullName: (draft.majorFullName ?? "").trim(),
+    educationLevel: draft.educationLevel,
+    degree: draft.degree,
+    majorFullName: draft.majorFullName?.trim() || undefined,
     graduationDate: draft.graduationDate,
-    employmentStatus: draft.employmentStatus as UserRecruitmentProfile["employmentStatus"],
-    teacherCert: draft.teacherCert as TeacherCertInfo,
+    employmentStatus: draft.employmentStatus,
+    teacherCert: draft.teacherCert,
     acceptedEmploymentNatures: draft.acceptedEmploymentNatures,
   };
+}
+
+/** 展示机会结果的最低门槛：至少知道用户愿意去哪里。 */
+export function hasMinimumPreviewProfile(draft: GuestProfileDraft): boolean {
+  return draft.regions.length > 0;
 }
 
 // ==================== 会话存储服务 ====================

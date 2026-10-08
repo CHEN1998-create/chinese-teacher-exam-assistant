@@ -21,9 +21,9 @@ import {
   SUBJECT_OPTIONS,
   TEACHER_CERT_STATUS_OPTIONS,
   TOTAL_PROFILE_STEPS,
-  buildProfileLimitations,
   draftToProfile,
   guestSessionService,
+  hasMinimumPreviewProfile,
   isStepComplete,
   isStepSkipped,
   pruneSkippedSteps,
@@ -118,7 +118,13 @@ function OnboardingForm() {
       if (!editing) router.replace("/opportunities");
       return;
     }
-    if (!editing && guestSessionService.isComplete()) {
+    const session = guestSessionService.load();
+    if (
+      !editing &&
+      session &&
+      guestSessionService.isComplete() &&
+      hasMinimumPreviewProfile(session.draft)
+    ) {
       router.replace("/preview");
     }
   }, [status, router, editing]);
@@ -145,6 +151,26 @@ function OnboardingForm() {
    *  invited 模式下若草稿已完整且没有「暂不提供」项，同步持久化到服务端（跨浏览器恢复）。 */
   const goNext = () => {
     const finishedStep = view;
+    if (finishedStep >= TOTAL_PROFILE_STEPS && !hasMinimumPreviewProfile(draft)) {
+      const nextDraft = pruneSkippedSteps({
+        ...draft,
+        skippedSteps: (draft.skippedSteps ?? []).filter((step) => step !== 1),
+      });
+      setDraft(nextDraft);
+      try {
+        guestSessionService.save({ draft: nextDraft, step: 0 });
+        setSaveError(false);
+      } catch {
+        setSaveError(true);
+        return;
+      }
+      setRecentFeedback({
+        tone: "info",
+        message: "只需先选择一个能接受的地区，其余信息可以稍后再补。",
+      });
+      setView(1);
+      return;
+    }
     if (!persist(finishedStep)) return; // 保存失败：停在本步，输入不丢
     // 画像各步漏斗（模块 7）：完成（未跳过）的每步记一次
     track("profile_step_completed", "profile", {
@@ -194,6 +220,26 @@ function OnboardingForm() {
       props: { step: view, skipped: 1 },
     });
     if (view >= TOTAL_PROFILE_STEPS) {
+      if (!hasMinimumPreviewProfile(nextDraft)) {
+        const regionDraft = pruneSkippedSteps({
+          ...nextDraft,
+          skippedSteps: (nextDraft.skippedSteps ?? []).filter((step) => step !== 1),
+        });
+        setDraft(regionDraft);
+        try {
+          guestSessionService.save({ draft: regionDraft, step: 0 });
+          setSaveError(false);
+        } catch {
+          setSaveError(true);
+          return;
+        }
+        setRecentFeedback({
+          tone: "info",
+          message: "只需先选择一个能接受的地区，其余信息可以稍后再补。",
+        });
+        setView(1);
+        return;
+      }
       trackOncePerUser("profile_completed", "profile", {
         props: { stepCount: TOTAL_PROFILE_STEPS, skipped: true },
       });
@@ -219,7 +265,7 @@ function OnboardingForm() {
   const canContinue = isStepComplete(draft, view);
   const skippedHere = isStepSkipped(draft, view);
   const hasContentHere = stepHasContent(draft, view);
-  const limitations = buildProfileLimitations(draft);
+  const needsRegion = !hasMinimumPreviewProfile(draft);
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -347,22 +393,12 @@ function OnboardingForm() {
           )}
           {view === 5 && <StepCert draft={draft} onChange={updateDraft} />}
 
-          {/* 最后一步：汇总暂未提供项及其对结果的限制 */}
-          {view === TOTAL_PROFILE_STEPS && limitations.length > 0 && (
+          {/* 最后一步只提示唯一最低门槛，其余空缺在结果中按 UNKNOWN 处理。 */}
+          {view === TOTAL_PROFILE_STEPS && needsRegion && (
             <div className="mt-5 rounded-lg border border-warn/30 bg-warn-soft px-3 py-3">
-              <p className="text-sm font-medium text-warn">
-                有 {limitations.length} 项信息你暂未提供，结果会这样受限：
-              </p>
-              <ul className="mt-1.5 list-disc pl-5 space-y-1">
-                {limitations.map((item) => (
-                  <li key={item.step} className="text-xs leading-relaxed text-warn">
-                    <span className="font-medium">{item.label}：</span>
-                    {item.impact}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 text-xs text-warn">
-                这些都不是「不符合」；补填后结论会自动更新，也可现在返回修改。
+              <p className="text-sm font-medium text-warn">查看结果前，只需再补充一个地区</p>
+              <p className="mt-1 text-xs leading-relaxed text-warn">
+                我们需要知道你能接受哪里，才不会推荐你明确不去的岗位。学历、专业等信息仍可稍后补充。
               </p>
             </div>
           )}
@@ -388,7 +424,11 @@ function OnboardingForm() {
 
           <div className="mt-7 border-t border-line pt-5">
             <Button onClick={goNext} disabled={!canContinue} size="lg" fullWidth>
-              {view >= TOTAL_PROFILE_STEPS ? "查看筛选结果" : "下一步"}
+              {view >= TOTAL_PROFILE_STEPS
+                ? needsRegion
+                  ? "先补充地区，再看结果"
+                  : "查看筛选结果"
+                : "下一步"}
             </Button>
             {!canContinue && (
               <p className="mt-2 text-center text-xs text-ink-muted">

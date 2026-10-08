@@ -4,11 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Hero } from "@/components/ia/Hero";
-import { Disclosure, LayerHeading } from "@/components/ia/Layer";
+import { Disclosure } from "@/components/ia/Layer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
-import { dimensionLabel, daysUntil } from "@/lib/ia/labels";
+import { daysUntil } from "@/lib/ia/labels";
 import { useOpportunities } from "@/lib/opportunities/useOpportunities";
 import {
   buildListViewModel,
@@ -17,6 +17,7 @@ import {
 } from "@/lib/opportunities/list-view";
 import { OpportunityListItem } from "@/components/opportunities/OpportunityListItem";
 import { CoverageBanner } from "@/components/opportunities/CoverageBanner";
+import { DatasetScopeNotice } from "@/components/opportunities/DatasetScopeNotice";
 import { StatusMessage, StatusMessageRegion } from "@/components/ui/StatusMessage";
 
 const NO_PROFILE_COPY: Record<string, { title: string; description: string }> = {
@@ -89,6 +90,25 @@ export default function OpportunitiesPage() {
     view.needInfoGroups[0]?.units[0] ??
     view.manualReview[0] ??
     null;
+  const actionable = [
+    ...(view.priority ? [view.priority] : []),
+    ...view.otherPreliminary,
+    ...view.needInfoGroups.flatMap((group) => group.units),
+    ...view.manualReview,
+  ].filter(
+    (unit, index, units) =>
+      units.findIndex((candidate) => candidate.unit.id === unit.unit.id) === index,
+  );
+  const featured = actionable[0] ?? null;
+  const secondary = actionable.slice(1);
+  const visibleSecondary = secondary.slice(0, 3);
+  const collapsedSecondary = secondary.slice(3);
+  const hasDemo = [
+    ...actionable,
+    ...view.regionOutOfScope,
+    ...view.notEligible,
+    ...view.closed,
+  ].some((unit) => unit.announcement.dataset === "demo");
   const heroConclusion = view.priority
     ? view.conclusion
     : view.needInfoGroups.length > 0
@@ -157,6 +177,7 @@ export default function OpportunitiesPage() {
       />
 
       <CoverageBanner coverage={view.coverage} />
+      <DatasetScopeNotice hasDemo={hasDemo} />
 
       {view.uncoveredRegions.length > 0 && (
         <div
@@ -207,33 +228,30 @@ export default function OpportunitiesPage() {
         </p>
       )}
 
-      {view.priority && (
+      {featured && (
         <div id="priority-opportunity" className="scroll-mt-20 space-y-2">
-          <LayerHeading
-            title={
-              view.priority.unit.id === view.primaryTargetUnitId
-                ? "重点准备的机会"
-                : "优先机会"
-            }
-          />
+          <h2 className="text-sm font-semibold text-ink">
+            {featured.unit.id === view.primaryTargetUnitId ? "重点准备的机会" : "优先查看"}
+          </h2>
           <OpportunityListItem
-            unit={view.priority}
+            unit={featured}
             evaluatedAt={evaluatedAt}
             priority
-            followBusy={followBusyId === view.priority.unit.id}
+            followBusy={followBusyId === featured.unit.id}
             onToggleFollow={toggleFollow}
           />
         </div>
       )}
 
-      {view.otherPreliminary.length > 0 && (
-        <section className="space-y-3">
-          <LayerHeading title="其他初步符合" count={view.otherPreliminary.length} />
-          {view.otherPreliminary.map((unit) => (
+      {visibleSecondary.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="text-sm font-semibold text-ink">其他值得查看</h2>
+          {visibleSecondary.map((unit) => (
             <OpportunityListItem
               key={unit.unit.id}
               unit={unit}
               evaluatedAt={evaluatedAt}
+              compact
               followBusy={followBusyId === unit.unit.id}
               onToggleFollow={toggleFollow}
             />
@@ -241,40 +259,21 @@ export default function OpportunitiesPage() {
         </section>
       )}
 
-      {view.needInfoGroups.map((group) => (
-        <section key={group.dimension} className="space-y-3">
-          <LayerHeading
-            title={`补充${dimensionLabel(group.dimension)}信息后判断`}
-            count={group.count}
-          />
-          {group.units.map((unit) => (
+      {collapsedSecondary.length > 0 && (
+        <Disclosure title="查看其余结果" count={collapsedSecondary.length}>
+          <div className="space-y-2">
+          {collapsedSecondary.map((unit) => (
             <OpportunityListItem
               key={unit.unit.id}
               unit={unit}
               evaluatedAt={evaluatedAt}
+              compact
               followBusy={followBusyId === unit.unit.id}
               onToggleFollow={toggleFollow}
             />
           ))}
-        </section>
-      ))}
-
-      {view.manualReview.length > 0 && (
-        <section className="space-y-3">
-          <LayerHeading
-            title="建议向招聘单位确认"
-            count={view.manualReview.length}
-          />
-          {view.manualReview.map((unit) => (
-            <OpportunityListItem
-              key={unit.unit.id}
-              unit={unit}
-              evaluatedAt={evaluatedAt}
-              followBusy={followBusyId === unit.unit.id}
-              onToggleFollow={toggleFollow}
-            />
-          ))}
-        </section>
+          </div>
+        </Disclosure>
       )}
 
       {/* 模块 7.5：用户端不显示 AI 初核待人工复核记录（real）。

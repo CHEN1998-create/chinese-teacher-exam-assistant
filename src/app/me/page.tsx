@@ -221,14 +221,15 @@ function ProfileCard() {
     },
     {
       label: "学历 / 学位",
-      value: [
-        CREDENTIAL_LEVEL_OPTIONS.find((o) => o.value === profile.educationLevel)?.label,
-        profile.degree && profile.degree !== "none"
-          ? { bachelor: "学士", master: "硕士", doctorate: "博士" }[profile.degree]
-          : null,
-      ]
-        .filter(Boolean)
-        .join(" / "),
+      value:
+        [
+          CREDENTIAL_LEVEL_OPTIONS.find((o) => o.value === profile.educationLevel)?.label,
+          profile.degree && profile.degree !== "none"
+            ? { bachelor: "学士", master: "硕士", doctorate: "博士" }[profile.degree]
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" / ") || "未填写",
     },
     { label: "毕业证专业", value: profile.majorFullName || "未填写" },
     {
@@ -244,7 +245,7 @@ function ProfileCard() {
     {
       label: "教师资格",
       value:
-        TEACHER_CERT_STATUS_OPTIONS.find((o) => o.value === profile.teacherCert.status)?.label ??
+        TEACHER_CERT_STATUS_OPTIONS.find((o) => o.value === profile.teacherCert?.status)?.label ??
         "未填写",
     },
     {
@@ -255,9 +256,10 @@ function ProfileCard() {
   ];
   const missingGraduationDate = !profile.graduationDate;
   const regionSummary = rows[0]?.value ?? "已填写意向地区";
+  const teacherCert = profile.teacherCert;
   const targetSummary = [
-    profile.teacherCert.subject ? subjectLabel(profile.teacherCert.subject) : null,
-    profile.teacherCert.stage ? stageLabel(profile.teacherCert.stage) : null,
+    teacherCert?.subject ? subjectLabel(teacherCert.subject) : null,
+    teacherCert?.stage ? stageLabel(teacherCert.stage) : null,
   ]
     .filter(Boolean)
     .join(" · ");
