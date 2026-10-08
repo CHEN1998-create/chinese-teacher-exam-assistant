@@ -11,6 +11,7 @@ import { useOpportunities } from "@/lib/opportunities/useOpportunities";
 import {
   buildListViewModel,
   formatEvaluatedAt,
+  listCardNextStepLabel,
 } from "@/lib/opportunities/list-view";
 import { OpportunityListItem } from "@/components/opportunities/OpportunityListItem";
 import { CoverageBanner } from "@/components/opportunities/CoverageBanner";
@@ -64,6 +65,17 @@ export default function OpportunitiesPage() {
 
   const view = buildListViewModel(state.data, state.profile);
   const evaluatedAt = view.meta.evaluatedAt;
+  const suggested =
+    view.priority ??
+    view.otherPreliminary[0] ??
+    view.needInfoGroups[0]?.units[0] ??
+    view.manualReview[0] ??
+    null;
+  const heroConclusion = view.priority
+    ? view.conclusion
+    : view.needInfoGroups.length > 0
+      ? `${view.validCount} 个机会还差信息就能完成判断`
+      : view.conclusion;
 
   // 最近的报名截止（只在初步符合中找）：7 天内给出必须级风险提示
   let risk: { tone: "must" | "info"; text: string } | null = null;
@@ -90,14 +102,14 @@ export default function OpportunitiesPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-2">
       <Hero
-        meta={`已发布公告即时匹配 · 有效机会 ${view.validCount} 个 · 评估于 ${formatEvaluatedAt(evaluatedAt)}`}
-        conclusion={view.conclusion}
+        meta={`机会结论 · ${formatEvaluatedAt(evaluatedAt)} 更新`}
+        conclusion={heroConclusion}
         risk={risk}
         action={
-          view.priority
+          suggested
             ? {
-                label: "查看优先机会的依据与下一步",
-                href: `/opportunities/${view.priority.unit.id}`,
+                label: listCardNextStepLabel(suggested),
+                href: `/opportunities/${suggested.unit.id}`,
               }
             : undefined
         }
@@ -167,7 +179,6 @@ export default function OpportunitiesPage() {
             unit={view.priority}
             evaluatedAt={evaluatedAt}
             priority
-            defaultExpanded
             followBusy={followBusyId === view.priority.unit.id}
             onToggleFollow={toggleFollow}
           />

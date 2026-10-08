@@ -127,15 +127,6 @@ function TaskDefinition({ label, value }: { label: string; value: string }) {
   );
 }
 
-function LayerHeading({ title, note }: { title: string; note?: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <h3 className="text-base font-bold text-ink">{title}</h3>
-      {note && <span className="text-xs text-ink-muted">{note}</span>}
-    </div>
-  );
-}
-
 export default function StudyPage() {
   const { status, session } = useCurrentUser();
   const [goals, setGoals] = useState<GoalsResponse | null>(null);
@@ -232,26 +223,38 @@ export default function StudyPage() {
 /** 门禁一：无主要目标 —— 只给明确下一步，不生成计划 */
 function NoPrimaryGate({ nextStep }: { nextStep: string }) {
   return (
-    <>
-      <Card className="text-center py-8">
-        <div className="w-14 h-14 bg-canvas rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-2xl">🎯</span>
-        </div>
-        <h2 className="text-xl font-bold text-ink">先选择一个主要备考目标</h2>
-        <p className="text-sm text-ink-muted mt-2 leading-relaxed">{nextStep}</p>
-        <Link
-          href="/opportunities"
-          className="inline-flex h-11 items-center justify-center rounded-xl bg-brand px-6 text-sm font-medium text-white hover:bg-brand-strong transition-colors mt-5"
+    <Card className="overflow-hidden rounded-3xl border-brand/15 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+        <svg
+          aria-hidden="true"
+          className="h-5 w-5"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
         >
-          去选择主要目标
-        </Link>
-      </Card>
-      <Card className="bg-canvas">
-        <p className="text-xs text-ink-muted leading-relaxed">
-          没有主要目标前不会生成备考计划，避免在错误方向上安排时间。其他已关注的机会会作为备选目标保留。
-        </p>
-      </Card>
-    </>
+          <circle cx="12" cy="12" r="8" strokeWidth="2" />
+          <circle cx="12" cy="12" r="3" strokeWidth="2" />
+          <path strokeLinecap="round" strokeWidth="2" d="M12 2v3m0 14v3M2 12h3m14 0h3" />
+        </svg>
+      </div>
+      <p className="mt-5 text-xs font-semibold tracking-wide text-brand">备考结论</p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
+        先确定一个主要备考目标
+      </h2>
+      <p className="mt-2 text-sm leading-relaxed text-ink-muted">{nextStep}</p>
+      <Link
+        href="/opportunities"
+        className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(57,115,230,0.2)] transition-colors hover:bg-brand-strong"
+      >
+        去选择主要目标
+        <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m9 18 6-6-6-6" />
+        </svg>
+      </Link>
+      <p className="mt-3 text-center text-xs text-ink-muted">
+        选定前不会生成计划，其他关注机会仍会保留
+      </p>
+    </Card>
   );
 }
 
@@ -288,15 +291,14 @@ function ExamUnverifiedGate({
   };
 
   return (
-    <>
-      <Card className="border-brand/30 bg-brand-soft/40">
-        <Badge variant="info">考试内容核对</Badge>
+    <Card className="rounded-3xl border-brand/20 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+        <p className="text-xs font-semibold tracking-wide text-brand">下一步</p>
         {reason === "version_changed" && (
-          <p className="mt-2 text-sm text-warn">
+          <p className="mt-3 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">
             该机会的公告已更新为新版本，需要重新核对考试内容后才能继续。
           </p>
         )}
-        <h2 className="text-lg font-bold text-ink mt-2">{verifyTask.title}</h2>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{verifyTask.title}</h2>
         <p className="text-sm text-ink-muted mt-1">{goal.unitName}</p>
         <dl className="mt-3 divide-y divide-line">
           <TaskDefinition label="做什么" value={verifyTask.what} />
@@ -305,13 +307,14 @@ function ExamUnverifiedGate({
           <TaskDefinition label="完成标准" value={verifyTask.doneCriteria} />
           <TaskDefinition label="为什么先做" value={verifyTask.whyFirst} />
         </dl>
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4">
           {officialLink ? (
-            <a href={officialLink} target="_blank" rel="noreferrer noopener" className="inline-flex h-10 items-center justify-center rounded-xl border border-line px-4 text-sm font-medium text-ink hover:bg-surface transition-colors">
-              打开官方公告（新窗口）
+            <a href={officialLink} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline">
+              先打开官方公告核对
+              <span aria-hidden="true">↗</span>
             </a>
           ) : <p className="text-xs text-warn">虚构演示机会，无官方公告链接。</p>}
-          <Button variant="primary" onClick={handleConfirm}>
+          <Button className="mt-4 w-full" variant="primary" onClick={handleConfirm}>
             {officialLink ? "我已核对，确认考试内容" : "继续演示：确认示例考情"}
           </Button>
         </div>
@@ -320,13 +323,10 @@ function ExamUnverifiedGate({
             <p className="text-sm text-danger">{error}</p>
           </div>
         )}
-      </Card>
-      <Card className="bg-canvas">
-        <p className="text-xs text-ink-muted leading-relaxed">
-          未确认考试内容前不会生成看似精确的计划。确认只对当前公告版本有效；公告出新版本后需要重新核对。
+        <p className="mt-3 text-center text-xs leading-relaxed text-ink-muted">
+          确认仅对当前公告版本有效，公告更新后会再次提醒
         </p>
-      </Card>
-    </>
+    </Card>
   );
 }
 
@@ -477,10 +477,10 @@ function ReadySection({
   let firstScreen: ReactNode;
   if (!currentPlan) {
     firstScreen = readiness && !readiness.ready ? (
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader
-          title="还不能生成学习计划"
-          description="以下信息缺失时不会生成假精确的计划，请先补全"
+          title="还差一点，暂时不能生成计划"
+          description="先补全下面的信息"
         />
         <ul className="space-y-2 mt-2">
           {readiness.missing.map((m, i) => (
@@ -490,27 +490,24 @@ function ReadySection({
             </li>
           ))}
         </ul>
-        <p className="text-xs text-ink-muted mt-3">
-          提示：新增资料后，需在资料页的「资料怎么用」里点一次「分析资料怎么用」，计划才会使用你的资料。
-        </p>
-        <div className="flex gap-2 mt-4">
+        <div className="mt-4">
           <Link
             href="/materials"
-            className="inline-flex h-10 items-center justify-center rounded-xl bg-brand px-4 text-sm font-medium text-white hover:bg-brand-strong transition-colors"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
           >
             去补全资料
           </Link>
         </div>
       </Card>
     ) : (
-      <Card>
+      <Card className="rounded-3xl border-brand/15 shadow-[0_12px_36px_rgba(30,64,120,0.06)]">
+        <p className="text-xs font-semibold tracking-wide text-brand">备考结论</p>
         <CardHeader
-          title="生成首个 7 天计划"
+          title="可以开始安排这 7 天了"
           description={`主要目标：${goal.unitName}`}
         />
         <p className="text-sm text-ink-muted mt-2">
-          系统将根据你的考试内容、已有资料与可用时间，生成一份只覆盖 7 天的可执行安排。
-          生成后为草稿状态，确认后开始执行；今天最重要的一项任务会显示在这里。
+          按考试内容、已有资料和可用时间生成草稿，确认后开始执行。
         </p>
         {readiness?.warnings && readiness.warnings.length > 0 && (
           <div className="mt-3 p-3 bg-warn-soft rounded-lg text-sm text-warn">
@@ -524,14 +521,15 @@ function ReadySection({
             {generateError}
           </div>
         )}
-        <Button className="mt-4" onClick={handleGenerate}>
-          生成草稿计划
+        <Button className="mt-4 w-full" onClick={handleGenerate}>
+          生成我的 7 天计划
         </Button>
       </Card>
     );
   } else if (currentPlan.status === "draft") {
     firstScreen = (
-      <Card className="border-warn/30 bg-warn-soft/40">
+      <Card className="rounded-3xl border-brand/20">
+        <p className="mb-2 text-xs font-semibold tracking-wide text-brand">下一步</p>
         <CardHeader
           title="计划草稿待确认"
           description={`${currentPlan.startDate} 至 ${currentPlan.endDate} · 只覆盖 7 天`}
@@ -543,11 +541,11 @@ function ReadySection({
             {generateError}
           </div>
         )}
-        <div className="flex flex-wrap gap-2 mt-4">
-          <Button variant="primary" onClick={handleConfirmPlan}>
+        <div className="mt-4 space-y-2">
+          <Button className="w-full" variant="primary" onClick={handleConfirmPlan}>
             确认计划，开始执行
           </Button>
-          <Button variant="outline" onClick={handleRegenerate}>
+          <Button className="w-full" variant="ghost" onClick={handleRegenerate}>
             重新生成草稿
           </Button>
         </div>
@@ -555,15 +553,13 @@ function ReadySection({
     );
   } else if (planEnded) {
     firstScreen = (
-      <Card className="text-center py-8">
-        <div className="w-14 h-14 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-2xl">🏁</span>
-        </div>
+      <Card className="rounded-3xl text-center py-8">
+        <p className="text-xs font-semibold tracking-wide text-success">本周结论</p>
         <h2 className="text-xl font-bold text-ink">这 7 天的安排结束了</h2>
         <p className="text-sm text-ink-muted mt-2">
           {formatDateWithWeekday(currentPlan.startDate)} — {formatDateWithWeekday(currentPlan.endDate)}
         </p>
-        <Button className="mt-5" onClick={handleGenerate}>
+        <Button className="mt-5 w-full" onClick={handleGenerate}>
           安排下一个 7 天
         </Button>
       </Card>
@@ -576,10 +572,8 @@ function ReadySection({
         onDismiss={() => setNextStep(null)}
       />
     ) : (
-      <Card className="text-center py-8">
-        <div className="w-14 h-14 bg-brand-soft rounded-full flex items-center justify-center mx-auto mb-4">
-          <span className="text-2xl">🌤️</span>
-        </div>
+      <Card className="rounded-3xl text-center py-8">
+        <p className="text-xs font-semibold tracking-wide text-brand">今日结论</p>
         <h2 className="text-xl font-bold text-ink">今天没有安排任务</h2>
         <p className="text-sm text-ink-muted mt-2">
           当前安排从 {currentPlan.startDate} 开始，今天可以休息或自由复习。
@@ -597,10 +591,8 @@ function ReadySection({
 
     if (pendingTasks.length === 0) {
       firstScreen = (
-        <Card className="text-center py-8">
-          <div className="w-14 h-14 bg-success-soft rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl">🎉</span>
-          </div>
+        <Card className="rounded-3xl text-center py-8">
+          <p className="text-xs font-semibold tracking-wide text-success">今日结论</p>
           <h2 className="text-xl font-bold text-ink">今天的任务都完成了</h2>
           <p className="text-sm text-ink-muted mt-2">
             共 {sortedTasks.length} 项
@@ -614,13 +606,14 @@ function ReadySection({
       const sourceUrl = sourceUrlOf(currentTask);
       const blocked = currentTask.executable === false;
       firstScreen = (
-        <Card className="border-brand/30 bg-brand-soft/40">
+        <Card className="rounded-3xl border-brand/20 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+          <p className="text-xs font-semibold tracking-wide text-brand">今天先做这一项</p>
           {todayPlan.isMinimumViable && (
-            <Badge variant="warning">今天时间少，先完成这一项就好</Badge>
+            <div className="mt-2"><Badge variant="warning">今天时间少，完成这一项就好</Badge></div>
           )}
-          <h2 className="text-lg font-bold text-ink mt-2">{currentTask.title}</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{currentTask.title}</h2>
           <p className="text-xs text-ink-muted mt-1">
-            {getGreeting()}，今天先做这一项 · 已完成 {doneCount}/{sortedTasks.length} 项
+            {getGreeting()} · 约 {formatTime(currentTask.estimatedTime)} · 已完成 {doneCount}/{sortedTasks.length} 项
           </p>
 
           {blocked && (
@@ -629,11 +622,7 @@ function ReadySection({
             </div>
           )}
 
-          <dl className="mt-3 divide-y divide-line">
-            <TaskDefinition
-              label="做什么"
-              value={currentTask.title}
-            />
+          <dl className="mt-3 divide-y divide-line border-y border-line">
             <TaskDefinition
               label="用什么"
               value={
@@ -644,7 +633,6 @@ function ReadySection({
                   : "暂无可打开的资料入口"
               }
             />
-            <TaskDefinition label="预计多久" value={`约 ${formatTime(currentTask.estimatedTime)}`} />
             <TaskDefinition label="完成标准" value={currentTask.completionCriteria} />
             <TaskDefinition label="为什么先做" value={currentTask.arrangementReason} />
           </dl>
@@ -654,24 +642,45 @@ function ReadySection({
               target="_blank"
               rel="noreferrer noopener"
               onClick={() => recordTaskStarted(currentTask, "open_source")}
-              className="text-sm text-brand hover:underline"
+              className="mt-4 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-5 text-sm font-semibold text-white shadow-[0_8px_20px_rgba(57,115,230,0.2)] transition-colors hover:bg-brand-strong"
             >
-              打开「{source}」
+              开始任务
+              <span aria-hidden="true">↗</span>
             </a>
           )}
 
-          <div className="mt-5">
-            <p className="text-xs text-ink-muted mb-2">做完后来点一下：</p>
-            <QuickFeedbackPanel
-              key={currentTask.id}
-              task={currentTask}
-              onSubmitted={(status) => {
-                recordTaskStarted(currentTask, "feedback");
-                handleSubmitted(status);
-              }}
-              onAvailableTimeChange={handleAvailableTimeChange}
-            />
-          </div>
+          {sourceUrl ? (
+            <details className="group mt-4 rounded-xl border border-line bg-canvas/60">
+              <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">
+                完成后反馈进度
+                <span className="text-ink-muted transition-transform group-open:rotate-180">⌄</span>
+              </summary>
+              <div className="border-t border-line p-3">
+                <QuickFeedbackPanel
+                  key={currentTask.id}
+                  task={currentTask}
+                  onSubmitted={(status) => {
+                    recordTaskStarted(currentTask, "feedback");
+                    handleSubmitted(status);
+                  }}
+                  onAvailableTimeChange={handleAvailableTimeChange}
+                />
+              </div>
+            </details>
+          ) : (
+            <div className="mt-5">
+              <p className="mb-2 text-xs text-ink-muted">反馈当前进度</p>
+              <QuickFeedbackPanel
+                key={currentTask.id}
+                task={currentTask}
+                onSubmitted={(status) => {
+                  recordTaskStarted(currentTask, "feedback");
+                  handleSubmitted(status);
+                }}
+                onAvailableTimeChange={handleAvailableTimeChange}
+              />
+            </div>
+          )}
         </Card>
       );
     }
@@ -704,11 +713,19 @@ function ReadySection({
       <section aria-label="今天">{firstScreen}</section>
 
       {/* ===== 第二层：本周其余任务、重排与复盘 ===== */}
-      <section aria-label="本周" className="space-y-3 pt-2 border-t border-line">
-        <LayerHeading
-          title="本周其余安排"
-          note={currentPlan ? `${currentPlan.startDate} 至 ${currentPlan.endDate}` : "生成计划后显示"}
-        />
+      <details aria-label="本周" className="group rounded-2xl border border-line bg-surface">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-sm font-semibold text-ink">查看本周安排</span>
+            <span className="mt-0.5 block text-xs text-ink-muted">
+              {currentPlan ? `${currentPlan.startDate} 至 ${currentPlan.endDate}` : "生成计划后显示"}
+            </span>
+          </span>
+          <svg aria-hidden="true" className="h-4 w-4 text-ink-muted transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+          </svg>
+        </summary>
+        <div className="space-y-3 border-t border-line p-4">
 
         {nextStep && (todayPlan?.tasks.length ?? 0) > 0 && (
           <NextStepCard
@@ -794,7 +811,8 @@ function ReadySection({
             </ul>
           )}
         </Card>
-      </section>
+        </div>
+      </details>
     </>
   );
 }

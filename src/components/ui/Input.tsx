@@ -31,8 +31,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           className={cn(
-            "w-full h-11 px-3 rounded-lg border border-line bg-surface text-sm text-ink placeholder:text-ink-muted/70",
-            "focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent",
+            "h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink placeholder:text-ink-muted/60 transition-colors",
+            "hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10",
             "disabled:bg-canvas disabled:text-ink-muted disabled:cursor-not-allowed",
             error && "border-danger focus:ring-danger",
             className
@@ -76,8 +76,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           ref={ref}
           id={selectId}
           className={cn(
-            "w-full h-11 px-3 rounded-lg border border-line bg-surface text-sm text-ink",
-            "focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent",
+            "h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink transition-colors",
+            "hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10",
             "disabled:bg-canvas disabled:text-ink-muted disabled:cursor-not-allowed",
             error && "border-danger focus:ring-danger",
             className
@@ -127,8 +127,8 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={areaId}
           className={cn(
-            "w-full min-h-[100px] px-3 py-2 rounded-lg border border-line bg-surface text-sm text-ink placeholder:text-ink-muted/70",
-            "focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent",
+            "min-h-[100px] w-full rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-ink placeholder:text-ink-muted/60 transition-colors",
+            "hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10",
             "disabled:bg-canvas disabled:text-ink-muted disabled:cursor-not-allowed",
             error && "border-danger focus:ring-danger",
             className

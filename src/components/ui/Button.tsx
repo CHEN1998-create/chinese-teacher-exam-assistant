@@ -48,17 +48,17 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:opacity-50 disabled:pointer-events-none";
+      "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:pointer-events-none disabled:opacity-45";
 
     const variants = {
       primary:
-        "bg-brand text-white hover:bg-brand-strong focus-visible:ring-brand",
+        "bg-brand text-white shadow-[0_6px_16px_rgba(57,115,230,0.2)] hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_8px_20px_rgba(57,115,230,0.24)] active:translate-y-0 active:shadow-sm focus-visible:ring-brand",
       secondary:
-        "bg-brand-soft text-brand hover:bg-brand-soft/70 focus-visible:ring-brand",
+        "bg-brand-soft text-brand hover:bg-[#e2ecff] focus-visible:ring-brand",
       outline:
-        "border border-line bg-surface text-ink hover:bg-canvas focus-visible:ring-brand",
+        "border border-line bg-surface text-ink hover:border-brand/30 hover:bg-brand-soft/50 focus-visible:ring-brand",
       ghost:
-        "bg-transparent text-ink hover:bg-brand-soft focus-visible:ring-brand",
+        "bg-transparent text-ink hover:bg-brand-soft/80 focus-visible:ring-brand",
       link:
         "bg-transparent text-brand underline-offset-4 hover:underline focus-visible:ring-brand px-0 h-auto",
       danger:
@@ -66,9 +66,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     };
 
     const sizes = {
-      sm: "h-8 px-3 text-sm",
+      sm: "h-9 px-3 text-sm",
       md: "h-11 px-4 text-sm",
-      lg: "h-12 px-6 text-base",
+      lg: "h-[52px] px-6 text-base",
     };
 
     const isLink = variant === "link";

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { StatusMessage, StatusMessageRegion } from "@/components/ui/StatusMessage";
+import { StatusMessage } from "@/components/ui/StatusMessage";
 import { useCurrentUser, AUTH_MODE } from "@/lib/auth";
 import {
   CITY_OPTIONS,
@@ -65,6 +65,15 @@ const STEP_TITLES = [
   "你什么时候毕业？现在是什么状态？",
   "你的教师资格情况？",
 ];
+
+const STEP_LABELS = ["地区偏好", "学历学位", "专业信息", "毕业情况", "教师资格"];
+
+const STEP_FEEDBACK: Record<number, string> = {
+  1: "地区偏好已记住，接下来核对学历条件",
+  2: "学历学位已记住，接下来核对专业要求",
+  3: "专业信息已记住，接下来判断毕业身份",
+  4: "毕业情况已记住，最后核对教师资格",
+};
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -149,7 +158,7 @@ export default function OnboardingPage() {
     } else {
       setRecentFeedback({
         tone: "success",
-        message: `第 ${finishedStep} 组已保存，继续填写下一组。`,
+        message: STEP_FEEDBACK[finishedStep],
       });
       setView(finishedStep + 1);
     }
@@ -187,7 +196,7 @@ export default function OnboardingPage() {
     } else {
       setRecentFeedback({
         tone: "info",
-        message: `已暂不提供第 ${view} 组；结果会标注限制，不会判不符合。`,
+        message: `已跳过${STEP_LABELS[view - 1]}，结果中会明确标出影响`,
       });
       setView(view + 1);
     }
@@ -209,11 +218,11 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-canvas">
-      <div className="mx-auto w-full max-w-xl px-4 py-6">
-        <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="mx-auto w-full max-w-2xl px-4 py-5 sm:px-6 sm:py-8">
+        <div className="mb-5 flex items-center justify-between gap-2">
           <Link
             href="/"
-            className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
+            className="inline-flex h-10 items-center gap-1 rounded-lg px-1 text-sm text-ink-muted transition-colors hover:text-ink"
           >
             <svg
               aria-hidden="true"
@@ -223,16 +232,21 @@ export default function OnboardingPage() {
             >
               <path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414L6 10l5.293-5.293a1 1 0 011.414 0z" />
             </svg>
-            返回首页
+            退出
           </Link>
-          <span className="text-xs text-ink-muted">
-            第 {view} 组，共 {TOTAL_PROFILE_STEPS} 组
+          <span className="rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted shadow-sm ring-1 ring-line">
+            {view} / {TOTAL_PROFILE_STEPS}
           </span>
         </div>
 
-        {/* 进度条：墨蓝=已完成，琥珀=已选暂不提供，灰=未到达 */}
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-sm font-semibold text-ink">资格预筛</p>
+          <p className="text-xs text-ink-muted">{STEP_LABELS[view - 1]}</p>
+        </div>
+
+        {/* 进度条：蓝=已完成，琥珀=已选暂不提供，灰=未到达 */}
         <div
-          className="mb-6 flex gap-2"
+          className="mb-5 flex gap-2"
           role="progressbar"
           aria-valuemin={1}
           aria-valuemax={TOTAL_PROFILE_STEPS}
@@ -246,7 +260,7 @@ export default function OnboardingPage() {
               <div
                 key={i}
                 title={isSkipped ? `第 ${stepNo} 组：暂不提供` : undefined}
-                className={`h-1.5 flex-1 rounded-full transition-colors ${
+                className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
                   isSkipped
                     ? "bg-warn"
                     : i < view
@@ -258,13 +272,26 @@ export default function OnboardingPage() {
           })}
         </div>
 
-        <Card>
-          <h1 className="mb-1 text-lg font-bold text-ink">{STEP_TITLES[view - 1]}</h1>
+        {recentFeedback && (
+          <StatusMessage
+            tone={recentFeedback.tone}
+            message={recentFeedback.message}
+            duration={4000}
+            onDismiss={() => setRecentFeedback(null)}
+            className="mb-4 shadow-none"
+          />
+        )}
+
+        <Card padding="lg" className="border-white/80 sm:p-8">
+          <p className="mb-2 text-xs font-semibold tracking-wide text-brand">第 {view} 步</p>
+          <h1 className="text-xl font-bold leading-snug tracking-[-0.02em] text-ink sm:text-2xl">
+            {STEP_TITLES[view - 1]}
+          </h1>
           {/* 短提示：每组只先说一句"这条信息用来做什么" */}
-          <p className="text-sm leading-relaxed text-ink-muted">{STEP_PURPOSE[view]}</p>
+          <p className="mt-2 text-sm leading-6 text-ink-muted">{STEP_PURPOSE[view]}</p>
 
           {/* "为什么问这个？"长解释按需展开（模块 0A 第七节） */}
-          <div className="mt-3">
+          <div className="mt-2">
             <Disclosure
               trigger="为什么问这个？"
               contentClassName="text-sm leading-relaxed text-ink-muted"
@@ -354,13 +381,13 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          <div className="mt-6">
+          <div className="mt-7 border-t border-line pt-5">
             <Button onClick={goNext} disabled={!canContinue} size="lg" fullWidth>
-              {view >= TOTAL_PROFILE_STEPS ? "查看初步匹配结果" : "继续核对下一项"}
+              {view >= TOTAL_PROFILE_STEPS ? "查看我的预筛结果" : "下一步"}
             </Button>
             {!canContinue && (
               <p className="mt-2 text-center text-xs text-ink-muted">
-                完成本页问题后继续；如果暂时不确定，也可以选择下方「暂不提供」
+                选完本页即可继续，也可以暂时跳过
               </p>
             )}
           </div>
@@ -370,7 +397,7 @@ export default function OnboardingPage() {
             <button
               type="button"
               onClick={skipCurrentStep}
-              className="mt-3 w-full text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline"
+              className="mt-3 min-h-10 w-full text-sm text-ink-muted underline-offset-4 hover:text-ink hover:underline"
             >
               {STEP_SKIP_COPY[view].action}
             </button>
@@ -389,24 +416,16 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        <p className="mt-6 text-center text-xs leading-relaxed text-ink-muted">
-          当前输入仅保存在这台设备（7 天有效），不会上传到服务器；可随时返回修改。
+        <p className="mt-5 flex flex-wrap items-center justify-center gap-x-1 text-center text-xs leading-relaxed text-ink-muted">
+          <svg aria-hidden="true" className="mr-0.5 h-3.5 w-3.5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <rect x="4.5" y="8.5" width="11" height="8" rx="2" />
+            <path d="M7 8.5V6a3 3 0 0 1 6 0v2.5" />
+          </svg>
+          答案仅存在本机，7 天后清除
           <Link href="/login" className="ml-1 text-brand hover:underline">
-            已有账号？直接登录
+            已有账号？登录
           </Link>
         </p>
-
-        {/* 完成一组后的非阻塞即时反馈 */}
-        <StatusMessageRegion>
-          {recentFeedback && (
-            <StatusMessage
-              tone={recentFeedback.tone}
-              message={recentFeedback.message}
-              duration={3000}
-              onDismiss={() => setRecentFeedback(null)}
-            />
-          )}
-        </StatusMessageRegion>
       </div>
     </div>
   );
@@ -457,9 +476,6 @@ function StepRegions({
 
   return (
     <div className="mt-4">
-      <p className="text-sm text-slate-500 mb-4">
-        可以填多个地区；招聘只按你能接受的地区筛选，不会推荐你明确不去的地方。
-      </p>
       <div className="space-y-4">
         {rows.map((region, index) => {
           const provinceCode = region.code.endsWith("0000")
@@ -468,16 +484,16 @@ function StepRegions({
           const cityCode = region.code.endsWith("0000") ? "" : region.code;
           const cities = CITY_OPTIONS[provinceCode] ?? [];
           return (
-            <div key={index} className="rounded-xl border border-slate-200 p-3 space-y-3">
+            <div key={index} className="space-y-4 rounded-2xl border border-line bg-canvas/60 p-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <label className="block">
-                  <span className="text-xs text-slate-500">省份</span>
+                  <span className="text-xs font-medium text-ink-muted">省份</span>
                   <select
                     value={provinceCode}
                     onChange={(e) =>
                       updateRow(index, regionFromSelect(e.target.value, "", region.level))
                     }
-                    className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1.5 h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-base text-ink transition-colors hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 sm:text-sm"
                   >
                     {PROVINCE_OPTIONS.map((p) => (
                       <option key={p.code} value={p.code}>
@@ -487,13 +503,13 @@ function StepRegions({
                   </select>
                 </label>
                 <label className="block">
-                  <span className="text-xs text-slate-500">城市（不选=全省均可）</span>
+                  <span className="text-xs font-medium text-ink-muted">城市（不选即全省）</span>
                   <select
                     value={cityCode}
                     onChange={(e) =>
                       updateRow(index, regionFromSelect(provinceCode, e.target.value, region.level))
                     }
-                    className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="mt-1.5 h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-base text-ink transition-colors hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 sm:text-sm"
                   >
                     <option value="">全省均可</option>
                     {cities.map((c) => (
@@ -505,8 +521,8 @@ function StepRegions({
                 </label>
               </div>
               <div>
-                <span className="text-xs text-slate-500">接受程度</span>
-                <div className="mt-1 flex flex-wrap gap-2">
+                <span className="text-xs font-medium text-ink-muted">接受程度</span>
+                <div className="mt-1.5 grid grid-cols-3 gap-2">
                   {REGION_LEVEL_OPTIONS.map((opt) => (
                     <button
                       key={opt.value}
@@ -515,10 +531,10 @@ function StepRegions({
                         updateRow(index, regionFromSelect(provinceCode, cityCode, opt.value))
                       }
                       title={opt.hint}
-                      className={`min-h-11 px-3 py-2 rounded-lg border text-base sm:text-sm transition-colors ${
+                      className={`min-h-11 rounded-xl border px-2 py-2 text-sm font-medium transition-all ${
                         region.level === opt.value
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-slate-200 text-slate-600 hover:border-slate-300"
+                          ? "border-brand bg-brand-soft text-brand ring-1 ring-brand/10"
+                          : "border-line bg-surface text-ink-muted hover:border-brand/30 hover:text-ink"
                       }`}
                     >
                       {opt.label}
@@ -530,7 +546,7 @@ function StepRegions({
                 <button
                   type="button"
                   onClick={() => removeRow(index)}
-                  className="text-xs text-slate-400 hover:text-red-600"
+                  className="text-xs text-ink-muted hover:text-danger"
                 >
                   删除这个地区
                 </button>
@@ -539,11 +555,11 @@ function StepRegions({
           );
         })}
         {rows.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-300 p-4 text-center">
+          <div className="rounded-2xl border border-dashed border-brand/30 bg-brand-soft/30 p-5 text-center">
             <button
               type="button"
               onClick={() => onChange([{ code: "330000", province: "浙江省", level: "required" }])}
-              className="text-sm text-blue-600 hover:underline"
+              className="font-medium text-brand hover:underline"
             >
               添加第一个地区
             </button>
@@ -554,7 +570,7 @@ function StepRegions({
         <button
           type="button"
           onClick={addRow}
-          className="mt-3 text-sm text-blue-600 hover:underline"
+          className="mt-3 inline-flex min-h-10 items-center text-sm font-medium text-brand hover:underline"
         >
           + 再加一个可以考虑的地区
         </button>
@@ -575,19 +591,24 @@ function OptionList<T extends string>({
   onSelect: (value: T) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div className="grid grid-cols-2 gap-2">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
           onClick={() => onSelect(opt.value)}
-          className={`min-h-11 text-left p-3 rounded-xl border text-base sm:text-sm transition-colors ${
+          className={`flex min-h-12 items-center justify-between rounded-xl border p-3 text-left text-sm font-medium transition-all ${
             value === opt.value
-              ? "border-blue-500 bg-blue-50 text-slate-900"
-              : "border-slate-200 text-slate-700 hover:border-blue-300"
+              ? "border-brand bg-brand-soft text-brand ring-1 ring-brand/10"
+              : "border-line bg-surface text-ink hover:border-brand/30 hover:bg-brand-soft/30"
           }`}
         >
-          {opt.label}
+          <span>{opt.label}</span>
+          {value === opt.value && (
+            <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
         </button>
       ))}
     </div>
@@ -606,7 +627,7 @@ function StepEducation({
   return (
     <div className="mt-4 space-y-5">
       <div>
-        <p className="text-sm text-slate-500 mb-2">最高学历（按已经取得或即将取得的毕业证填写）</p>
+        <p className="mb-2 text-sm font-medium text-ink">最高学历</p>
         <OptionList
           options={CREDENTIAL_LEVEL_OPTIONS}
           value={educationLevel}
@@ -614,7 +635,7 @@ function StepEducation({
         />
       </div>
       <div>
-        <p className="text-sm text-slate-500 mb-2">最高学位</p>
+        <p className="mb-2 text-sm font-medium text-ink">最高学位</p>
         <OptionList
           options={DEGREE_OPTIONS}
           value={degree}
@@ -636,19 +657,20 @@ function StepMajor({
 }) {
   return (
     <div className="mt-4">
-      <p className="text-sm text-slate-500 mb-3">
-        请按毕业证（或预期毕业证）上的名称完整填写，含括号里的方向，例如“汉语言文学（师范）”。
-      </p>
+      <label htmlFor="major-full-name" className="mb-2 block text-sm font-medium text-ink">
+        专业全称
+      </label>
       <input
+        id="major-full-name"
         value={major}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="毕业证专业全称"
+        placeholder="例如：汉语言文学（师范）"
         autoComplete="off"
         // text-base 防止 iOS Safari 聚焦时自动放大页面
-        className="w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-base text-ink transition-colors placeholder:text-ink-muted/60 hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 sm:text-sm"
       />
-      <p className="text-xs text-slate-400 mt-2">
-        专业目录存在解释空间（如“相关专业”）时，不会自动判定，会提示你向招聘单位确认。
+      <p className="mt-2 text-xs leading-5 text-ink-muted">
+        请与毕业证保持一致，包含括号中的方向
       </p>
     </div>
   );
@@ -670,21 +692,21 @@ function StepGraduation({
   return (
     <div className="mt-4 space-y-5">
       <div>
-        <p className="text-sm text-slate-500 mb-2">毕业（或预计毕业）时间</p>
+        <p className="mb-2 text-sm font-medium text-ink">毕业（或预计毕业）时间</p>
         <input
           type="month"
           value={monthValue}
           onChange={(e) =>
             onChange({ graduationDate: e.target.value ? `${e.target.value}-15` : undefined })
           }
-          className="w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-base text-ink transition-colors hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 sm:text-sm"
         />
-        <p className="text-xs text-slate-400 mt-2">
-          只记录毕业时间这一事实，不给你贴“应届生”标签；是否算应届按每条公告口径逐次判断。
+        <p className="mt-2 text-xs leading-5 text-ink-muted">
+          是否属于应届生会按每条公告单独判断
         </p>
       </div>
       <div>
-        <p className="text-sm text-slate-500 mb-2">当前状态</p>
+        <p className="mb-2 text-sm font-medium text-ink">当前状态</p>
         <OptionList
           options={EMPLOYMENT_STATUS_OPTIONS}
           value={employmentStatus}
@@ -771,7 +793,7 @@ function StepCert({
   return (
     <div className="mt-4 space-y-5">
       <div>
-        <p className="text-sm text-slate-500 mb-2">教师资格</p>
+        <p className="mb-2 text-sm font-medium text-ink">教师资格</p>
         <OptionList
           options={TEACHER_CERT_STATUS_OPTIONS}
           value={cert.status}
@@ -782,13 +804,13 @@ function StepCert({
       {cert.status !== undefined && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-xs text-slate-500">
+            <span className="text-xs font-medium text-ink-muted">
               {certNone ? "想报考的学科" : "资格证学科"}
             </span>
             <select
               value={subjectValue ?? ""}
               onChange={changeIntendedSubject}
-              className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1.5 h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-base text-ink transition-colors hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 sm:text-sm"
             >
               <option value="" disabled>
                 请选择学科
@@ -802,11 +824,11 @@ function StepCert({
           </label>
           {!certNone && (
             <label className="block">
-              <span className="text-xs text-slate-500">资格证学段</span>
+              <span className="text-xs font-medium text-ink-muted">资格证学段</span>
               <select
                 value={cert.stage ?? ""}
                 onChange={(e) => updateCert({ stage: e.target.value as TeacherCertInfo["stage"] })}
-                className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="mt-1.5 h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-base text-ink transition-colors hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 sm:text-sm"
               >
                 <option value="" disabled>
                   请选择学段
@@ -824,46 +846,46 @@ function StepCert({
 
       {cert.status === "in_progress" && (
         <label className="block">
-          <span className="text-xs text-slate-500">预计取得教师资格时间</span>
+          <span className="text-xs font-medium text-ink-muted">预计取得教师资格时间</span>
           <input
             type="month"
             value={cert.expectedDate?.slice(0, 7) ?? ""}
             onChange={(e) =>
               updateCert({ expectedDate: e.target.value ? `${e.target.value}-15` : undefined })
             }
-            className="mt-1 w-full min-h-11 h-11 px-3 rounded-lg border border-slate-300 text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="mt-1.5 h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-base text-ink transition-colors hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10 sm:text-sm"
           />
         </label>
       )}
 
       {!subjectOpen && cert.status !== undefined && (
-        <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+        <div className="rounded-xl border border-warn/20 bg-warn-soft px-3.5 py-3 text-sm leading-6 text-warn">
           当前先开放<strong>语文</strong>教师公开招聘；其他学科暂未开放匹配，完成后可以在结果页留下开注意向，
           不会为你生成不相关的匹配结果。
         </div>
       )}
 
       <div>
-        <p className="text-sm text-slate-500 mb-2">
+        <p className="mb-2 text-sm font-medium text-ink">
           能接受哪些官方用工形式？（至少选一项）
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {NATURE_OPTIONS.map((opt) => {
             const checked = draft.acceptedEmploymentNatures.includes(opt.value);
             return (
               <label
                 key={opt.value}
-                className={`flex min-h-11 items-center gap-2 p-3 rounded-xl border text-base sm:text-sm cursor-pointer transition-colors ${
+                className={`flex min-h-12 cursor-pointer items-center gap-2.5 rounded-xl border p-3 text-sm font-medium transition-all ${
                   checked
-                    ? "border-blue-500 bg-blue-50 text-slate-900"
-                    : "border-slate-200 text-slate-700 hover:border-blue-300"
+                    ? "border-brand bg-brand-soft text-brand ring-1 ring-brand/10"
+                    : "border-line bg-surface text-ink hover:border-brand/30 hover:bg-brand-soft/30"
                 }`}
               >
                 <input
                   type="checkbox"
                   checked={checked}
                   onChange={() => toggleNature(opt.value)}
-                  className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  className="h-4 w-4 rounded border-line text-brand focus:ring-brand"
                 />
                 {opt.label}
               </label>

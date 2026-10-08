@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useSchedule } from "@/lib/schedule/useSchedule";
 import { buildScheduleView } from "@/lib/ia/schedule-view";
 import { Hero } from "@/components/ia/Hero";
@@ -9,7 +8,6 @@ import { LayerHeading } from "@/components/ia/Layer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
-import { cn } from "@/lib/utils";
 
 export default function SchedulePage() {
   const { state, reload, toggleMute } = useSchedule();
@@ -48,23 +46,13 @@ export default function SchedulePage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6 pb-2">
       {nextAction ? (
-        <section className="rounded-2xl border border-brand/30 bg-gradient-to-b from-brand-soft to-surface p-5 shadow-sm">
-          <p className="text-xs font-medium uppercase tracking-wide text-brand">
-            当前最重要的一个动作
-          </p>
-          <h1 className="mt-2 text-xl font-semibold text-ink">
-            {nextAction.unitName}
-          </h1>
-          <p className="mt-1 text-base text-ink">{nextAction.label}</p>
-          <Link
-            href={nextAction.href}
-            className={cn(
-              "mt-4 inline-flex h-10 items-center justify-center rounded-lg bg-brand px-4 text-sm font-medium text-white transition-colors hover:bg-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2",
-            )}
-          >
-            {nextAction.label}
-          </Link>
-        </section>
+        <Hero
+          meta="当前最重要的一步"
+          conclusion={nextAction.label}
+          action={{ label: nextAction.label, href: nextAction.href }}
+        >
+          <p className="text-sm text-ink-muted">{nextAction.unitName}</p>
+        </Hero>
       ) : view.next ? (
         <Hero
           meta="下一件不能错过的事"
@@ -94,12 +82,18 @@ export default function SchedulePage() {
         </Hero>
       ) : (
         // 空态 2：有关注但近期没有需要行动的节点（时间未定显示“待官方通知”）
-        <div className="rounded-xl border border-line bg-surface p-5">
-          <p className="text-lg font-semibold text-ink">近期没有需要处理的节点</p>
-          <p className="mt-2 text-sm text-ink-muted">
-            时间未定的事项一律显示“待官方通知”，不会用推测日期提醒你。下面可以查看已关注机会的完整时间线。
-          </p>
-        </div>
+        <Hero
+          meta="日程结论"
+          conclusion="近期没有需要处理的节点"
+          risk={{
+            tone: "info",
+            text: "时间未定的事项会等待官方通知，不会用推测日期催促你。",
+          }}
+          action={{
+            label: "检查关注机会",
+            href: `/opportunities/${view.groups[0]!.unitId}`,
+          }}
+        />
       )}
 
       {/* 时间冲突提示：只提示，不替用户自动放弃 */}
@@ -120,7 +114,7 @@ export default function SchedulePage() {
 
       {/* 第二层：按关注机会分组的时间线；不默认展示月历 */}
       <section className="space-y-3">
-        <LayerHeading title="关注机会时间线" count={view.groups.length} />
+        <LayerHeading title="完整时间线" count={view.groups.length} />
         <Timeline
           groups={view.groups}
           mutedUnitIds={state.data.mutedUnitIds}

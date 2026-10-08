@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
+import { BrandMark } from "@/components/layout/BrandMark";
 import { useCurrentUser, DEMO_ACCOUNTS } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/config";
 import { opportunitiesApi } from "@/lib/opportunities/api";
@@ -100,21 +101,16 @@ function LoginForm() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-brand-soft to-slate-50 flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-canvas px-4 py-8">
+      <div className="w-full max-w-sm">
         {/* 品牌区 */}
-        <div className="text-center mb-6">
-          <div className="w-14 h-14 bg-brand-soft rounded-2xl flex items-center justify-center mx-auto mb-3">
-            <span className="text-2xl">📝</span>
-          </div>
-          <h1 className="text-xl font-bold text-ink">教招有据</h1>
-          <p className="text-sm text-ink-muted mt-1">教师招聘机会与资格预筛</p>
-          <p className="mt-3 text-xs leading-5 text-ink-muted">
-            登录后可以保存关注机会与报考进度；资格结果为预筛，最终以官方公告和招聘单位审核为准
-          </p>
+        <div className="mb-7 text-center">
+          <BrandMark size="lg" className="justify-center" />
+          <h1 className="mt-5 text-2xl font-bold tracking-[-0.02em] text-ink">欢迎回来</h1>
+          <p className="mt-2 text-sm text-ink-muted">登录后继续查看关注机会与报考进度</p>
         </div>
 
-        <div className="bg-surface rounded-2xl border border-line shadow-sm p-6">
+        <div className="rounded-3xl border border-line bg-surface p-6 shadow-[0_18px_50px_rgba(42,69,112,0.08)]">
           {/* Demo 声明 */}
           {demo && (
             <div className="mb-4 p-3 rounded-lg bg-warn-soft border border-warn/30">
@@ -139,7 +135,7 @@ function LoginForm() {
             <div>
               <label
                 htmlFor="account"
-                className="block text-sm font-medium text-ink mb-1.5"
+                className="mb-1.5 block text-sm font-medium text-ink"
               >
                 账号
               </label>
@@ -150,14 +146,14 @@ function LoginForm() {
                 placeholder={demo ? "演示邮箱，例如 student@demo.app" : "邮箱"}
                 value={account}
                 onChange={(e) => setAccount(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-line bg-surface text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
+                className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink transition-colors placeholder:text-ink-muted/60 hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
               />
             </div>
 
             <div>
               <label
                 htmlFor="password"
-                className="block text-sm font-medium text-ink mb-1.5"
+                className="mb-1.5 block text-sm font-medium text-ink"
               >
                 密码
               </label>
@@ -168,7 +164,7 @@ function LoginForm() {
                 placeholder={demo ? "演示密码：demo1234" : "密码"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-10 px-3 rounded-lg border border-line bg-surface text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent"
+                className="h-12 w-full rounded-xl border border-line bg-surface px-3.5 text-sm text-ink transition-colors placeholder:text-ink-muted/60 hover:border-brand/30 focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10"
               />
             </div>
 
@@ -178,8 +174,8 @@ function LoginForm() {
               </div>
             )}
 
-            <Button type="submit" fullWidth size="lg" disabled={submitting}>
-              {submitting ? "登录中..." : "登录"}
+            <Button type="submit" fullWidth size="lg" loading={submitting}>
+              {submitting ? "登录中" : "登录"}
             </Button>
           </form>
 
@@ -206,7 +202,7 @@ function LoginForm() {
           )}
         </div>
 
-        <p className="text-center text-xs text-ink-muted mt-4">
+        <p className="mt-4 text-center text-xs text-ink-muted">
           {demo
             ? "未注册账号？Demo 阶段无需注册，请直接使用演示账号"
             : "仅限受邀测试用户，不开放公开注册"}

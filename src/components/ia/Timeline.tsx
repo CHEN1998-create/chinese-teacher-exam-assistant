@@ -132,41 +132,63 @@ export function TimelineGroup({
   muted?: boolean;
   onToggleMute?: (unitId: string, muted: boolean) => void;
 }) {
+  const nextEvent = group.events.find((event) => !event.past);
   return (
-    <section className="rounded-xl border border-line bg-surface p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs text-ink-muted">{group.regionText}</p>
-          <h3 className="mt-0.5 text-sm font-semibold text-ink">{group.title}</h3>
-        </div>
+    <details className="group rounded-2xl border border-line bg-surface">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block text-xs text-ink-muted">{group.regionText}</span>
+          <span className="mt-0.5 block truncate text-sm font-semibold text-ink">
+            {group.title}
+          </span>
+          {nextEvent && (
+            <span className="mt-1 block text-xs text-ink-muted">
+              下一节点：{nextEvent.kindLabel} · {nextEvent.dateText}
+            </span>
+          )}
+        </span>
+        <span className="flex shrink-0 items-center gap-2 text-xs text-ink-muted">
+          {group.events.length} 个节点
+          <svg
+            aria-hidden="true"
+            className="h-4 w-4 transition-transform group-open:rotate-180"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+          </svg>
+        </span>
+      </summary>
+      <div className="border-t border-line px-4 pb-4 pt-3">
         {onToggleMute && (
-          <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-ink-muted">
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-ink-muted">
             <input
               type="checkbox"
               checked={!!muted}
               onChange={(e) => onToggleMute(group.unitId, e.target.checked)}
               className="h-3.5 w-3.5 rounded border-line text-brand focus:ring-brand"
             />
-            {muted ? "已关闭提醒" : "提醒开"}
+            {muted ? "已关闭站内提醒" : "站内提醒已开启"}
           </label>
         )}
+        {muted && (
+          <p className="mt-1 text-xs text-ink-muted">
+            日程节点仍会保留在这里。
+          </p>
+        )}
+        {group.trust && <TrustBadge trust={group.trust} />}
+        <ol className="mt-4">
+          {group.events.map((event, index) => (
+            <EventRow
+              key={event.id}
+              event={event}
+              isLast={index === group.events.length - 1}
+            />
+          ))}
+        </ol>
       </div>
-      {muted && (
-        <p className="mt-1 text-xs text-ink-muted">
-          该机会的站内通知已关闭，日程节点仍会展示。
-        </p>
-      )}
-      {group.trust && <TrustBadge trust={group.trust} />}
-      <ol className="mt-3">
-        {group.events.map((event, index) => (
-          <EventRow
-            key={event.id}
-            event={event}
-            isLast={index === group.events.length - 1}
-          />
-        ))}
-      </ol>
-    </section>
+    </details>
   );
 }
 

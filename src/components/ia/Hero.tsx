@@ -54,16 +54,46 @@ function RiskLine({ risk }: { risk: OpportunityRisk }) {
 }
 
 const ACTION_CLASS =
-  "inline-flex h-12 w-full items-center justify-center rounded-xl bg-brand px-6 text-base font-medium text-white transition-colors hover:bg-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+  "group inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand px-6 text-base font-semibold text-white shadow-[0_8px_20px_rgba(57,115,230,0.2)] transition-all hover:-translate-y-0.5 hover:bg-brand-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50";
+
+function ActionContent({ label }: { label: string }) {
+  return (
+    <>
+      <span>{label}</span>
+      <svg
+        aria-hidden="true"
+        className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          d="m9 18 6-6-6-6"
+        />
+      </svg>
+    </>
+  );
+}
 
 export function Hero({ meta, conclusion, risk, action, children }: HeroProps) {
   return (
     <section
       aria-label="结论与下一步"
-      className="rounded-xl border border-line bg-surface p-5"
+      className="relative overflow-hidden rounded-3xl border border-brand/15 bg-surface p-5 shadow-[0_12px_36px_rgba(30,64,120,0.07)] sm:p-6"
     >
-      {meta && <p className="text-xs text-ink-muted">{meta}</p>}
-      <h2 className="mt-1.5 text-xl font-semibold leading-snug text-ink">
+      <span
+        aria-hidden="true"
+        className="absolute -right-12 -top-12 h-32 w-32 rounded-full bg-brand-soft"
+      />
+      {meta && (
+        <p className="relative text-xs font-semibold tracking-wide text-brand">
+          {meta}
+        </p>
+      )}
+      <h2 className="relative mt-2 max-w-xl text-2xl font-semibold leading-snug tracking-tight text-ink">
         {conclusion}
       </h2>
       {risk && (
@@ -82,11 +112,11 @@ export function Hero({ meta, conclusion, risk, action, children }: HeroProps) {
                 rel="noopener noreferrer"
                 className={ACTION_CLASS}
               >
-                {action.label}
+                <ActionContent label={action.label} />
               </a>
             ) : (
               <a href={action.href} className={ACTION_CLASS}>
-                {action.label}
+                <ActionContent label={action.label} />
               </a>
             )
           ) : (
@@ -96,7 +126,7 @@ export function Hero({ meta, conclusion, risk, action, children }: HeroProps) {
               disabled={action.disabled}
               className={ACTION_CLASS}
             >
-              {action.label}
+              <ActionContent label={action.label} />
             </button>
           )}
         </div>

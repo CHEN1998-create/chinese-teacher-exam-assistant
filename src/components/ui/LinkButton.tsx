@@ -18,19 +18,20 @@ interface LinkButtonProps extends ComponentProps<typeof Link> {
 }
 
 const variantStyles: Record<NonNullable<LinkButtonProps["variant"]>, string> = {
-  primary: "bg-brand text-white hover:bg-brand-strong focus-visible:ring-brand",
+  primary:
+    "bg-brand text-white shadow-[0_6px_16px_rgba(57,115,230,0.2)] hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_8px_20px_rgba(57,115,230,0.24)] focus-visible:ring-brand",
   secondary:
-    "bg-brand-soft text-brand hover:bg-brand-soft/70 focus-visible:ring-brand",
+    "bg-brand-soft text-brand hover:bg-[#e2ecff] focus-visible:ring-brand",
   outline:
-    "border border-line bg-surface text-ink hover:bg-canvas focus-visible:ring-brand",
-  ghost: "bg-transparent text-ink hover:bg-brand-soft focus-visible:ring-brand",
+    "border border-line bg-surface text-ink hover:border-brand/30 hover:bg-brand-soft/50 focus-visible:ring-brand",
+  ghost: "bg-transparent text-ink hover:bg-brand-soft/80 focus-visible:ring-brand",
   link: "bg-transparent text-brand underline-offset-4 hover:underline focus-visible:ring-brand px-0 h-auto",
 };
 
 const sizeStyles: Record<NonNullable<LinkButtonProps["size"]>, string> = {
-  sm: "h-8 px-3 text-sm",
+  sm: "h-9 px-3 text-sm",
   md: "h-11 px-4 text-sm",
-  lg: "h-12 px-6 text-base",
+  lg: "h-[52px] px-6 text-base",
 };
 
 export function LinkButton({
@@ -47,7 +48,7 @@ export function LinkButton({
   return (
     <Link
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
+        "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface",
         variantStyles[variant],
         !isLink && sizeStyles[size],
         fullWidth && "w-full",

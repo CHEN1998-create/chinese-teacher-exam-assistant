@@ -87,7 +87,7 @@ export function QuickFeedbackPanel({ task, onSubmitted, onAvailableTimeChange }:
               type="button"
               disabled={saving}
               onClick={() => pickReason(key)}
-              className="px-3 py-2 rounded-lg border border-line text-sm text-ink hover:border-blue-400 hover:bg-brand-soft transition-colors disabled:opacity-50"
+              className="px-3 py-2 rounded-lg border border-line text-sm text-ink hover:border-brand/50 hover:bg-brand-soft transition-colors disabled:opacity-50"
             >
               {label}
             </button>
@@ -129,7 +129,7 @@ export function QuickFeedbackPanel({ task, onSubmitted, onAvailableTimeChange }:
               onAvailableTimeChange?.(m);
               submit(pendingStatus!, "time");
             }}
-            className="px-3 py-2 rounded-lg border border-line text-sm text-ink hover:border-blue-400 hover:bg-brand-soft transition-colors disabled:opacity-50"
+            className="px-3 py-2 rounded-lg border border-line text-sm text-ink hover:border-brand/50 hover:bg-brand-soft transition-colors disabled:opacity-50"
           >
             {m} 分钟
           </button>
@@ -156,12 +156,12 @@ export function QuickFeedbackPanel({ task, onSubmitted, onAvailableTimeChange }:
   return (
     <div>
       {stage === "choose" && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <button
             type="button"
             disabled={saving}
             onClick={() => submit("completed")}
-            className="h-11 rounded-xl bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50"
+            className="h-11 rounded-xl bg-brand text-white text-sm font-semibold hover:bg-brand-strong transition-colors disabled:opacity-50"
           >
             我做完了
           </button>
@@ -172,7 +172,7 @@ export function QuickFeedbackPanel({ task, onSubmitted, onAvailableTimeChange }:
               setPendingStatus("partial");
               setStage("reason");
             }}
-            className="h-11 rounded-xl bg-warn text-white text-sm font-medium hover:bg-amber-600 transition-colors disabled:opacity-50"
+            className="h-11 rounded-xl border border-brand/30 bg-surface text-brand text-sm font-medium hover:bg-brand-soft transition-colors disabled:opacity-50"
           >
             做了一部分
           </button>

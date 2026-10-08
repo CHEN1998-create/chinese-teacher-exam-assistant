@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * 设计 Token（v6.1 模块 0A 视觉系统：墨蓝 + 暖灰，80 / 15 / 5 用色比例）
+ * 设计 Token（v6.1 模块 0A 视觉系统：清透蓝 + 冷白，80 / 15 / 5 用色比例）
  *
  * - 原始值集中在 :root，便于跨场景复用与平滑迁移；
  * - 通过 @theme inline 暴露为 Tailwind 工具类（bg-canvas / bg-surface /
@@ -13,22 +13,22 @@
  */
 :root {
   /* 主语义层 */
-  --color-canvas: #f7f7f5;       /* 页面背景：暖灰 */
+  --color-canvas: #f6f8fc;       /* 页面背景：冷白灰 */
   --color-surface: #ffffff;       /* 内容表面：白 */
-  --color-ink: #1d292f;           /* 主文字：墨蓝近黑 */
-  --color-ink-muted: #5f6b72;     /* 次文字：暖灰 */
-  --color-brand: #2f566d;          /* 品牌主色：墨蓝 */
-  --color-brand-strong: #244657;  /* 品牌悬停：更深一档 */
-  --color-brand-soft: #eaf0f3;    /* 品牌浅色：背景与标签 */
-  --color-line: #e3e7e8;          /* 默认边框：暖灰 */
-  --color-success: #3f6b55;        /* 成功：墨绿 */
-  --color-success-soft: #e6efe9;
-  --color-warn: #8a6428;           /* 提醒：琥珀 */
-  --color-warn-soft: #f5ecdb;
-  --color-danger: #a54646;         /* 风险：砖红 */
-  --color-danger-soft: #f3e3e3;
-  --color-info: #2f566d;           /* 信息：与品牌一致 */
-  --color-info-soft: #eaf0f3;
+  --color-ink: #172033;           /* 主文字：深蓝黑 */
+  --color-ink-muted: #667085;     /* 次文字：中性灰蓝 */
+  --color-brand: #3973e6;         /* 品牌主色：明亮但不过饱和的蓝 */
+  --color-brand-strong: #2f63c7;  /* 品牌悬停：更深一档 */
+  --color-brand-soft: #edf3ff;    /* 品牌浅色：背景与标签 */
+  --color-line: #e4e9f2;          /* 默认边框：低对比冷灰 */
+  --color-success: #21835a;       /* 成功：清晰绿 */
+  --color-success-soft: #eaf7f0;
+  --color-warn: #9a6818;          /* 提醒：琥珀 */
+  --color-warn-soft: #fff7e7;
+  --color-danger: #c24848;        /* 风险：克制红 */
+  --color-danger-soft: #fff0f0;
+  --color-info: #3973e6;          /* 信息：与品牌一致 */
+  --color-info-soft: #edf3ff;
 
   /* 兼容层：保留旧变量名，指向新色值 */
   --background: var(--color-canvas);
@@ -93,6 +93,12 @@ body {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: #cfe0ff;
+  color: var(--color-ink);
 }
 
 code,
@@ -113,12 +119,12 @@ samp {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5d8;
+  background: #cbd3e1;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8b3b8;
+  background: #aeb9cb;
 }
 
 /* 尊重用户的减少动效偏好（核心交互仍可用） */

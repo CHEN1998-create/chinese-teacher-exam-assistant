@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { Badge } from "@/components/ui/Badge";
-import { NotificationPreferencePanel } from "@/components/governance/NotificationPreferencePanel";
 import { useCurrentUser, AUTH_MODE } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/config";
 import { formatDateTime } from "@/lib/utils";
@@ -18,8 +18,10 @@ import { profileApi } from "@/lib/profile/profileApi";
 import {
   CREDENTIAL_LEVEL_OPTIONS,
   EMPLOYMENT_STATUS_OPTIONS,
+  subjectLabel,
   TEACHER_CERT_STATUS_OPTIONS,
 } from "@/lib/guest/guestSession";
+import { stageLabel } from "@/lib/ia/labels";
 import { opportunitiesApi } from "@/lib/opportunities/api";
 import type {
   GoalsResponse,
@@ -51,47 +53,14 @@ export default function MePage() {
   if (!user || !role) return null;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-xl font-bold text-ink">我的</h1>
-
-      {/* 账号 */}
-      <Card>
-        <CardHeader title="账号信息" description="当前登录会话与角色" />
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-brand-soft flex items-center justify-center shrink-0">
-            <span className="text-xl">👤</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="font-medium text-ink">{user.name}</p>
-              <Badge variant="primary">
-                {role === "admin"
-                  ? "管理员"
-                  : role === "exam_reviewer"
-                    ? "考情审核员"
-                    : role === "resource_reviewer"
-                      ? "资源审核员"
-                      : "受邀用户"}
-              </Badge>
-            </div>
-            <p className="text-sm text-ink-muted mt-0.5 truncate">
-              用户ID：{user.id}
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Button variant="outline" size="sm" onClick={() => void logout()}>
-            退出登录
-          </Button>
-          {hasRole(STAFF_ROLES) && !isDemoMode && (
-            <Link href="/admin/corrections">
-              <Button variant="outline" size="sm">
-                进入运营后台
-              </Button>
-            </Link>
-          )}
-        </div>
-      </Card>
+    <div className="mx-auto max-w-2xl space-y-4 pb-4">
+      <header>
+        <p className="text-xs font-semibold tracking-wide text-brand">我的空间</p>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">
+          {user.name}
+        </h1>
+        <p className="mt-1 text-sm text-ink-muted">管理画像、备考入口与提醒偏好</p>
+      </header>
 
       {/* 个人画像 */}
       <ProfileCard />
@@ -102,53 +71,81 @@ export default function MePage() {
       {/* 我的纠错 */}
       <MyCorrectionsCard />
 
-      {/* 通知偏好 */}
-      <NotificationPreferencePanel />
-
-      {/* 隐私与账号设置 */}
+      {/* 次级入口集中收纳，避免与首屏主行动竞争 */}
       <Card>
         <CardHeader
-          title="隐私与账号设置"
-          description="数据类别说明、删除测试数据、注销账号与学习资料设置"
+          title="更多管理"
+          description="资料、提醒、隐私与账号设置"
         />
         <div className="divide-y divide-line">
           <SettingsRow
-            href="/settings"
-            icon="🔒"
-            title="隐私与数据"
-            description="查看我们保存的数据类别，申请删除测试数据或注销账号"
+            href="/materials"
+            title="学习资料"
+            description="管理已有资料及其适用方式"
           />
           <SettingsRow
             href="/settings"
-            icon="⚙️"
-            title="账号与学习资料设置"
-            description="学段、每日可用时间等偏好"
+            title="通知与学习偏好"
+            description="管理学习提醒、考情变化与每日可用时间"
+          />
+          <SettingsRow
+            href="/settings"
+            title="隐私与数据"
+            description="查看我们保存的数据类别，申请删除测试数据或注销账号"
           />
         </div>
       </Card>
+
+      <details className="group rounded-2xl border border-line bg-surface">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+              账号信息
+              <Badge variant="primary">
+                {role === "admin"
+                  ? "管理员"
+                  : role === "exam_reviewer"
+                    ? "考情审核员"
+                    : role === "resource_reviewer"
+                      ? "资源审核员"
+                      : "受邀用户"}
+              </Badge>
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-muted">用户ID：{user.id}</span>
+          </span>
+          <svg aria-hidden="true" className="h-4 w-4 text-ink-muted transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+          </svg>
+        </summary>
+        <div className="flex flex-wrap gap-2 border-t border-line p-4">
+          <Button variant="outline" size="sm" onClick={() => void logout()}>
+            退出登录
+          </Button>
+          {hasRole(STAFF_ROLES) && !isDemoMode && (
+            <LinkButton href="/admin/corrections" variant="outline" size="sm">
+              进入运营后台
+            </LinkButton>
+          )}
+        </div>
+      </details>
     </div>
   );
 }
 
 function SettingsRow({
   href,
-  icon,
   title,
   description,
 }: {
   href: string;
-  icon: string;
   title: string;
   description: string;
 }) {
   return (
     <Link
       href={href}
-      className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:bg-canvas/60 -mx-2 px-2 rounded-lg transition-colors"
+      className="-mx-2 flex items-center gap-3 rounded-lg px-2 py-3 transition-colors first:pt-0 last:pb-0 hover:bg-canvas/60"
     >
-      <span className="text-lg" aria-hidden="true">
-        {icon}
-      </span>
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-medium text-ink">{title}</span>
         <span className="block text-xs text-ink-muted mt-0.5">{description}</span>
@@ -193,14 +190,15 @@ function ProfileCard() {
 
   if (!profile) {
     return (
-      <Card>
-        <CardHeader
-          title="我的画像"
-          description="完成五组基础画像后才能看到资格预筛结果"
-        />
-        <Link href="/onboarding">
-          <Button size="sm">开始基础画像</Button>
-        </Link>
+      <Card className="rounded-3xl border-brand/15 p-5 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+        <p className="text-xs font-semibold tracking-wide text-brand">当前结论</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
+          先完成基础画像
+        </h2>
+        <p className="mt-2 text-sm text-ink-muted">完成后才能看到与你有关的机会判断。</p>
+        <LinkButton href="/onboarding" variant="primary" size="lg" fullWidth className="mt-5">
+          开始基础画像
+        </LinkButton>
       </Card>
     );
   }
@@ -254,28 +252,43 @@ function ProfileCard() {
         supplementCount > 0 ? `已补充 ${supplementCount} 项（年龄/户籍/社保等）` : "暂无补充",
     },
   ];
+  const missingGraduationDate = !profile.graduationDate;
+  const regionSummary = rows[0]?.value ?? "已填写意向地区";
+  const targetSummary = [
+    profile.teacherCert.subject ? subjectLabel(profile.teacherCert.subject) : null,
+    profile.teacherCert.stage ? stageLabel(profile.teacherCert.stage) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <Card>
-      <CardHeader
-        title="我的画像"
-        description="基础五组 + 按需补充；缺信息不会被判定为不符合"
-      />
-      <dl className="divide-y divide-line">
-        {rows.map((row) => (
-          <div key={row.label} className="flex justify-between gap-4 py-2.5 text-sm">
-            <dt className="text-ink-muted shrink-0">{row.label}</dt>
-            <dd className="text-ink text-right">{row.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="mt-3">
-        <Link href="/onboarding">
-          <Button variant="outline" size="sm">
-            编辑画像
-          </Button>
-        </Link>
-      </div>
+    <Card className="rounded-3xl border-brand/15 p-5 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+      <p className="text-xs font-semibold tracking-wide text-brand">画像结论</p>
+      <h2 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
+        {missingGraduationDate
+          ? "补充毕业时间，机会判断会更准确"
+          : "画像已就绪，机会匹配会自动更新"}
+      </h2>
+      <p className="mt-2 text-sm text-ink-muted">
+        当前画像：{regionSummary}{targetSummary ? ` · ${targetSummary}` : ""}
+      </p>
+      <LinkButton href="/onboarding" variant="primary" size="lg" fullWidth className="mt-5">
+        {missingGraduationDate ? "补充画像信息" : "编辑我的画像"}
+      </LinkButton>
+      <details className="group mt-3 rounded-xl border border-line bg-canvas/60">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-3 py-2.5 text-sm font-medium text-ink [&::-webkit-details-marker]:hidden">
+          查看已填写内容
+          <span className="text-ink-muted transition-transform group-open:rotate-180">⌄</span>
+        </summary>
+        <dl className="divide-y divide-line border-t border-line px-3">
+          {rows.map((row) => (
+            <div key={row.label} className="flex justify-between gap-4 py-2.5 text-sm">
+              <dt className="shrink-0 text-ink-muted">{row.label}</dt>
+              <dd className="text-right text-ink">{row.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
     </Card>
   );
 }
@@ -303,13 +316,13 @@ function StudyEntryCard() {
   const target = primary.goals.find((g) => g.unitId === primary.primaryTargetUnitId);
 
   return (
-    <Card>
+    <Card className="border-brand/15 bg-brand-soft/35">
       <Link
         href="/study"
-        className="flex items-center gap-3 -m-1 p-3 rounded-lg hover:bg-canvas transition-colors"
+        className="-m-1 flex items-center gap-3 rounded-xl p-3 transition-colors hover:bg-brand-soft"
       >
-        <span className="text-lg" aria-hidden="true">
-          📚
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface text-brand" aria-hidden="true">
+          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5V5.5A2.5 2.5 0 0 1 6.5 3H20v14H6.5A2.5 2.5 0 0 0 4 19.5Zm0 0A1.5 1.5 0 0 0 5.5 21H20" /></svg>
         </span>
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-medium text-ink">我的备考</span>
@@ -343,17 +356,18 @@ function MyCorrectionsCard() {
     };
   }, []);
 
-  if (items === null) return null;
+  if (items === null || items.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader
-        title="我的纠错"
-        description="你在机会详情页提交的信息纠错及官方核对结果"
-      />
-      {items.length === 0 ? (
-        <p className="text-sm text-ink-muted">还没有提交过纠错。</p>
-      ) : (
+    <details className="group rounded-2xl border border-line bg-surface">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+        <span>
+          <span className="block text-sm font-semibold text-ink">我的纠错</span>
+          <span className="mt-0.5 block text-xs text-ink-muted">{items.length} 条提交记录</span>
+        </span>
+        <span className="text-ink-muted transition-transform group-open:rotate-180">⌄</span>
+      </summary>
+      <div className="border-t border-line p-4">
         <ul className="space-y-3">
           {items.slice(0, 10).map((c) => (
             <li key={c.id} className="rounded-lg border border-line p-3">
@@ -378,7 +392,7 @@ function MyCorrectionsCard() {
             </li>
           ))}
         </ul>
-      )}
-    </Card>
+      </div>
+    </details>
   );
 }

@@ -65,128 +65,132 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-canvas px-4 py-10 md:py-16">
-      <div className="mx-auto w-full max-w-xl">
-        <header className="flex flex-col items-center text-center">
-          <BrandMark size="lg" />
-          <h1 className="mt-6 text-2xl font-bold leading-snug text-ink md:text-[28px]">
-            看看你现在可能能报哪些教师岗位
+    <div className="min-h-screen bg-canvas">
+      <header className="mx-auto flex h-18 w-full max-w-6xl items-center justify-between px-5 md:h-20 md:px-8">
+        <BrandMark size="md" />
+        <LinkButton href="/login" variant="ghost" size="sm" className="text-ink-muted">
+          登录
+        </LinkButton>
+      </header>
+
+      <main className="mx-auto grid w-full max-w-6xl items-center gap-12 px-5 pb-12 pt-8 md:px-8 md:pb-16 md:pt-14 lg:grid-cols-[1.02fr_0.98fr] lg:gap-20">
+        <section>
+          <p className="inline-flex items-center gap-2 rounded-full border border-brand/15 bg-brand-soft px-3 py-1.5 text-xs font-semibold text-brand">
+            <span className="h-1.5 w-1.5 rounded-full bg-brand" aria-hidden="true" />
+            教师招聘资格预筛
+          </p>
+
+          <h1 className="mt-5 max-w-2xl text-[34px] font-bold leading-[1.18] tracking-[-0.035em] text-ink sm:text-[42px] md:text-5xl">
+            先确认能不能报，
+            <span className="text-brand">再决定要不要准备</span>
           </h1>
-          <p className="mt-3 text-sm leading-relaxed text-ink-muted">
-            根据官方公告逐项核对。
-            <br className="sm:hidden" />
-            判断不了的条件，我们会明确标出来。
+          <p className="mt-5 max-w-lg text-base leading-7 text-ink-muted md:text-lg">
+            回答 5 组关键信息，获得基于官方公告的初步判断。
+            不确定的条件会单独标出，不让你自己猜。
           </p>
-          <p className="mt-3 inline-flex items-center rounded-full bg-brand-soft px-3 py-1 text-xs font-medium text-brand">
-            验证期仅开放 · 语文教师岗位
-          </p>
-        </header>
 
-        {/* 一行覆盖摘要：仅事实，不展开 */}
-        <p
-          className="mt-7 text-center text-sm text-ink-muted"
-          data-testid="home-coverage-summary"
+          <div className="mt-8 flex max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:items-center">
+            <Button
+              size="lg"
+              onClick={handleStart}
+              data-testid="start-onboarding"
+              className="w-full sm:w-auto sm:min-w-44"
+              iconEnd={
+                <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 10h12m-4-4 4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              }
+            >
+              开始资格预筛
+            </Button>
+            <LinkButton
+              href="/learn"
+              variant="ghost"
+              data-testid="open-learn"
+              className="h-[52px] text-sm text-ink-muted"
+            >
+              先看看怎么判断
+            </LinkButton>
+          </div>
+
+          <ul className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink-muted" aria-label="使用说明">
+            {["无需注册", "答案只存在本机", "结论附官方依据"].map((item) => (
+              <li key={item} className="flex items-center gap-1.5">
+                <svg aria-hidden="true" className="h-4 w-4 text-success" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                {item}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section
+          className="relative overflow-hidden rounded-[28px] border border-line bg-surface p-5 shadow-[0_24px_70px_rgba(42,69,112,0.1)] sm:p-7"
+          aria-label="预筛结果示例"
         >
-          {regionText}语文岗位持续核对中 · 在报{" "}
-          <span className="font-semibold text-ink">
-            {GUEST_COVERAGE.openOpportunityCount}
-          </span>{" "}
-          个（截至 {formatDate(GUEST_COVERAGE.lastCheckedAt)}）
-        </p>
+          <div className="absolute right-0 top-0 h-28 w-28 rounded-bl-full bg-brand-soft" aria-hidden="true" />
+          <div className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ink-muted">完成后你会看到</p>
+                <h2 className="mt-1.5 text-xl font-bold text-ink">清楚的预筛结论</h2>
+              </div>
+              <span className="rounded-full bg-success-soft px-3 py-1 text-xs font-semibold text-success">结果示例</span>
+            </div>
 
-        <div className="mt-7 flex flex-col items-center gap-3">
-          <Button
-            size="lg"
-            fullWidth
-            onClick={handleStart}
-            data-testid="start-onboarding"
-            className="max-w-xs"
-          >
-            开始匹配
-          </Button>
-          <LinkButton
-            href="/learn"
-            variant="link"
-            data-testid="open-learn"
-            className="text-sm"
-            iconEnd={
-              <svg
-                aria-hidden="true"
-                className="h-3.5 w-3.5"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-              >
-                <path d="M7.293 5.293a1 1 0 011.414 0L13 9.414a1 1 0 010 1.414l-4.293 4.293a1 1 0 01-1.414-1.414L10.586 10 7.293 6.707a1 1 0 010-1.414z" />
-              </svg>
-            }
-          >
-            先花 30 秒了解我们怎么判断
-          </LinkButton>
-        </div>
+            <div className="mt-6 rounded-2xl border border-success/15 bg-success-soft p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface text-success shadow-sm">
+                  <svg aria-hidden="true" className="h-5 w-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-success">资格预筛</p>
+                  <p className="mt-0.5 text-lg font-bold text-ink">初步符合</p>
+                  <p className="mt-1 text-sm leading-6 text-ink-muted">适合你的机会优先显示，风险条件单独提醒。</p>
+                </div>
+              </div>
+            </div>
 
-        {/* 完整覆盖范围与依据：按需展开 */}
-        <div className="mt-10 space-y-3">
+            <div className="mt-4 grid gap-2.5 sm:grid-cols-3">
+              {[
+                ["01", "逐项核对", "学历、专业等"],
+                ["02", "标出缺口", "不确定不误判"],
+                ["03", "附上依据", "可回看原公告"],
+              ].map(([number, title, description]) => (
+                <div key={number} className="rounded-2xl border border-line bg-canvas/70 p-3.5">
+                  <span className="text-xs font-bold text-brand">{number}</span>
+                  <p className="mt-2 text-sm font-semibold text-ink">{title}</p>
+                  <p className="mt-0.5 text-xs text-ink-muted">{description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer className="mx-auto w-full max-w-6xl px-5 pb-10 md:px-8">
+        <div className="relative flex flex-col gap-3 border-t border-line pt-5 text-sm text-ink-muted sm:flex-row sm:items-center sm:justify-between">
+          <p data-testid="home-coverage-summary">
+            当前覆盖：{regionText} · 语文教师岗位
+          </p>
           <Disclosure
-            trigger="查看当前覆盖范围与依据"
+            trigger="覆盖范围与判断依据"
             triggerVariant="ghost"
-            contentClassName="rounded-xl border border-line bg-surface p-4 text-sm leading-relaxed text-ink-muted"
+            contentClassName="mt-2 rounded-2xl border border-line bg-surface p-4 text-sm leading-relaxed text-ink-muted sm:absolute sm:right-8 sm:z-10 sm:w-[480px] sm:shadow-xl"
           >
-            <dl className="space-y-2">
-              <div className="flex gap-2">
-                <dt className="shrink-0 text-ink-muted">在报岗位</dt>
-                <dd className="text-ink">
-                  <span className="font-semibold">
-                    {GUEST_COVERAGE.openOpportunityCount} 个
-                  </span>
-                  <span className="ml-1 text-ink-muted">（截至最近一次核对）</span>
-                </dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="shrink-0 text-ink-muted">最近核对</dt>
-                <dd className="text-ink">{formatDate(GUEST_COVERAGE.lastCheckedAt)}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="shrink-0 text-ink-muted">下一窗口</dt>
-                <dd className="text-ink">{GUEST_COVERAGE.nextWindowNote}</dd>
-              </div>
-              <div className="flex gap-2">
-                <dt className="shrink-0 text-ink-muted">信息来源</dt>
-                <dd className="text-ink">
-                  两市教育官方渠道共 {SOURCE_COUNT} 个来源（杭州教育网、宁波市教育局、鄞州区教育局）
-                </dd>
-              </div>
+            <dl className="grid gap-2 sm:grid-cols-2">
+              <div><dt className="text-xs text-ink-muted">最近核对</dt><dd className="mt-0.5 font-medium text-ink">{formatDate(GUEST_COVERAGE.lastCheckedAt)}</dd></div>
+              <div><dt className="text-xs text-ink-muted">官方来源</dt><dd className="mt-0.5 font-medium text-ink">共 {SOURCE_COUNT} 个</dd></div>
+              <div className="sm:col-span-2"><dt className="text-xs text-ink-muted">下一窗口</dt><dd className="mt-0.5 font-medium text-ink">{GUEST_COVERAGE.nextWindowNote}</dd></div>
             </dl>
-            <p className="mt-3 border-t border-line pt-2 text-xs leading-relaxed text-ink-muted">
-              {GUEST_COVERAGE.scopeNote}
-            </p>
-
-            <h3 className="mt-4 text-sm font-semibold text-ink">结论从哪来</h3>
-            <ul className="mt-2 space-y-1.5 text-sm text-ink-muted">
-              <li className="flex gap-2">
-                <span aria-hidden="true" className="text-brand">·</span>
-                逐条比对官方招聘公告原文与岗位表（地区、学历学位、专业、应届身份、教师资格），每条结论附公告出处。
-              </li>
-              <li className="flex gap-2">
-                <span aria-hidden="true" className="text-brand">·</span>
-                只给四档结论：初步符合、补充信息后判断、建议人工确认、明确不符合；没提供的信息不会被当作不符合。
-              </li>
-              <li className="flex gap-2">
-                <span aria-hidden="true" className="text-brand">·</span>
-                结果仅为报名前的资格预筛，最终以官方公告和招聘单位审核为准。
-              </li>
-            </ul>
+            <p className="mt-3 border-t border-line pt-3 text-xs">{GUEST_COVERAGE.scopeNote}</p>
+            <p className="mt-2 text-xs">资格预筛不是官方审核，最终以招聘单位认定为准。</p>
           </Disclosure>
         </div>
-
-        <p className="mt-8 text-center text-xs leading-relaxed text-ink-muted">
-          无需注册登录，你的答案仅保存在这台设备，7 天后自动清除
-          <br />
-          已有账号？
-          <LinkButton href="/login" variant="link" className="ml-1 text-sm">
-            直接登录
-          </LinkButton>
-        </p>
-      </div>
+      </footer>
     </div>
   );
 }

@@ -44,14 +44,15 @@ import {
   VerificationSection,
 } from "@/components/opportunities/EvidenceSection";
 import { CorrectionModal } from "@/components/opportunities/CorrectionModal";
-import { ActionChain } from "@/components/opportunities/ActionChain";
 import { MaterialsList } from "@/components/opportunities/MaterialsList";
 import { ConsultationPanel } from "@/components/opportunities/ConsultationPanel";
 import { track, trackView } from "@/lib/analytics/eventService";
 import { gateStateMeta } from "@/lib/gate-states";
 
 function scrollToId(id: string) {
-  document.getElementById(id)?.scrollIntoView({
+  const target = document.getElementById(id);
+  if (target instanceof HTMLDetailsElement) target.open = true;
+  target?.scrollIntoView({
     behavior: "smooth",
     block: "start",
   });
@@ -187,6 +188,15 @@ export default function OpportunityDetailPage() {
     unit.version.timeline.registrationEnd,
     detail.meta.evaluatedAt,
   );
+  const heroConclusion = closed
+    ? gateStateMeta(primaryClosedGate!.code).label
+    : unit.overall === "preliminary_eligible"
+      ? "目前初步符合，可以进入报名准备"
+      : unit.overall === "need_more_info"
+        ? `还差 ${groups.missingInfo.length} 项信息才能完成判断`
+        : unit.overall === "manual_review"
+          ? `${groups.confirmOfficial.length} 项条件需要向招聘单位确认`
+          : `${groups.unsatisfied.length} 项条件明确不符合`;
 
   const heroAction = (() => {
     const base = { label: action.label };
@@ -395,9 +405,9 @@ export default function OpportunityDetailPage() {
       </nav>
 
       {/* 标题区（报考单元基础事实） */}
-      <header className="space-y-1.5">
+      <header className="space-y-2">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-lg font-semibold leading-snug text-ink">
+          <h1 className="text-2xl font-semibold leading-snug tracking-tight text-ink">
             {unit.unit.name}
           </h1>
           {primaryClosedGate ? (
@@ -426,14 +436,17 @@ export default function OpportunityDetailPage() {
 
       {/* 第一段：结论 + 唯一下一步 */}
       <Hero
-        meta={`${
+        meta={`机会结论 · ${
           primaryClosedGate
             ? gateStateMeta(primaryClosedGate.code).label
             : MATCH_STATUS_LABELS[unit.overall]
-        } · 依据规则 ${detail.meta.ruleVersion}`}
-        conclusion={unit.summary}
+        }`}
+        conclusion={heroConclusion}
         action={busy ? { ...heroAction, disabled: true, label: "处理中…" } : heroAction}
       >
+        {!closed && (
+          <p className="text-sm leading-6 text-ink-muted">{unit.summary}</p>
+        )}
         {closed && (
           <div className="space-y-1.5 rounded-lg border border-danger/30 bg-danger-soft/60 p-2.5">
             <p className="text-xs font-semibold text-danger">
@@ -468,14 +481,49 @@ export default function OpportunityDetailPage() {
         </p>
       )}
 
+      <details
+        id="follow"
+        className="group scroll-mt-20 rounded-2xl border border-line bg-surface"
+      >
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-sm font-semibold text-ink">我的跟进</span>
+            <span className="mt-0.5 block text-xs text-ink-muted">
+              {unit.follow
+                ? `已关注 · ${unit.follow.role === "primary" ? "主要备考目标" : unit.follow.role === "backup" ? "备选目标" : "可继续推进报名状态"}`
+                : "关注后可记录报名进度并设为备考目标"}
+            </span>
+          </span>
+          <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+          </svg>
+        </summary>
+        <div className="border-t border-line p-3">
+          <FollowControls
+            follow={unit.follow}
+            unitName={unit.unit.name}
+            busy={busy}
+            onFollow={() => void followUnit()}
+            onTransition={(status, opts) => void handleTransition(status, opts)}
+            onSetRole={(role) => void handleSetRole(role)}
+            onUnfollow={() =>
+              void runAction(async () => {
+                await opportunitiesApi.unfollow(unitId);
+                track("opportunity_unfollowed", "opportunity", { targetId: unitId });
+              }, { redirectAfter: true })
+            }
+          />
+        </div>
+      </details>
+
       {/* 第二段：关键依据与不确定项（官方事实 vs 系统预筛判断分行展示） */}
       <section className="space-y-4">
         <div>
           <h2 className="text-base font-semibold text-ink">
-            关键依据与不确定项
+            影响当前判断的条件
           </h2>
           <p className="mt-0.5 text-xs text-ink-muted">
-            每条都分「公告怎么写（官方事实）」与「系统预筛判断」；缺少信息不是不符合，向招聘单位确认前系统不自动下结论。
+            先处理缺失、不确定或不满足项；已满足条件可按需展开。
           </p>
         </div>
 
@@ -575,7 +623,7 @@ export default function OpportunityDetailPage() {
       )}
 
       {/* 官方联系信息与咨询模板（仅对需官方确认维度） */}
-      {unit.follow && unit.consultationTemplates && (
+      {unit.follow && unit.consultationTemplates && groups.confirmOfficial.length > 0 && (
         <section className="space-y-3">
           <div>
             <h2 className="text-base font-semibold text-ink">官方咨询</h2>
@@ -599,53 +647,30 @@ export default function OpportunityDetailPage() {
         </section>
       )}
 
-      {/* 第三段：官方原文与岗位表位置 */}
-      <OfficialSourceSection detail={detail} />
-
-      {/* 第四段：核对时间与变化 */}
-      <VerificationSection
-        detail={detail}
-        onOpenCorrection={() => {
-          setCorrectionDone(false);
-          setCorrectionOpen(true);
-        }}
-      />
-
-      {/* 第五段：我的跟进（关注 / 准备报名 / 主要备考目标） */}
-      <div id="follow" className="scroll-mt-20 space-y-3">
-        <FollowControls
-          follow={unit.follow}
-          unitName={unit.unit.name}
-          busy={busy}
-          onFollow={() => void followUnit()}
-          onTransition={(status, opts) => void handleTransition(status, opts)}
-          onSetRole={(role) => void handleSetRole(role)}
-          onUnfollow={() =>
-            void runAction(async () => {
-              await opportunitiesApi.unfollow(unitId);
-              // 模块 7：取消关注（看板计入「关注」，但不再计后续阶段）
-              track("opportunity_unfollowed", "opportunity", { targetId: unitId });
-            }, { redirectAfter: true })
-          }
-        />
-
-        {unit.follow && (
-          <ActionChain
-            follow={unit.follow}
-            unitId={unitId}
-            missingInfoCount={groups.missingInfo.length}
-            confirmOfficialCount={groups.confirmOfficial.length}
-            materials={unit.unit.materials ?? []}
-            deadlineText={deadline.text}
-            officialUrl={unit.unit.registerUrl ?? unit.announcement.officialUrl}
-            busy={busy}
-            onGoMissingInfo={() => scrollToId("missing-info")}
-            onGoConfirm={() => scrollToId("to-confirm")}
-            onPrepare={() => void handleTransition("preparing")}
-            onMarkRegistered={() => void handleTransition("registered")}
+      {/* 第三层：官方依据、核对与版本记录按需展开 */}
+      <details className="group rounded-2xl border border-line bg-surface">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-4 [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="block text-sm font-semibold text-ink">官方依据与版本记录</span>
+            <span className="mt-0.5 block text-xs text-ink-muted">
+              查看公告位置、核对时间、历史版本与纠错入口
+            </span>
+          </span>
+          <svg aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+          </svg>
+        </summary>
+        <div className="space-y-4 border-t border-line p-3">
+          <OfficialSourceSection detail={detail} />
+          <VerificationSection
+            detail={detail}
+            onOpenCorrection={() => {
+              setCorrectionDone(false);
+              setCorrectionOpen(true);
+            }}
           />
-        )}
-      </div>
+        </div>
+      </details>
 
       <CorrectionModal
         isOpen={correctionOpen}

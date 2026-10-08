@@ -15,56 +15,90 @@ function formatDay(iso: string): string {
 export function CoverageBanner({ coverage }: { coverage: CoverageDTO }) {
   const regionText = coverage.regions.map((r) => r.label).join("、");
   return (
-    <section
+    <details
       aria-label="官方监测覆盖说明"
-      className="rounded-xl border border-success/30 bg-success-soft/60 p-4"
+      className="group rounded-2xl border border-line bg-surface"
       data-testid="coverage-banner"
     >
-      <h2 className="text-sm font-semibold text-success">
-        官方监测 · {regionText}
-      </h2>
-      <p className="mt-2 text-sm text-success">
-        当前监测到{" "}
-        <span className="font-semibold">
-          {coverage.openOpportunityCount} 个在报语文教师岗位
-        </span>
-        ；最近一次核对官方来源：{formatDay(coverage.lastCheckedAt)}。
-      </p>
-      <p className="mt-1 text-sm text-ink-muted">{coverage.nextWindowNote}</p>
-
-      <ul className="mt-3 space-y-1 text-xs text-ink-muted">
-        {coverage.regions.flatMap((region) =>
-          region.sources.map((source) => (
-            <li
-              key={source.id}
-              className="flex flex-wrap items-center gap-x-2 gap-y-0.5"
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5 [&::-webkit-details-marker]:hidden">
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-success-soft text-success">
+            <svg
+              aria-hidden="true"
+              className="h-4 w-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
             >
-              <span
-                aria-hidden="true"
-                className={
-                  source.ok
-                    ? "inline-block h-1.5 w-1.5 rounded-full bg-success"
-                    : "inline-block h-1.5 w-1.5 rounded-full bg-danger"
-                }
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="m5 12 4 4L19 6"
               />
-              <span>
-                {region.label} · {source.name}
-              </span>
-              <span>
-                {source.ok ? "来源可访问" : `来源异常：${source.failReason ?? "未知原因"}`}
-              </span>
-              <span>核对于 {formatDay(source.lastCheckedAt)}</span>
-            </li>
-          )),
-        )}
-      </ul>
+            </svg>
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-ink">
+              官方来源已核对 · {regionText}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-muted">
+              {formatDay(coverage.lastCheckedAt)} 更新 · 点击查看监测范围
+            </span>
+          </span>
+        </span>
+        <svg
+          aria-hidden="true"
+          className="h-4 w-4 shrink-0 text-ink-muted transition-transform group-open:rotate-180"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m6 9 6 6 6-6" />
+        </svg>
+      </summary>
 
-      <p className="mt-3 border-t border-success/30 pt-2 text-xs leading-relaxed text-ink-muted">
-        {coverage.scopeNote}
-        下方「真实监测记录」均为 AI 依据官方原文初核、
-        <span className="font-medium">尚待人工复核</span>
-        ，未复核前不进入推荐。覆盖版本 {coverage.version}。
-      </p>
-    </section>
+      <div className="border-t border-line px-4 pb-4 pt-3">
+        <p className="text-sm text-ink">
+          当前监测到{" "}
+          <span className="font-semibold">
+            {coverage.openOpportunityCount} 个在报语文教师岗位
+          </span>
+          ；{coverage.nextWindowNote}
+        </p>
+
+        <ul className="mt-3 space-y-1.5 text-xs text-ink-muted">
+          {coverage.regions.flatMap((region) =>
+            region.sources.map((source) => (
+              <li
+                key={source.id}
+                className="flex flex-wrap items-center gap-x-2 gap-y-0.5"
+              >
+                <span
+                  aria-hidden="true"
+                  className={
+                    source.ok
+                      ? "inline-block h-1.5 w-1.5 rounded-full bg-success"
+                      : "inline-block h-1.5 w-1.5 rounded-full bg-danger"
+                  }
+                />
+                <span>
+                  {region.label} · {source.name}
+                </span>
+                <span>
+                  {source.ok ? "来源可访问" : `来源异常：${source.failReason ?? "未知原因"}`}
+                </span>
+                <span>核对于 {formatDay(source.lastCheckedAt)}</span>
+              </li>
+            )),
+          )}
+        </ul>
+
+        <p className="mt-3 border-t border-line pt-3 text-xs leading-relaxed text-ink-muted">
+          {coverage.scopeNote}
+          AI 初核且尚待人工复核的记录不会进入推荐。覆盖版本 {coverage.version}。
+        </p>
+      </div>
+    </details>
   );
 }
