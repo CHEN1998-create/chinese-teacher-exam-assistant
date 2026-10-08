@@ -152,7 +152,7 @@ function formatCoverageLine(): string {
   const day = Number.isNaN(d.getTime())
     ? GUEST_COVERAGE.lastCheckedAt
     : `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-  return `真实监测：杭州、宁波语文教师渠道，最近核对 ${day}，当前在报 ${GUEST_COVERAGE.openOpportunityCount} 个；下方为功能演示示例公告，非在报岗位。`;
+  return `杭州、宁波语文教师渠道 · ${day}核对 · 当前在报 ${GUEST_COVERAGE.openOpportunityCount} 个`;
 }
 
 /** 这些维度属于「条件画像」，本就不在基础五组中采集；基础五组被跳过时不显示该行 */
@@ -182,8 +182,8 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
     // 仅在预览结果首次展示时记录
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  // 优先卡默认展开，其余卡片默认收起（与机会页同一交互）
-  const [priorityOpen, setPriorityOpen] = useState(true);
+  // 首屏先看机会概要，需要时再展开逐项依据。
+  const [priorityOpen, setPriorityOpen] = useState(false);
   const [openIds, setOpenIds] = useState<ReadonlySet<string>>(new Set());
 
   const toggleRow = (unitId: string) => {
@@ -264,8 +264,11 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
     return (
       <div className="min-h-screen bg-canvas">
         <div className="mx-auto max-w-2xl space-y-4 py-6 px-4">
-          <SummaryCard />
-          <p className="text-xs text-ink-muted">{formatCoverageLine()}</p>
+          <header>
+            <p className="text-xs font-semibold tracking-wide text-brand">初步匹配结果</p>
+            <h1 className="mt-1 text-xl font-bold text-ink">暂时没有可优先推进的机会</h1>
+            <p className="mt-1 text-xs text-ink-muted">{formatCoverageLine()}</p>
+          </header>
           <UncoveredRegionsCard regionLabels={view.uncoveredRegions.map((r) => r.label)} />
           {missingRegion && (
             <Card className="border-warn/30 bg-warn-soft/70" data-testid="missing-region-notice">
@@ -298,6 +301,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             actionHref="/onboarding"
           />
           <LimitationsCard limitations={limitations} />
+          <SummaryCard />
           {archiveSections}
         </div>
       </div>
@@ -310,9 +314,6 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-        {/* 顶部回答摘要：根据这些信息为你判断（模块 0A §7.4） */}
-        <SummaryCard />
-
         {/* 第一层：一句结论 + 一个风险 + 唯一主行动（关注才登录） */}
         <Hero
           meta={formatCoverageLine()}
@@ -324,20 +325,13 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
               : undefined
           }
         >
-          <p className="text-xs text-ink-muted">
-            不登录也可以继续查看全部结果；登录后才能关注机会、保存画像和跟踪报名（演示环境不发送真实通知）。
-          </p>
+          <div className="space-y-1 text-xs leading-relaxed text-ink-muted">
+            <p>先看最值得推进的一项；登录后可以保存画像、关注机会并跟踪报名。</p>
+            <p>下方岗位是功能演示示例，不代表当前真实在报岗位。</p>
+          </div>
         </Hero>
 
-        {/* 最低必要信息缺失导致的结果限制（用户选择过「暂不提供」） */}
-        <LimitationsCard limitations={limitations} />
-
-        {/* 画像地区暂未收录：暂未收录 ≠ 当地没有招聘 */}
-        <UncoveredRegionsCard
-          regionLabels={view.uncoveredRegions.map((region) => region.label)}
-        />
-
-        {/* 优先机会：首屏可见，默认展开依据 */}
+        {/* 优先机会：首屏只保留一张概要卡，逐项依据按需展开 */}
         <div id="priority-opportunity" className="space-y-2">
           <LayerHeading title="最值得先看的机会" />
           <OpportunityCard
@@ -347,6 +341,13 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             onToggle={() => setPriorityOpen((v) => !v)}
           />
         </div>
+
+        {/* 判断输入和限制都放到优先机会之后，避免用户先读表单回顾。 */}
+        <SummaryCard />
+        <LimitationsCard limitations={limitations} />
+        <UncoveredRegionsCard
+          regionLabels={view.uncoveredRegions.map((region) => region.label)}
+        />
 
         {/* 其他初步符合 */}
         {otherPreliminary.length > 0 && (
@@ -459,33 +460,31 @@ function SummaryCard() {
   ];
 
   return (
-    <Card
-      data-testid="preview-summary"
-      className="border-line bg-surface"
-    >
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-ink">根据这些信息为你判断</h2>
-        <LinkButton href="/onboarding" variant="link" className="text-sm">
-          修改
-        </LinkButton>
-      </div>
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
-        {rows.map((row) => (
-          <div key={row.step} className="flex gap-2 text-sm">
-            <dt className="shrink-0 text-ink-muted">{row.label}</dt>
-            <dd
-              className={
-                row.value === USER_COPY.MATCH_STATUS.UNKNOWN
-                  ? "text-warn"
-                  : "text-ink"
-              }
-            >
-              {row.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </Card>
+    <div data-testid="preview-summary">
+      <Disclosure title="本次判断使用的 5 项信息">
+        <div className="mb-3 flex justify-end">
+          <LinkButton href="/onboarding" variant="link" className="text-sm">
+            修改信息
+          </LinkButton>
+        </div>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+          {rows.map((row) => (
+            <div key={row.step} className="flex gap-2 text-sm">
+              <dt className="shrink-0 text-ink-muted">{row.label}</dt>
+              <dd
+                className={
+                  row.value === USER_COPY.MATCH_STATUS.UNKNOWN
+                    ? "text-warn"
+                    : "text-ink"
+                }
+              >
+                {row.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Disclosure>
+    </div>
   );
 }
 

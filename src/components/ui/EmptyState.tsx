@@ -1,5 +1,5 @@
 import { Button } from "./Button";
-import Link from "next/link";
+import { LinkButton } from "./LinkButton";
 
 interface EmptyStateProps {
   title: string;
@@ -19,14 +19,18 @@ export function EmptyState({
   icon,
 }: EmptyStateProps) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      {icon && <div className="mb-4 text-ink-muted/50">{icon}</div>}
-      <h3 className="text-lg font-medium text-ink mb-2">{title}</h3>
-      <p className="text-sm text-ink-muted mb-6 max-w-sm">{description}</p>
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-surface/70 px-5 py-10 text-center">
+      {icon && (
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand">
+          {icon}
+        </div>
+      )}
+      <h3 className="mb-2 text-lg font-semibold text-ink">{title}</h3>
+      <p className="mb-6 max-w-sm text-sm leading-relaxed text-ink-muted">{description}</p>
       {actionLabel && actionHref && (
-        <Link href={actionHref}>
-          <Button variant="primary">{actionLabel}</Button>
-        </Link>
+        <LinkButton href={actionHref} variant="primary">
+          {actionLabel}
+        </LinkButton>
       )}
       {actionLabel && onAction && !actionHref && (
         <Button variant="primary" onClick={onAction}>

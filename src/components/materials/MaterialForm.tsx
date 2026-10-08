@@ -25,6 +25,7 @@ interface MaterialFormProps {
   /** 传入则为编辑，否则新增 */
   initial?: MaterialItem | null;
   onClose: () => void;
+  onSaved?: (name: string) => void;
 }
 
 interface ChapterDraft {
@@ -116,7 +117,7 @@ function ModuleCheckboxGroup({
 }
 
 /** 资料新增/编辑弹窗：挂载即新鲜状态（父组件用条件挂载，无需 effect 重置） */
-export function MaterialForm({ targetId, initial, onClose }: MaterialFormProps) {
+export function MaterialForm({ targetId, initial, onClose, onSaved }: MaterialFormProps) {
   const [form, setForm] = useState<FormState>(() => toFormState(initial));
   const [error, setError] = useState<string | null>(null);
   const isEdit = Boolean(initial);
@@ -183,7 +184,8 @@ export function MaterialForm({ targetId, initial, onClose }: MaterialFormProps) 
       } else {
         materialService.create(payload);
       }
-      onClose();
+      onSaved?.(payload.name);
+      if (!onSaved) onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : "保存失败，请重试");
     }

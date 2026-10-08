@@ -13,16 +13,23 @@ interface TabsProps {
 export function Tabs({ tabs, activeTab, onChange, children }: TabsProps) {
   return (
     <div>
-      <div className="flex gap-1 p-1 bg-slate-100 rounded-lg mb-4 overflow-x-auto">
+      <div
+        className="mb-4 flex gap-1 overflow-x-auto rounded-xl border border-line bg-surface p-1"
+        role="tablist"
+        aria-label="页面分区"
+      >
         {tabs.map((tab) => (
           <button
             key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
             onClick={() => onChange(tab.id)}
             className={cn(
-              "px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors",
+              "min-h-10 flex-1 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand",
               activeTab === tab.id
-                ? "bg-white text-slate-900 shadow-sm"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-brand-soft text-brand"
+                : "text-ink-muted hover:bg-canvas hover:text-ink"
             )}
           >
             {tab.label}
@@ -42,5 +49,5 @@ interface TabPanelProps {
 
 export function TabPanel({ id, activeTab, children }: TabPanelProps) {
   if (id !== activeTab) return null;
-  return <div>{children}</div>;
+  return <div role="tabpanel">{children}</div>;
 }

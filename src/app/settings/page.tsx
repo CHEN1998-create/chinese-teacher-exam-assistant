@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { LinkButton } from "@/components/ui/LinkButton";
 import { Badge } from "@/components/ui/Badge";
 import { Input, Select } from "@/components/ui/Input";
+import { Disclosure } from "@/components/ia/Layer";
+import { StatusMessage, StatusMessageRegion } from "@/components/ui/StatusMessage";
 import { NotificationPreferencePanel } from "@/components/governance/NotificationPreferencePanel";
 import { DataPrivacyPanel } from "@/components/governance/DataPrivacyPanel";
 import { useCurrentUser } from "@/lib/auth";
@@ -24,7 +26,7 @@ export default function SettingsPage() {
   const { user, role, hasRole, logout, updateProfile } = useCurrentUser();
 
   const [isSaving, setIsSaving] = useState(false);
-  const [savedTip, setSavedTip] = useState(false);
+  const [feedback, setFeedback] = useState<{ id: number; message: string } | null>(null);
 
   const [formData, setFormData] = useState({
     educationLevel: user?.educationLevel ?? ("middle" as EducationLevel),
@@ -40,8 +42,10 @@ export default function SettingsPage() {
       dailyAvailableTime: formData.dailyAvailableTime,
     });
     setIsSaving(false);
-    setSavedTip(true);
-    setTimeout(() => setSavedTip(false), 2000);
+    setFeedback({
+      id: Date.now(),
+      message: "学习设置已保存，后续任务会按新的学段和可用时间安排。",
+    });
   };
 
   const handleLogout = async () => {
@@ -52,41 +56,19 @@ export default function SettingsPage() {
   if (!user || !role) return null;
 
   return (
-    <div className="space-y-6">
-      {/* 账号信息 */}
-      <Card>
-        <CardHeader title="账号信息" description="当前登录会话与角色" />
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-brand-soft flex items-center justify-center shrink-0">
-            <span className="text-xl">👤</span>
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="font-medium text-ink">{user.name}</p>
-              <Badge variant="primary">{USER_ROLE_LABELS[role]}</Badge>
-            </div>
-            <p className="text-sm text-ink-muted mt-0.5">用户ID：{user.id}</p>
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap gap-3">
-          <Button variant="outline" size="sm" onClick={handleLogout}>
-            退出登录
-          </Button>
-          {hasRole(STAFF_ROLES) && !isDemoMode && (
-            <Link href="/admin">
-              <Button variant="outline" size="sm">
-                进入运营后台
-              </Button>
-            </Link>
-          )}
-        </div>
-      </Card>
+    <div className="space-y-5">
+      <header>
+        <p className="text-xs font-semibold tracking-wide text-brand">偏好与数据</p>
+        <h1 className="mt-1 text-xl font-bold text-ink">设置</h1>
+        <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+          常用的学习设置放在前面，通知、隐私和账号操作按需展开。
+        </p>
+      </header>
 
-      {/* 基本信息 */}
       <Card>
         <CardHeader
-          title="学习资料设置"
-          description="设置你的学段和每日可用学习时间"
+          title="学习设置"
+          description="这两项会直接影响每日任务的内容与时长。"
         />
         <div className="space-y-4">
           <Select
@@ -116,25 +98,67 @@ export default function SettingsPage() {
             hint="建议 60-300 分钟，系统会根据此安排每日任务"
           />
         </div>
-        <div className="mt-4 flex items-center justify-end gap-3">
-          {savedTip && <span className="text-sm text-success">已保存</span>}
-          <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "保存中..." : "保存设置"}
+        <div className="mt-5 flex justify-end">
+          <Button onClick={handleSave} loading={isSaving}>
+            保存并更新任务安排
           </Button>
         </div>
       </Card>
 
-      {/* 通知设置（即时生效，无需保存） */}
-      <NotificationPreferencePanel />
+      <div className="space-y-3">
+        <Disclosure title="通知与提醒">
+          <NotificationPreferencePanel
+            embedded
+            onSaved={(message) => setFeedback({ id: Date.now(), message })}
+          />
+        </Disclosure>
 
-      {/* 演示环境：一键重置浏览器中的全部演示数据 */}
-      {isDemoMode && <ResetDemoDataCard />}
+        <Disclosure title="账号与登录">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-soft text-brand">
+              <span aria-hidden="true">人</span>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-medium text-ink">{user.name}</p>
+                <Badge variant="primary">{USER_ROLE_LABELS[role]}</Badge>
+              </div>
+              <p className="mt-0.5 truncate text-xs text-ink-muted">用户ID：{user.id}</p>
+            </div>
+          </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button variant="outline" size="sm" onClick={handleLogout}>
+              退出登录
+            </Button>
+            {hasRole(STAFF_ROLES) && !isDemoMode && (
+              <LinkButton href="/admin" variant="outline" size="sm">
+                进入运营后台
+              </LinkButton>
+            )}
+          </div>
+        </Disclosure>
 
-      {/* invited 模式：删除测试数据 / 注销账号 */}
-      {!isDemoMode && <AccountDangerZoneCard />}
+        <Disclosure title="隐私与个人数据">
+          <DataPrivacyPanel />
+        </Disclosure>
+      </div>
 
-      {/* 隐私说明、数据类别与删除申请 */}
-      <DataPrivacyPanel />
+      <section aria-label="高风险操作" className="space-y-3 pt-2">
+        <p className="px-1 text-xs font-semibold tracking-wide text-danger">谨慎操作</p>
+        {isDemoMode && <ResetDemoDataCard />}
+
+        {!isDemoMode && <AccountDangerZoneCard />}
+      </section>
+
+      {feedback && (
+        <StatusMessageRegion className="bottom-20 md:bottom-4">
+          <StatusMessage
+            key={feedback.id}
+            message={feedback.message}
+            onDismiss={() => setFeedback(null)}
+          />
+        </StatusMessageRegion>
+      )}
     </div>
   );
 }
@@ -154,7 +178,7 @@ function ResetDemoDataCard() {
   };
 
   return (
-    <Card>
+    <Card className="border-danger/20 shadow-none">
       <CardHeader
         title="重置演示数据"
         description="清除本浏览器中的全部操作记录与演示会话，恢复到默认演示状态"
@@ -230,7 +254,7 @@ function AccountDangerZoneCard() {
   };
 
   return (
-    <Card>
+    <Card className="border-danger/20 shadow-none">
       <CardHeader
         title="账号与数据"
         description="管理你的测试数据与账号"

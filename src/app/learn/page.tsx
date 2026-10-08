@@ -49,7 +49,7 @@ export default function LearnPage() {
   };
 
   return (
-    <div className="min-h-screen bg-canvas px-4 py-8 md:py-12">
+    <div className="min-h-screen bg-canvas px-4 pb-28 pt-8 md:py-12">
       <div className="mx-auto w-full max-w-xl">
         <header className="flex items-center justify-between gap-3">
           <Link
@@ -69,49 +69,56 @@ export default function LearnPage() {
           <BrandMark size="sm" />
         </header>
 
-        <h1 className="mt-8 text-xl font-bold leading-snug text-ink md:text-2xl">
-          先花 30 秒了解我们怎么判断
+        <h1 className="mt-8 text-2xl font-bold leading-snug tracking-tight text-ink md:text-3xl">
+          我们用三步，帮你找到更值得推进的机会
         </h1>
-        <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          看完可以直接开始匹配。
+        <p className="mt-3 max-w-lg text-sm leading-relaxed text-ink-muted">
+          不替招聘单位做资格认定，只把公告条件、你的情况和需要确认的地方讲清楚。
         </p>
 
-        <ol className="mt-8 space-y-4" aria-label="我们怎么判断：三段说明">
+        <ol
+          className="mt-8 overflow-hidden rounded-3xl border border-line bg-surface px-5 shadow-[0_12px_36px_rgba(30,64,120,0.06)]"
+          aria-label="我们怎么判断：三段说明"
+        >
           {CARDS.map((card, i) => (
             <li
               key={card.id}
               data-testid={`learn-card-${card.id}`}
-              className="rounded-2xl border border-line bg-surface p-5"
+              className="relative flex gap-4 border-b border-line py-5 last:border-b-0"
             >
-              <div className="flex items-center gap-2">
+              <div className="relative z-10 shrink-0">
                 <span
                   aria-hidden="true"
-                  className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand"
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-soft text-sm font-semibold text-brand"
                 >
                   {i + 1}
                 </span>
-                <h2 className="text-base font-semibold text-ink">{card.title}</h2>
               </div>
-              <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-                {card.body}
-              </p>
+              <div>
+                <h2 className="text-base font-semibold text-ink">{card.title}</h2>
+                <p className="mt-1.5 text-sm leading-relaxed text-ink-muted">
+                  {card.body}
+                </p>
+              </div>
             </li>
           ))}
         </ol>
 
-        <div className="mt-8 flex flex-col items-center gap-3">
-          <Button
-            size="lg"
-            fullWidth
-            onClick={handleStart}
-            data-testid="learn-start-match"
-            className="max-w-xs"
-          >
-            开始匹配
-          </Button>
-          <Link href="/" className="text-sm text-ink-muted hover:text-ink">
-            返回首页
-          </Link>
+        <div className="fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur md:static md:mt-8 md:border-0 md:bg-transparent md:p-0">
+          <div className="mx-auto flex max-w-xl flex-col items-center gap-2">
+            <Button
+              size="lg"
+              fullWidth
+              onClick={handleStart}
+              data-testid="learn-start-match"
+              className="max-w-sm"
+            >
+              看看我可能能报哪些
+            </Button>
+            <Link href="/" className="text-xs text-ink-muted hover:text-ink md:text-sm">
+              返回首页
+            </Link>
+          </div>
         </div>
       </div>
     </div>
