@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Hero } from "@/components/ia/Hero";
 import { Disclosure } from "@/components/ia/Layer";
 import { GateTag, MatchStatusTag } from "@/components/ia/MatchStatusTag";
+import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
@@ -211,6 +212,16 @@ export default function OpportunityDetailPage() {
   const gateViews = failedGateViews(unit.gates);
   const closed = gateViews.length > 0;
   const action = nextAction(unit);
+  // 补充表单只收集画像外的事实（出生日期/户籍/社保/工作年限）与自由项；
+  // 学历、专业等画像信息缺失时表单无可补字段，需引导用户去报考信息页补填。
+  const askableUnknown = groups.missingInfo.filter(
+    (d) =>
+      d.dimension === "age" ||
+      d.dimension === "hukou" ||
+      d.dimension === "social_security" ||
+      d.dimension === "work_experience" ||
+      d.dimension === "other",
+  );
   const deadline = deadlineText(
     unit.version.timeline.registrationEnd,
     detail.meta.evaluatedAt,
@@ -457,9 +468,17 @@ export default function OpportunityDetailPage() {
       {/* 标题区（报考单元基础事实） */}
       <header className="space-y-2">
         <div className="flex items-start justify-between gap-3">
-          <h1 className="text-2xl font-semibold leading-snug tracking-tight text-ink">
-            {unit.unit.name}
-          </h1>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold leading-snug tracking-tight text-ink">
+              {unit.unit.name}
+            </h1>
+            {/* 演示数据必须在首屏可见地标识（不收进折叠层） */}
+            {unit.announcement.dataset === "demo" && (
+              <Badge variant="warning" className="mt-2">
+                虚构演示
+              </Badge>
+            )}
+          </div>
           {primaryClosedGate ? (
             <GateTag code={primaryClosedGate.code} />
           ) : (
@@ -477,6 +496,17 @@ export default function OpportunityDetailPage() {
           {closed ? "" : deadline.text}
         </p>
         {/* 模块 7.5：dataset === "real" 已在加载后 early return，此处不再渲染提示 */}
+        {unit.announcement.dataset === "demo" && (
+          <aside
+            className="rounded-xl border border-warn/25 bg-warn-soft/60 px-4 py-3"
+            aria-label="演示数据说明"
+          >
+            <p className="text-sm font-semibold text-ink">这是虚构演示机会</p>
+            <p className="mt-1 text-xs leading-5 text-ink-muted">
+              标题、发布主体与日期均为演示示例，不代表真实招聘信息，不可用于真实报名。
+            </p>
+          </aside>
+        )}
         {unit.follow?.newerVersion && (
           <Callout variant="note" title="公告版本已更新">
             你保存时依据的公告版本已有更新，当前展示的是最新已发布版本。
@@ -646,12 +676,29 @@ export default function OpportunityDetailPage() {
         {/* 补充信息只影响当前画像，提交后即时重算；闸门失败（截止/来源失效等）时不引导补充 */}
         {!closed && groups.missingInfo.length > 0 && (
           <div id="supplement" className="scroll-mt-20">
-            <SupplementForm
-              dimensions={groups.missingInfo}
-              initial={facts}
-              saving={savingFacts}
-              onSave={(next) => void handleSaveFacts(next)}
-            />
+            {askableUnknown.length > 0 ? (
+              <SupplementForm
+                dimensions={groups.missingInfo}
+                initial={facts}
+                saving={savingFacts}
+                onSave={(next) => void handleSaveFacts(next)}
+              />
+            ) : (
+              <aside className="rounded-xl border border-warn/30 bg-warn-soft/40 px-4 py-3">
+                <p className="text-sm font-semibold text-ink">
+                  这些信息在「报考信息」里补充
+                </p>
+                <p className="mt-1 text-xs leading-5 text-ink-muted">
+                  缺少的是学历、专业等报考画像信息。缺失不等于不符合：补充后回到本页会自动重新判断。
+                </p>
+                <Link
+                  href="/onboarding?from=opportunity"
+                  className="mt-3 inline-flex h-10 items-center justify-center rounded-xl bg-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-strong"
+                >
+                  去补充报考信息
+                </Link>
+              </aside>
+            )}
           </div>
         )}
       </section>

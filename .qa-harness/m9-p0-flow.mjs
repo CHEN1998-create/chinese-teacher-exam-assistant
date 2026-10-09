@@ -10,12 +10,12 @@
 import { BASE, check, note, runBrowser, clearLocalStorage } from "./helpers.mjs";
 
 async function loginFromPreview(page) {
-  await page.getByRole("link", { name: /关注.*登录后保存/ }).first().click();
-  await page.waitForURL("**/login**", { timeout: 10000 });
+  // v7：/preview 展示的是虚构示例判断，不再以“关注/保存”为由引导登录；
+  // 登录通过独立入口完成，登录后进入机会列表继续真实（demo）闭环。
+  await page.goto(`${BASE}/login?next=/opportunities`, { waitUntil: "networkidle" });
   await page.fill("#account", "student@demo.app");
   await page.fill("#password", "demo1234");
   await page.click('button[type="submit"]');
-  // 已登录访问 /preview 会被送回 /opportunities
   await page.waitForURL("**/opportunities", { timeout: 15000 });
 }
 
@@ -29,8 +29,8 @@ async function fillOnboarding(page) {
   await page.getByRole("button", { name: "学士学位", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
 
-  // 第 3 组：专业
-  await page.getByPlaceholder("毕业证专业全称").fill("汉语言文学（师范）");
+  // 第 3 组：专业（v7 文案：placeholder 为示例格式）
+  await page.getByLabel("专业全称").fill("汉语言文学（师范）");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
 
   // 第 4 组：毕业时间 + 当前状态
@@ -41,13 +41,14 @@ async function fillOnboarding(page) {
   // 第 5 组：教资（默认语文/初中）+ 至少一种用工形式
   await page.getByRole("button", { name: "已经取得教师资格证", exact: true }).click();
   await page.getByText("事业编", { exact: true }).click();
-  await page.getByRole("button", { name: "查看初步匹配结果" }).click();
+  await page.getByRole("button", { name: "查看筛选结果" }).click();
 }
 
 /** 资料 + 能力基线 + 诊断（沿用 s07 已验证的准备路径，路由更新为 v6.1） */
 async function setupStudyMaterials(page) {
   await page.goto(`${BASE}/materials`, { waitUntil: "networkidle" });
-  await page.getByRole("button", { name: /新增资料|添加资料/ }).first().click();
+  // v7：空态主行动为「新增第一份资料 / 新增我的第一份资料」，已有资料时为「新增资料」
+  await page.getByRole("button", { name: /新增.{0,6}资料|添加资料/ }).first().click();
   await page.waitForTimeout(400);
   const dlg = page.getByRole("dialog");
   await dlg.getByLabel(/资料名称/).fill("语文考编通关宝典（M9验收）");
@@ -67,7 +68,8 @@ async function setupStudyMaterials(page) {
   await page.getByRole("button", { name: "保存准备情况" }).click();
   await page.waitForTimeout(500);
 
-  await page.locator("button", { hasText: "资料怎么用" }).first().click();
+  // v7：第 4 个 Tab 文案由「资料怎么用」改为「使用建议」
+  await page.locator("button", { hasText: "使用建议" }).first().click();
   await page.waitForTimeout(300);
   const gen = page.getByRole("button", { name: /重新计算|再算一次|生成诊断|分析资料怎么用/ });
   if ((await gen.count()) > 0) {
@@ -99,10 +101,10 @@ await runBrowser(async (page) => {
   await page.waitForURL("**/preview", { timeout: 10000 });
   await page.waitForTimeout(600);
   let body = await page.locator("body").innerText();
-  check("访客看到初步机会结果", body.includes("最值得先看的机会"), "");
+  check("访客看到初步机会结果", body.includes("看看以后会怎样帮你判断"), "");
   check(
-    "结果页保留口径提示（初步匹配不等于可报名，最终以单位审核为准）",
-    body.includes("初步匹配结果不等于保证可以报名"),
+    "结果页保留口径提示（示例仅用于体验判断方式，不代表真实招聘）",
+    body.includes("示例仅用于体验判断方式，不代表真实招聘"),
     "",
   );
   check("访客阶段画像事件已暂存", await page.evaluate(() =>
@@ -111,56 +113,62 @@ await runBrowser(async (page) => {
 
   // —— 登录保存 ——
   await loginFromPreview(page);
-  // 演示匹配在浏览器本机完成，轮询等待界面稳定。
-  await page.getByText(/有效机会\s*\d+\s*个/).waitFor({ timeout: 15000 });
+  // 机会列表 v7 结构：优先机会以“优先查看”分区展示
+  await page.getByText("优先查看", { exact: true }).waitFor({ timeout: 15000 });
   body = await page.locator("body").innerText();
-  check("登录后进入机会列表", body.includes("有效机会"), body.match(/有效机会\s*\d+\s*个/)?.[0] ?? "");
+  check("登录后进入机会列表", body.includes("优先查看"), "");
   check("访客暂存事件登录后已迁移", await page.evaluate(() =>
     localStorage.getItem("kb_guest_analytics_pending") === "[]"
   ), "pending 清空");
 
   // —— 查看匹配依据 ——
-  await page.getByRole("link", { name: "查看优先机会的依据与下一步" }).click();
+  await page.locator("#priority-opportunity a").first().click();
   await page.waitForURL(/\/opportunities\/.+/, { timeout: 10000 });
-  await page.getByText("关键依据与不确定项").waitFor({ timeout: 15000 });
-  await page.getByText("示例公告与岗位表位置").waitFor({ timeout: 5000 });
+  await page.getByText("影响当前判断的条件").waitFor({ timeout: 15000 });
   body = await page.locator("body").innerText();
-  check("详情页展示关键依据与不确定项", body.includes("关键依据与不确定项"), "");
-  check("详情页明确标示示例公告", body.includes("示例公告与岗位表位置") && body.includes("虚构演示"), "");
+  check("详情页展示影响当前判断的条件", body.includes("影响当前判断的条件"), "");
+  check("详情页明确标示虚构演示", body.includes("虚构演示") || body.includes("虚构示例"), "");
   check("虚构官方域名不可点击", await page.locator('a[href*="example.gov.cn"]').count() === 0, "");
 
   // —— 关注 ——
-  await page.getByRole("button", { name: "关注（加入考虑中）" }).click();
+  await page.getByRole("button", { name: "保存这个机会" }).click();
   await page.waitForTimeout(900);
+  // v7：跟进控件收在「我的跟进」折叠层内，断言与后续操作前先展开
+  const openFollowDetails = async () => {
+    await page.locator("#follow").evaluate((el) => {
+      if (el instanceof HTMLDetailsElement) el.open = true;
+    });
+  };
+  await openFollowDetails();
   body = await page.locator("body").innerText();
   check("关注成功：进入考虑中", body.includes("考虑中"), "");
 
-  // —— 查看日程 ——
-  await page.goto(`${BASE}/schedule`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(600);
-  body = await page.locator("body").innerText();
-  check("日程页可打开（时间线或空态）", body.includes("关注机会时间线") || body.includes("还没有不能错过的事"), "");
-
-  // —— 标记准备报名 + 设为主要目标 ——
-  await page.goBack({ waitUntil: "networkidle" }).catch(() => undefined);
-  await page.waitForURL(/\/opportunities\/.+/, { timeout: 10000 }).catch(() => undefined);
-  if (!page.url().match(/\/opportunities\/[^/]+$/)) {
-    await page.goto(`${BASE}/opportunities`, { waitUntil: "networkidle" });
-    await page.getByRole("link", { name: "查看优先机会的依据与下一步" }).click();
-    await page.waitForURL(/\/opportunities\/.+/, { timeout: 10000 });
-  }
-  await page.waitForTimeout(500);
+  // —— 标记准备报名 + 设为主要目标（同页完成后再看日程） ——
   await page.getByRole("button", { name: "标记为准备报名" }).first().click();
   await page.waitForTimeout(900);
   body = await page.locator("body").innerText();
   check("已标记准备报名", body.includes("准备报名"), "");
 
-  await page.getByRole("button", { name: /设为主要备考目标/ }).click();
-  await page.waitForTimeout(300);
-  await page.getByRole("button", { name: /确认设为主要|设为主要目标|确认切换/ }).click();
+  await openFollowDetails();
+  await page.getByRole("button", { name: /设为重点准备/ }).first().click();
+  await page.waitForTimeout(400);
+  await page.getByRole("button", { name: "确认设为重点准备" }).click();
   await page.waitForTimeout(900);
   body = await page.locator("body").innerText();
-  check("设为主要目标成功", body.includes("主要备考目标") || body.includes("改为备选目标"), "");
+  check("设为主要目标成功", body.includes("改为备选目标") || body.includes("重点准备"), "");
+
+  // —— 查看日程 ——
+  await page.goto(`${BASE}/schedule`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(600);
+  body = await page.locator("body").innerText();
+  check(
+    "日程页可打开（下一步/时间线或空态）",
+    body.includes("下一件不能错过的事") ||
+      body.includes("当前最重要的一步") ||
+      body.includes("近期没有需要处理的节点") ||
+      body.includes("还没有不能错过的事"),
+    "",
+  );
 
   // —— 备考：核对考试内容 → 资料/基线/诊断 → 生成并确认计划 → 开始第一项任务 ——
   await page.goto(`${BASE}/study`, { waitUntil: "networkidle" });
@@ -177,9 +185,14 @@ await runBrowser(async (page) => {
   await page.goto(`${BASE}/study`, { waitUntil: "networkidle" });
   await page.waitForTimeout(600);
   body = await page.locator("body").innerText();
-  if (body.includes("生成草稿计划")) {
-    await page.getByRole("button", { name: "生成草稿计划" }).click();
+  // v7：生成按钮文案为「生成我的 7 天计划」
+  if (body.includes("生成我的 7 天计划")) {
+    await page.getByRole("button", { name: "生成我的 7 天计划" }).click();
     await page.waitForTimeout(1000);
+  }
+  body = await page.locator("body").innerText();
+  if (body.includes("还差一点，暂时不能生成计划")) {
+    note("就绪门禁未通过：还差信息，无法生成计划");
   }
   body = await page.locator("body").innerText();
   if (body.includes("确认计划，开始执行")) {

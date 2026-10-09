@@ -143,13 +143,13 @@ export default function StudyPage() {
   useEffect(() => {
     if (status !== "authenticated" || !userId) return;
     let cancelled = false;
-    setForbidden(false);
     goalService
       .fetchGoals()
       .then((res) => {
         if (cancelled) return;
         setGoals(res);
         setGoalsError(null);
+        setForbidden(false);
         setConfirmation(goalService.getExamContentConfirmation(userId));
       })
       .catch((e: unknown) => {
@@ -212,7 +212,10 @@ export default function StudyPage() {
           description={
             online ? goalsError : "网络已断开。恢复网络后点击重试，或返回后再打开。"
           }
-          onRetry={() => setReloadKey((k) => k + 1)}
+          onRetry={() => {
+            setGoalsError(null);
+            setReloadKey((k) => k + 1);
+          }}
         />
       </div>
     );

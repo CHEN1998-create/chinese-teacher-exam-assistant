@@ -95,14 +95,15 @@ export async function guestOnboarding(page, base = BASE) {
   await page.getByRole("button", { name: "本科", exact: true }).click();
   await page.getByRole("button", { name: "学士学位", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
-  await page.getByPlaceholder("毕业证专业全称").fill("汉语言文学（师范）");
+  // v7：专业为 label 输入框；末步按钮为「查看筛选结果」
+  await page.getByLabel("专业全称").fill("汉语言文学（师范）");
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.locator('input[type="month"]').fill("2024-06");
   await page.getByRole("button", { name: "已毕业，暂时没落实工作", exact: true }).click();
   await page.getByRole("button", { name: "下一步", exact: true }).click();
   await page.getByRole("button", { name: "已经取得教师资格证", exact: true }).click();
   await page.getByText("事业编", { exact: true }).click();
-  await page.getByRole("button", { name: "查看初步匹配结果" }).click();
+  await page.getByRole("button", { name: "查看筛选结果" }).click();
   await page.waitForURL("**/preview", { timeout: 10000 });
 }
 

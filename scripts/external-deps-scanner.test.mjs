@@ -105,7 +105,7 @@ describe("构建产物基线（执行过 npm run build 时生效）", () => {
     }
     const { blocked } = scanRoots([nextDir]);
     expect(blocked.map((b) => `${b.origin} @ ${b.file}`)).toEqual([]);
-  });
+  }, 60_000); // 全量并发时扫描数千个产物文件在 Windows 上可能超出默认 5s
 
   it("浏览器静态 chunk 不含服务端密钥变量名", (ctx) => {
     if (!fs.existsSync(staticDir)) {
@@ -113,7 +113,7 @@ describe("构建产物基线（执行过 npm run build 时生效）", () => {
       return;
     }
     expect(scanClientSecrets(staticDir)).toEqual([]);
-  });
+  }, 60_000);
 });
 
 describe("报警器有效性自检", () => {

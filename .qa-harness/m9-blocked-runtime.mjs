@@ -38,30 +38,31 @@ await runBrowser(async (page, context) => {
     // 1) 首页：访客价值主张与画像入口可用
     await page.goto(`${BASE}/`, { waitUntil: "networkidle" });
     let body = await page.locator("body").innerText();
-    check("首页核心内容可见", body.includes("再看自己可能能报哪些教师岗位"), "");
+    // v7：首页主标题为「先看看，你可能能报哪些教师岗位」
+    check("首页核心内容可见", body.includes("你可能能报哪些教师岗位"), "");
     check("首页画像入口可用", await page.getByTestId("start-onboarding").isVisible(), "");
 
     // 2) 访客画像 → 登录：在断跨源条件下完成画像、预览与 demo 登录
     await page.evaluate(() => localStorage.clear());
     await guestOnboarding(page, BASE);
-    await page.getByRole("link", { name: /关注.*登录后保存/ }).first().click();
-    await page.waitForURL("**/login**", { timeout: 10000 });
+    // v7：preview 为虚构示例，不引导关注/登录；直接进入登录页
+    await page.goto(`${BASE}/login?next=/opportunities`, { waitUntil: "networkidle" });
     await page.fill("#account", ACCOUNTS.student.account);
     await page.fill("#password", ACCOUNTS.student.password);
     await page.click('button[type="submit"]');
     await page.waitForURL("**/opportunities", { timeout: 15000 });
     check("登录成功并进入机会页", page.url().includes("/opportunities"), page.url());
 
-    // 3) 机会：即时匹配列表可读（轮询等待 /api/opportunities/match）
-    await page.getByText(/有效机会\s*\d+\s*个/).waitFor({ timeout: 15000 });
+    // 3) 机会：即时匹配列表可读（轮询等待列表结论）
+    await page.getByText("优先查看", { exact: true }).first().waitFor({ timeout: 15000 });
     body = await page.locator("body").innerText();
-    check("机会页核心操作可用（有效机会即时匹配）", body.includes("有效机会"), body.match(/有效机会\s*\d+\s*个/)?.[0] ?? "无匹配文案");
+    check("机会页核心操作可用（列表结论与优先机会）", body.includes("优先查看") && body.includes("机会结论"), "机会结论 + 优先查看");
 
     // 4) 日程：时间线/空态可读
     await page.goto(`${BASE}/schedule`, { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
     body = await page.locator("body").innerText();
-    check("日程页核心内容可用", body.includes("关注机会时间线") || body.includes("还没有不能错过的事"), "");
+    check("日程页核心内容可用", body.includes("完整时间线") || body.includes("还没有不能错过的事") || body.includes("近期没有需要处理的节点"), "");
 
     // 5) 备考：门禁/任务页可读（不要求新用户一定有今日任务）
     await page.goto(`${BASE}/study`, { waitUntil: "networkidle" });
@@ -69,10 +70,11 @@ await runBrowser(async (page, context) => {
     body = await page.locator("body").innerText();
     check(
       "备考页核心内容可用（主目标门禁或今日任务）",
-      body.includes("先选择一个主要备考目标") ||
+      body.includes("先选择一个重点准备的机会") ||
         body.includes("今天") ||
-        body.includes("生成首个 7 天计划") ||
-        body.includes("考试内容核对"),
+        body.includes("生成我的 7 天计划") ||
+        body.includes("确认示例考情") ||
+        body.includes("先打开官方公告核对"),
       "",
     );
   } else {

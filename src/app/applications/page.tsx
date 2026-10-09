@@ -59,13 +59,13 @@ export default function ApplicationsPage() {
   useEffect(() => {
     if (status !== "authenticated" || !userId) return;
     let cancelled = false;
-    setError(null);
-    setForbidden(false);
     Promise.all([opportunitiesApi.getGoals(), opportunitiesApi.listFollows()])
       .then(([g, f]) => {
         if (cancelled) return;
         setGoals(g);
         setFollows(f);
+        setError(null);
+        setForbidden(false);
       })
       .catch((e: unknown) => {
         if (cancelled) return;
@@ -124,7 +124,10 @@ export default function ApplicationsPage() {
         description={
           online ? error : "网络已断开。恢复网络后点击重试，或返回后再打开。"
         }
-        onRetry={() => setReloadKey((k) => k + 1)}
+        onRetry={() => {
+          setError(null);
+          setReloadKey((k) => k + 1);
+        }}
       />
     );
   }
@@ -161,7 +164,6 @@ export default function ApplicationsPage() {
     merged[0]!;
   const primaryGoal = primaryEntry.goal;
   const primaryFollow = primaryEntry.follow;
-  const backups = merged.filter((m) => m.goal.unitId !== primaryGoal.unitId);
 
   // 主目标下一步：基于 followStatus 推导（不引入新状态机）
   const primaryNextStep = nextStepFor(primaryGoal.followStatus, primaryGoal);

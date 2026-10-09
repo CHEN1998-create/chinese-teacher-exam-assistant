@@ -8,7 +8,7 @@
 
 > **品牌口径**：“教招有据”是产品名；“验证版”是阶段标签，仅用于试用说明与内部文档，不默认拼进 Logo；固定功能副标题为“教师招聘机会与资格预筛”；所有资格结论均为预筛，最终以官方公告和招聘单位审核为准。商标、域名与平台账号名称占用状态为**待核查**，对外发布前须完成近似查询，详见 [`docs/教招有据-模块0-品牌清单与版本决策记录.md`](./docs/教招有据-模块0-品牌清单与版本决策记录.md)。
 
-当前实现以 [`v6.1 PRD`](./PRD-全国教师公开招聘与备考助手-v6.1.md) 的完整业务闭环为能力基础，并按 [`v7.0 研究验证版 PRD`](./PRD-全国教师公开招聘助手-v7.0-研究验证版.md) 收拢用户端叙事、主导航和验证重点。本 README 描述仓库在 **2026-10-08** 的实际产品状态、运行方式与边界；后端能力详见 [`backend/README.md`](./backend/README.md)。
+当前实现以 [`v6.1 PRD`](./PRD-全国教师公开招聘与备考助手-v6.1.md) 的完整业务闭环为能力基础，并按 [`v7.0 研究验证版 PRD`](./PRD-全国教师公开招聘助手-v7.0-研究验证版.md) 收拢用户端叙事、主导航和验证重点。本 README 描述仓库在 **2026-10-09** 的实际产品状态、运行方式与边界；后端能力详见 [`backend/README.md`](./backend/README.md)。
 
 ## 文档地图
 
@@ -26,7 +26,7 @@
 
 ---
 
-## 一、当前产品状态（2026-10-08）
+## 一、当前产品状态（2026-10-09）
 
 > 状态标识：✅ = 仓库中已实现并有自动化测试覆盖；🚧 = 代码已写但**尚未在真实环境验证**；❌ = 未实现，不得对外宣称完成。
 
@@ -47,16 +47,18 @@
 
 > **验收状态（2026-10-05 模块 9 收口）**：登录后 P0 闭环 E2E 23/23（demo 会话）与 invited 受邀链路 E2E 29/29（服务端登录、HttpOnly 会话、画像迁移、账号隔离、登出失效；脚本 [`.qa-harness/m9-invited-flow.mjs`](./.qa-harness/m9-invited-flow.mjs)）均在真实 NestJS + PostgreSQL 上通过；断跨源运行时回归用户侧 7/7、管理侧（非 demo 构建）2/2；无代理中国移动家庭宽带与手机蜂窝真实网络冒烟通过（[`.qa-harness/m9-cn-smoke.mjs`](./.qa-harness/m9-cn-smoke.mjs)）。**仍待办**：公开受邀地址（境内部署 + ICP 备案 + HTTPS）未落地，上线后须按 [`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md) 第 6.3 节补测。
 
-> **2026-10-07 线上复测**：[公开 Vercel 演示地址](https://frontend-exam-test.vercel.app) 已更新，demo P0 闭环 25/25、断跨源 7/7、安全冒烟 2/2 通过；阿里云受邀地址尚未开放。2026-10-05 的 demo + 后端联调记录仅为历史记录，不再作为当前架构使用。
+> **2026-10-07 线上复测**（v7 视觉改造前）：[公开 Vercel 演示地址](https://frontend-exam-test.vercel.app) 已更新，demo P0 闭环 25/25、断跨源 7/7、安全冒烟 2/2 通过；阿里云受邀地址尚未开放。2026-10-05 的 demo + 后端联调记录仅为历史记录，不再作为当前架构使用。**2026-10-09 v7 视觉系统落地后，`.qa-harness/` Playwright 脚本的选择器可能受页面重构影响，尚未重跑；单元测试 212/212 与生产构建已通过。**
 
 ### 当前界面与体验原则
 
-2026-10-08 已完成首页、登录、画像、机会列表、机会详情、日程、备考、我的、资料、设置、访客预览和产品说明页的连续视觉优化。当前界面遵循以下规则：
+2026-10-09 已完成首页、登录、画像、机会列表、机会详情、报考中心、日程、备考、我的、资料、设置、访客预览和产品说明页的连续视觉优化，并落地 v7 视觉系统。当前界面遵循以下规则：
 
 - 每个核心页面先给出**一个结论 + 一个下一步**，详细依据按需展开；
-- 主色使用明亮蓝与冷白背景，绿色、黄色、红色只表达成功、待确认和风险；
+- 主色为**温暖米白（#FCFBF8）背景 + 深海军蓝（#071A31）品牌色**，大圆角、克制阴影；绿色、黄色、红色只表达成功、待确认和风险；
+- 统一 v7 组件库（`src/components/ui/`）：Button / Card / Badge / Loading / Skeleton / EmptyState / ErrorState / Modal / Tabs / Progress / Switch / TaskCard / Disclosure / Drawer / StatusMessage，以及 v7 新增 9 件——Toast/Toaster、Timeline、QualifyConclusionCard（四档状态 ok/miss/ask/no）、EvidenceCard、FeedbackBar、OpportunityCard、ApplicationTargetCard、MaterialList、Callout（ask/no/note/ok/grey 变体）；
 - 减少大段说明、同权重卡片和重复免责声明，统一标题、标签页、空状态与加载骨架；
-- 关注、保存资料、修改通知和学习设置后提供明确反馈；
+- 关注、保存资料、修改通知和学习设置后提供明确反馈（FeedbackBar / Callout(ok) / Toast）；
+- **完整状态覆盖**：加载、空态、错误+重试、离线（`useOnlineStatus` hook + 离线 Callout/ErrorState）、无权限（401/403 → EmptyState + 去登录）、数据过期（materials `stale` / `newerVersion` → Callout(note)）、乐观锁冲突（VERSION_CONFLICT → Callout(no) + 重拉）、成功反馈，均有对应表达；
 - 移动端保证主要按钮可见，长页面与底部导航保留安全间距；
 - 匹配依据、官方来源、数据覆盖范围和“预筛不等于最终审核”的边界不因视觉简化而隐藏。
 
@@ -74,10 +76,10 @@
 | 公告流水线：提交来源 → 快照留档（SHA-256）→ 确定性解析提取 → 候选待审核 → 人工审核 → 不可变版本发布 | ✅ 后端模块；当前解析器为确定性规则（❌ 未接真实 AI/OCR）；快照存服务端本地卷 `.data/snapshots`（❌ 未接对象存储）；提交方式为 URL + 粘贴正文（❌ 无二进制附件上传） |
 | 运营后台：指标看板（含 P0 漏斗）、考情审核、公告流水线、资源管理、纠错队列 | ✅ demo 本地数据；invited 走服务端角色校验；公开演示环境 `/admin` 整体关闭 |
 | 用户纠错、结论撤回留痕、通知偏好、数据删除申请 | ✅ demo；invited 服务端接口部分覆盖（❌ 真实删除流程未全链路验证） |
-| 用户端产品化体验：结论优先、唯一主行动、渐进展开、统一空态/加载态、保存与开关反馈、移动端适配 | ✅ 2026-10-08 已覆盖主要用户页面 |
+| 用户端产品化体验：结论优先、唯一主行动、渐进展开、统一空态/加载态、保存与开关反馈、移动端适配 | ✅ 2026-10-09 v7 视觉系统（温暖米白+深海军蓝）落地，9 件 v7 组件 + 完整状态覆盖（离线/无权限/数据过期/冲突）覆盖主要用户页面 |
 | 分析指标：27 事件（含 8 个 P0 漏斗事件）、seed/live 分流、访客暂存迁移、P0 9 阶段漏斗与 7 日有效推进率 | ✅ 模块 9 口径，见下文“分析与指标” |
 | 运行时网络基线：CSP 同源、外部依赖扫描与守卫、断跨源核心操作回归 | ✅ 代码侧 + 真实网络实测：2026-10-05 中国移动家庭宽带与手机蜂窝无代理冒烟通过（[`docs/china-network-accessibility.md`](./docs/china-network-accessibility.md) 第 6.3 节）；备案域名公开访问待部署后补测 |
-| 单元/领域测试 | ✅ Vitest，26 个测试文件：205 个通过、2 个按配置跳过（共 207 个，2026-10-08 本机复测），含网络基线守卫与模块 9 高风险回归 |
+| 单元/领域测试 | ✅ Vitest，27 个测试文件：212 个通过（2026-10-09 本机复测），含网络基线守卫与模块 9 高风险回归 |
 | 真实短信/微信/邮件/Web Push、自动全国爬虫、对象存储、真实 AI/OCR | ❌ 本轮明确不做/未接入 |
 
 ### 技术栈
@@ -98,7 +100,7 @@ npm run dev        # http://localhost:3000（demo 模式）
 质量检查：
 
 ```bash
-npm test                 # Vitest 全量：205 通过、2 按配置跳过（共 207 个）
+npm test                 # Vitest 全量：212 个通过（27 个测试文件）
 npm run check:external   # 扫描源码与构建产物的运行时外部依赖（postbuild 自动执行）
 npx tsc --noEmit         # 类型检查
 npm run lint             # ESLint
@@ -150,6 +152,7 @@ npm run start:dev
 | `/login` | demo 演示登录 / invited 服务端登录；支持 `?next=`；访客画像与暂存事件登录后迁移 |
 | `/opportunities` | 机会列表：优先机会、其他初步符合、补问/人工确认/不符合二级分组 |
 | `/opportunities/[unitId]` | 机会详情三层：结论与下一步、逐项资格核对、官方依据与版本；关注/推进/设主目标/补充资格 |
+| `/applications` | 报考中心：主目标工作区 + 报名倒计时 + 材料完成度 + 官方报名入口（只跳验证过的地址）+ 状态历史 Timeline + 全部报考目标 |
 | `/schedule` | 关注机会报名与考试时间线、下一件不能错过的事 |
 | `/study` | 备考：主要目标门禁、考情核对门禁、7 天计划、今日一项任务、反馈与重排 |
 | `/me` | 登录后的个人中心：画像结论、资料、备考、通知、设置与纠错入口 |
@@ -157,7 +160,7 @@ npm run start:dev
 | `/settings` | 高频学习设置前置；通知、账号、隐私按需展开；危险操作独立分区 |
 | `/admin`、`/admin/reviews`、`/admin/pipeline`、`/admin/exams`、`/admin/resources`、`/admin/feedback`、`/admin/corrections`、`/admin/trial` | 运营后台（仅工作人员角色；公开演示环境整体关闭） |
 
-已删除的 v5.2 旧路由 `/exam`、`/today`、`/plan` 由 [`src/middleware.ts`](./src/middleware.ts) 307 跳转到 `/opportunities`、`/study`（保留查询参数）；映射表与 [`src/lib/ia/nav.ts`](./src/lib/ia/nav.ts) 的 `LEGACY_ROUTE_REDIRECTS` 锁定一致，`src/middleware.test.ts` 覆盖。
+已删除的 v5.2 旧路由 `/exam`、`/today`、`/plan` 由 [`src/proxy.ts`](./src/proxy.ts) 307 跳转到 `/opportunities`、`/study`（保留查询参数）；映射表与 [`src/lib/ia/nav.ts`](./src/lib/ia/nav.ts) 的 `LEGACY_ROUTE_REDIRECTS` 锁定一致，`src/proxy.test.ts` 覆盖。
 
 ### 主要领域模块
 
@@ -172,6 +175,8 @@ npm run start:dev
 - `src/lib/governance/`：纠错、撤回留痕、通知偏好、隐私删除
 - `src/lib/analytics/`：27 事件字典与指标纯函数；seed/live 分流；详见下节
 - `src/lib/auth/`：`AuthService` 接口 + `DemoAuthProvider` / `HttpAuthProvider`，`instance.ts` 按 `NEXT_PUBLIC_AUTH_MODE` 切换
+- `src/lib/useOnlineStatus.ts`：网络在线状态监听（`navigator.onLine` + online/offline 事件）与 401/403 鉴权错误识别，供页面离线/无权限状态分支复用
+- `src/components/ui/`：v7 组件库（token 见 `src/app/globals.css`）：Button / Card / Input / Badge / Loading / Skeleton / EmptyState / ErrorState / Modal / Tabs / Progress / Switch / TaskCard / Disclosure / Drawer / StatusMessage + v7 新增 Toast / Timeline / QualifyConclusionCard / EvidenceCard / FeedbackBar / OpportunityCard / ApplicationTargetCard / MaterialList / Callout，统一从 `index.ts` 导出
 
 ### 分析与指标（模块 9 口径）
 
@@ -230,4 +235,4 @@ npm run start:dev
 
 ---
 
-*本 README 于 2026-10-08 按当前仓库重新核对：用户端已采用“机会 / 日程 / 我的”信息架构，备考作为主要目标后的次级闭环；主要页面完成结论优先、单一主行动、渐进展开与反馈状态优化。Vitest 共 207 个用例（205 通过、2 按配置跳过），类型检查、ESLint 与生产构建通过。公开受邀地址（境内部署 + ICP + HTTPS）仍待办，未实现能力继续标注 ❌/🚧，不得移入“已实现”。*
+*本 README 于 2026-10-09 按当前仓库重新核对：用户端已采用“机会 / 日程 / 我的”信息架构，备考作为主要目标后的次级闭环；主要页面完成 v7 视觉系统（温暖米白 + 深海军蓝 + 9 件新组件）与完整状态覆盖（加载/空态/错误+重试/离线/无权限/数据过期/冲突/成功反馈）。Vitest 共 27 个测试文件、212 个用例全部通过，类型检查、ESLint 与生产构建通过。公开受邀地址（境内部署 + ICP + HTTPS）仍待办，未实现能力继续标注 ❌/🚧，不得移入“已实现”。*
