@@ -58,3 +58,22 @@ next-env.d.ts
 /.qa-harness/test-results/
 /.qa-harness/playwright-report/
 /.qa-harness/.auth/
+
+# ===== [项目特有] 历史遗留与编辑器缓存（非源码，不跟踪）=====
+/.legacy-git-metadata/
+/.merge-primary-repo/
+/.trae/
+
+# ===== 嵌套 frontend 子目录构建副本（主工程在根目录，子目录是误入的构建产物）=====
+/frontend/
+
+# ===== 发布与构建压缩包 =====
+/*.tgz
+/deploy/*.tgz
+/deploy/release-*.tgz
+/*.zip
+
+# ===== 受邀部署敏感凭据（私钥/公钥/token，绝不提交）=====
+/deploy/aliyun_ed25519
+/deploy/aliyun_ed25519.pub
+/deploy/internal-token.txt
