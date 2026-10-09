@@ -34,6 +34,27 @@ export class AdminGuard implements CanActivate {
   }
 }
 
+/**
+ * 仅超级管理员（admin）守卫。
+ *
+ * 与 AdminGuard（全体工作人员）区分：提交真实公告来源会改写对用户展示的
+ * 真实监测台账，属于最高影响操作，审核员（exam_reviewer / resource_reviewer）
+ * 只负责审核与发布，不得录入新来源（职责分离）。
+ */
+@Injectable()
+export class StrictAdminGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const req = context.switchToHttp().getRequest();
+    const user = resolveAuthenticatedUser(req);
+    if (!user) throw new UnauthorizedException('缺少用户身份信息，请先登录');
+    if (user.role !== 'admin') {
+      throw new ForbiddenException('提交公告来源仅限运营管理员');
+    }
+    req.user = user;
+    return true;
+  }
+}
+
 @Injectable()
 export class ReviewGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {

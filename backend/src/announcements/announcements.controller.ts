@@ -9,7 +9,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AnnouncementsService } from './announcements.service.js';
-import { AdminGuard, ReviewGuard } from './admin.guard.js';
+import { AdminGuard, ReviewGuard, StrictAdminGuard } from './admin.guard.js';
 import type { ReviewAction } from './domain.js';
 
 interface AuthenticatedRequest {
@@ -22,9 +22,11 @@ export class AnnouncementsController {
   constructor(private readonly service: AnnouncementsService) {}
 
   // ==================== 管理员：提交来源 ====================
+  // 提交真实公告来源改写对用户展示的真实监测台账，属最高影响操作；
+  // 仅限运营管理员（admin），审核员只负责审核与发布（职责分离）。
 
   @Post('sources')
-  @UseGuards(AdminGuard)
+  @UseGuards(StrictAdminGuard)
   async submitSource(
     @Body()
     body: {
