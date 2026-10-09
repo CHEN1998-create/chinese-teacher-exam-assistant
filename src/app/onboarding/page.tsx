@@ -3,10 +3,9 @@
 import { Suspense, useEffect, useState, type ChangeEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Disclosure } from "@/components/ui/Disclosure";
-import { StatusMessage } from "@/components/ui/StatusMessage";
+import { FeedbackBar } from "@/components/ui/FeedbackBar";
 import { useCurrentUser, AUTH_MODE } from "@/lib/auth";
 import {
   CITY_OPTIONS,
@@ -69,10 +68,10 @@ const STEP_TITLES = [
 const STEP_LABELS = ["地区偏好", "学历学位", "专业信息", "毕业情况", "教师资格"];
 
 const STEP_FEEDBACK: Record<number, string> = {
-  1: "地区偏好已记住，接下来核对学历条件",
-  2: "学历学位已记住，接下来核对专业要求",
+  1: "很好，已缩小一部分范围。接下来核对学历条件",
+  2: "已记录，这会帮助我们排除明显不符合的岗位",
   3: "专业信息已记住，接下来判断毕业身份",
-  4: "毕业情况已记住，最后核对教师资格",
+  4: "还差两步，就能看到初步结果",
 };
 
 function OnboardingForm() {
@@ -106,10 +105,11 @@ function OnboardingForm() {
   // 本机存储写入失败提示（输入仍保留在 draft 状态中，不会丢失）
   const [saveError, setSaveError] = useState(false);
 
-  // 完成一组后的非阻塞即时反馈（模块 0A 第七节）
+  // 完成一组后的非阻塞即时反馈（v7 FeedbackBar：done=完成，note=进行中）
   const [recentFeedback, setRecentFeedback] = useState<{
-    tone: "success" | "info" | "warn" | "danger";
+    variant: "note" | "done";
     message: string;
+    key: number;
   } | null>(null);
 
   useEffect(() => {
@@ -165,7 +165,8 @@ function OnboardingForm() {
         return;
       }
       setRecentFeedback({
-        tone: "info",
+        variant: "note",
+        key: Date.now(),
         message: "只需先选择一个能接受的地区，其余信息可以稍后再补。",
       });
       setView(1);
@@ -188,7 +189,8 @@ function OnboardingForm() {
       router.push("/preview");
     } else {
       setRecentFeedback({
-        tone: "success",
+        variant: "done",
+        key: Date.now(),
         message: STEP_FEEDBACK[finishedStep],
       });
       setView(finishedStep + 1);
@@ -234,7 +236,8 @@ function OnboardingForm() {
           return;
         }
         setRecentFeedback({
-          tone: "info",
+          variant: "note",
+          key: Date.now(),
           message: "只需先选择一个能接受的地区，其余信息可以稍后再补。",
         });
         setView(1);
@@ -246,7 +249,8 @@ function OnboardingForm() {
       router.push("/preview");
     } else {
       setRecentFeedback({
-        tone: "info",
+        variant: "note",
+        key: Date.now(),
         message: `已跳过${STEP_LABELS[view - 1]}，结果中会明确标出影响`,
       });
       setView(view + 1);
@@ -273,19 +277,23 @@ function OnboardingForm() {
         <div className="mb-5 flex items-center justify-between gap-2">
           <Link
             href="/"
-            className="inline-flex h-10 items-center gap-1 rounded-lg px-1 text-sm text-ink-muted transition-colors hover:text-ink"
+            className="inline-flex h-10 items-center gap-1 rounded-md px-1 text-sm text-ink-muted transition-colors hover:text-ink"
           >
             <svg
               aria-hidden="true"
               className="h-4 w-4"
-              viewBox="0 0 20 20"
-              fill="currentColor"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <path d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414L6 10l5.293-5.293a1 1 0 011.414 0z" />
+              <path d="m15 18-6-6 6-6" />
             </svg>
             退出
           </Link>
-          <span className="rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted shadow-sm ring-1 ring-line">
+          <span className="rounded-pill bg-surface px-3 py-1.5 text-xs font-medium text-ink-muted ring-1 ring-line">
             {view} / {TOTAL_PROFILE_STEPS}
           </span>
         </div>
@@ -295,7 +303,7 @@ function OnboardingForm() {
           <p className="text-xs text-ink-muted">{STEP_LABELS[view - 1]}</p>
         </div>
 
-        {/* 进度条：蓝=已完成，琥珀=已选暂不提供，灰=未到达 */}
+        {/* 进度条：原型 .prog__bar（4px 高、ink-2 填充）；蓝=已完成，琥珀=已选暂不提供，灰=未到达 */}
         <div
           className="mb-5 flex gap-2"
           role="progressbar"
@@ -311,11 +319,11 @@ function OnboardingForm() {
               <div
                 key={i}
                 title={isSkipped ? `第 ${stepNo} 组：暂不提供` : undefined}
-                className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
+                className={`h-1 flex-1 rounded-pill transition-colors duration-300 ${
                   isSkipped
                     ? "bg-warn"
                     : i < view
-                      ? "bg-brand"
+                      ? "bg-brand-strong"
                       : "bg-line"
                 }`}
               />
@@ -323,17 +331,18 @@ function OnboardingForm() {
           })}
         </div>
 
+        {/* v7 反馈条：done=完成（绿），note=进行中（蓝），不打断用户继续操作 */}
         {recentFeedback && (
-          <StatusMessage
-            tone={recentFeedback.tone}
-            message={recentFeedback.message}
-            duration={4000}
-            onDismiss={() => setRecentFeedback(null)}
-            className="mb-4 shadow-none"
-          />
+          <div className="mb-4">
+            <FeedbackBar
+              key={recentFeedback.key}
+              message={recentFeedback.message}
+              variant={recentFeedback.variant}
+            />
+          </div>
         )}
 
-        <Card padding="lg" className="border-white/80 sm:p-8">
+        <section className="rounded-xl border border-line bg-surface p-5 shadow-1 sm:p-7">
           <p className="mb-2 text-xs font-semibold tracking-wide text-brand">第 {view} 步</p>
           <h1 className="text-xl font-bold leading-snug tracking-[-0.02em] text-ink sm:text-2xl">
             {STEP_TITLES[view - 1]}
@@ -447,16 +456,19 @@ function OnboardingForm() {
               {STEP_SKIP_COPY[view].action}
             </button>
           )}
-        </Card>
+        </section>
 
         {view > 1 && (
           <div className="mt-4">
             <button
               type="button"
               onClick={goBack}
-              className="text-sm text-ink-muted hover:text-ink"
+              className="inline-flex items-center gap-1 text-sm text-ink-muted hover:text-ink"
             >
-              ← 返回上一组修改
+              <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m15 18-6-6 6-6" />
+              </svg>
+              返回上一组修改
             </button>
           </div>
         )}

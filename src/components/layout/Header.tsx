@@ -46,7 +46,7 @@ export function Header() {
 
   return (
     <header
-      className={`sticky top-0 z-40 border-b border-line bg-surface md:hidden ${
+      className={`sticky top-0 z-40 border-b border-line bg-canvas/95 backdrop-blur md:hidden ${
         // 演示模式：移动端为两行高的横幅让出空间
         isDemoMode ? "top-11" : "top-0"
       }`}

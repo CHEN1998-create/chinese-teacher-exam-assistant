@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
 import { StatusMessage } from "@/components/ui/StatusMessage";
+import { Callout } from "@/components/ui/Callout";
 import {
   deadlineText,
   natureShortLabel,
@@ -49,6 +50,7 @@ import { MaterialsList } from "@/components/opportunities/MaterialsList";
 import { ConsultationPanel } from "@/components/opportunities/ConsultationPanel";
 import { track, trackView } from "@/lib/analytics/eventService";
 import { gateStateMeta } from "@/lib/gate-states";
+import { useOnlineStatus, isForbiddenError } from "@/lib/useOnlineStatus";
 
 function scrollToId(id: string) {
   const target = document.getElementById(id);
@@ -70,6 +72,8 @@ export default function OpportunityDetailPage() {
     () => profileState.status === "ready",
   );
   const [error, setError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
+  const online = useOnlineStatus();
   const [facts, setFacts] = useState<SupplementFacts>(() =>
     supplementFactsService.load(),
   );
@@ -87,6 +91,7 @@ export default function OpportunityDetailPage() {
     async (profile: UserRecruitmentProfile): Promise<UnitDetailResponse | undefined> => {
       setLoading(true);
       setError(null);
+      setForbidden(false);
       try {
         const response = await opportunitiesApi.unitDetail(unitId, profile);
         setDetail(response);
@@ -97,7 +102,8 @@ export default function OpportunityDetailPage() {
         });
         return response;
       } catch (e) {
-        setError(e instanceof Error ? e.message : "详情加载失败");
+        if (isForbiddenError(e)) setForbidden(true);
+        else setError(e instanceof Error ? e.message : "详情加载失败");
         return undefined;
       } finally {
         setLoading(false);
@@ -124,7 +130,8 @@ export default function OpportunityDetailPage() {
       })
       .catch((e) => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : "详情加载失败");
+          if (isForbiddenError(e)) setForbidden(true);
+          else setError(e instanceof Error ? e.message : "详情加载失败");
         }
       })
       .finally(() => {
@@ -153,12 +160,27 @@ export default function OpportunityDetailPage() {
   // 到此分支 profileState 必然 ready（上面已对 loading/no-profile 提前返回）
   const profile = profileState.profile;
 
+  if (forbidden) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <EmptyState
+          title="无权限查看这个机会"
+          description="登录已过期或当前账号无权访问该数据。请重新登录后再试。"
+          actionLabel="去登录"
+          actionHref="/login"
+        />
+      </div>
+    );
+  }
+
   if (error || !detail) {
     return (
       <ErrorState
-        title="机会详情加载失败"
+        title={online ? "机会详情加载失败" : "当前离线，无法加载机会详情"}
         description={
-          error ?? "未找到该报考单元，它可能不属于当前已发布公告版本。"
+          online
+            ? (error ?? "未找到该报考单元，它可能不属于当前已发布公告版本。")
+            : "网络已断开。恢复网络后点击重试，或返回机会列表浏览其他机会。"
         }
         onRetry={() => void loadDetail(profile)}
       />
@@ -456,9 +478,9 @@ export default function OpportunityDetailPage() {
         </p>
         {/* 模块 7.5：dataset === "real" 已在加载后 early return，此处不再渲染提示 */}
         {unit.follow?.newerVersion && (
-          <p className="rounded-lg bg-warn-soft px-3 py-1.5 text-xs text-warn">
+          <Callout variant="note" title="公告版本已更新">
             你保存时依据的公告版本已有更新，当前展示的是最新已发布版本。
-          </p>
+          </Callout>
         )}
       </header>
 
@@ -476,19 +498,16 @@ export default function OpportunityDetailPage() {
           <p className="text-sm leading-6 text-ink-muted">{unit.summary}</p>
         )}
         {closed && (
-          <div className="space-y-1.5 rounded-lg border border-danger/30 bg-danger-soft/60 p-2.5">
-            <p className="text-xs font-semibold text-danger">
-              不进入推荐的原因（历史留档已保留，不会当作资格不符合）
-            </p>
-            <ul className="space-y-1 text-sm text-ink-muted">
+          <Callout variant="no" title="不进入推荐的原因（历史留档已保留，不会当作资格不符合）">
+            <ul className="space-y-1">
               {gateViews.map(({ gate, meta }) => (
                 <li key={gate.code}>
-                  <span className="font-medium text-ink">· {meta.label}：</span>
+                  <span className="font-medium">· {meta.label}：</span>
                   {gate.reason}
                 </li>
               ))}
             </ul>
-          </div>
+          </Callout>
         )}
       </Hero>
 
@@ -503,10 +522,10 @@ export default function OpportunityDetailPage() {
         </div>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[
-            { label: "已满足", count: groups.satisfied.length, tone: "text-success bg-success-soft" },
-            { label: "待补充", count: groups.missingInfo.length, tone: "text-warn bg-warn-soft" },
-            { label: "需确认", count: groups.confirmOfficial.length, tone: "text-warn bg-warn-soft" },
-            { label: "不符合", count: groups.unsatisfied.length, tone: "text-danger bg-danger-soft" },
+            { label: "已满足", count: groups.satisfied.length, tone: "bg-ok-bg text-ok-ink border border-ok-line" },
+            { label: "待补充", count: groups.missingInfo.length, tone: "bg-ask-bg text-ask-ink border border-ask-line" },
+            { label: "需确认", count: groups.confirmOfficial.length, tone: "bg-ask-bg text-ask-ink border border-ask-line" },
+            { label: "不符合", count: groups.unsatisfied.length, tone: "bg-no-bg text-no-ink border border-no-line" },
           ].map((item) => (
             <div key={item.label} className={`rounded-xl px-3 py-3 ${item.tone}`}>
               <p className="text-xs font-medium">{item.label}</p>
@@ -519,12 +538,9 @@ export default function OpportunityDetailPage() {
       </section>
 
       {actionError && (
-        <p
-          role="alert"
-          className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
-        >
+        <Callout variant="no" title="操作未完成">
           {actionError}
-        </p>
+        </Callout>
       )}
       {actionNotice && (
         <StatusMessage
@@ -535,12 +551,14 @@ export default function OpportunityDetailPage() {
         />
       )}
       {correctionDone && (
-        <p
-          role="status"
-          className="rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-sm text-success"
-        >
-          纠错已提交并留痕，我们会核对官方原文；如需更正将通过新版本发布，不会直接改动结论。
-        </p>
+        <Callout variant="ok" title="纠错已提交并留痕">
+          我们会核对官方原文；如需更正将通过新版本发布，不会直接改动结论。
+        </Callout>
+      )}
+      {!online && (
+        <Callout variant="ask" title="当前离线">
+          显示的是之前加载的资格判断，可能不是最新版本。恢复网络后会自动刷新。
+        </Callout>
       )}
 
       <details

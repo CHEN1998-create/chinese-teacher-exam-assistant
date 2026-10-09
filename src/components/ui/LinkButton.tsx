@@ -19,9 +19,9 @@ interface LinkButtonProps extends ComponentProps<typeof Link> {
 
 const variantStyles: Record<NonNullable<LinkButtonProps["variant"]>, string> = {
   primary:
-    "bg-brand text-white shadow-[0_6px_16px_rgba(57,115,230,0.2)] hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-[0_8px_20px_rgba(57,115,230,0.24)] focus-visible:ring-brand",
+    "bg-brand text-on-dark shadow-1 hover:-translate-y-0.5 hover:bg-brand-strong hover:shadow-2 focus-visible:ring-brand",
   secondary:
-    "bg-brand-soft text-brand hover:bg-[#e2ecff] focus-visible:ring-brand",
+    "bg-brand-soft text-brand-strong hover:bg-bar/60 focus-visible:ring-brand",
   outline:
     "border border-line bg-surface text-ink hover:border-brand/30 hover:bg-brand-soft/50 focus-visible:ring-brand",
   ghost: "bg-transparent text-ink hover:bg-brand-soft/80 focus-visible:ring-brand",

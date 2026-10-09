@@ -18,6 +18,7 @@ import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { Callout } from "@/components/ui/Callout";
 import { DailyPlanCard } from "@/components/plans/DailyPlanCard";
 import { ReplanPanel } from "@/components/plans/ReplanPanel";
 import { WeeklyReviewCard } from "@/components/plans/WeeklyReviewCard";
@@ -48,6 +49,7 @@ import type { PlanTask, TaskFeedback } from "@/types";
 import { formatDateWithWeekday, formatTime, getGreeting } from "@/lib/utils";
 import { trackOncePerUser } from "@/lib/analytics/eventService";
 import { safeOfficialLink } from "@/lib/links/official";
+import { useOnlineStatus, isForbiddenError } from "@/lib/useOnlineStatus";
 
 /** 任务使用的资料/资源名称（与 today 页同口径） */
 function sourceNameOf(task: PlanTask): string | null {
@@ -131,6 +133,8 @@ export default function StudyPage() {
   const { status, session } = useCurrentUser();
   const [goals, setGoals] = useState<GoalsResponse | null>(null);
   const [goalsError, setGoalsError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
+  const online = useOnlineStatus();
   const [reloadKey, setReloadKey] = useState(0);
   const [confirmation, setConfirmation] = useState<ExamContentConfirmation | null>(null);
 
@@ -139,6 +143,7 @@ export default function StudyPage() {
   useEffect(() => {
     if (status !== "authenticated" || !userId) return;
     let cancelled = false;
+    setForbidden(false);
     goalService
       .fetchGoals()
       .then((res) => {
@@ -149,6 +154,10 @@ export default function StudyPage() {
       })
       .catch((e: unknown) => {
         if (cancelled) return;
+        if (isForbiddenError(e)) {
+          setForbidden(true);
+          return;
+        }
         setGoals(null);
         setGoalsError(e instanceof Error ? e.message : "加载失败，请稍后重试");
       });
@@ -182,12 +191,27 @@ export default function StudyPage() {
     );
   }
 
+  if (forbidden) {
+    return (
+      <div className="mx-auto max-w-2xl pb-2">
+        <EmptyState
+          title="无权限查看备考信息"
+          description="登录已过期或当前账号无权访问这些数据。请重新登录后再试。"
+          actionLabel="去登录"
+          actionHref="/login"
+        />
+      </div>
+    );
+  }
+
   if (goalsError && !goals) {
     return (
       <div className="mx-auto max-w-2xl pb-2">
         <ErrorState
-          title="备考信息暂时加载失败"
-          description={goalsError}
+          title={online ? "备考信息暂时加载失败" : "当前离线，无法加载备考信息"}
+          description={
+            online ? goalsError : "网络已断开。恢复网络后点击重试，或返回后再打开。"
+          }
           onRetry={() => setReloadKey((k) => k + 1)}
         />
       </div>
@@ -197,7 +221,12 @@ export default function StudyPage() {
   if (!goals) return <LoadingPage />;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-2">
+    <div className="mx-auto max-w-2xl space-y-7 pb-2">
+      {!online && (
+        <Callout variant="ask" title="当前离线">
+          显示的是之前生成的备考计划，可能不是最新安排。恢复网络后会自动刷新。
+        </Callout>
+      )}
       {gate.kind === "no_primary" && <NoPrimaryGate nextStep={gate.nextStep} />}
       {gate.kind === "exam_unverified" && (
         <ExamUnverifiedGate
@@ -510,16 +539,16 @@ function ReadySection({
           按考试内容、已有资料和可用时间生成草稿，确认后开始执行。
         </p>
         {readiness?.warnings && readiness.warnings.length > 0 && (
-          <div className="mt-3 p-3 bg-warn-soft rounded-lg text-sm text-warn">
+          <Callout variant="ask" title="生成计划前请留意">
             {readiness.warnings.map((w, i) => (
               <p key={i}>• {w}</p>
             ))}
-          </div>
+          </Callout>
         )}
         {generateError && (
-          <div role="alert" className="mt-3 p-3 bg-danger-soft text-danger rounded-lg text-sm">
+          <Callout variant="no" title="生成失败">
             {generateError}
-          </div>
+          </Callout>
         )}
         <Button className="mt-4 w-full" onClick={handleGenerate}>
           生成我的 7 天计划
@@ -537,9 +566,9 @@ function ReadySection({
         />
         <p className="text-sm text-ink-muted mt-1">{currentPlan.generationReason}</p>
         {generateError && (
-          <div role="alert" className="mt-3 p-3 bg-danger-soft text-danger rounded-lg text-sm">
+          <Callout variant="no" title="重新生成失败">
             {generateError}
-          </div>
+          </Callout>
         )}
         <div className="mt-4 space-y-2">
           <Button className="w-full" variant="primary" onClick={handleConfirmPlan}>
@@ -617,9 +646,9 @@ function ReadySection({
           </p>
 
           {blocked && (
-            <div role="note" className="mt-3 p-3 rounded-lg bg-warn-soft/70 text-sm text-warn">
-              这项任务暂不可执行：{currentTask.blockedReason ?? "资料入口缺失"}
-            </div>
+            <Callout variant="ask" title="这项任务暂不可执行">
+              {currentTask.blockedReason ?? "资料入口缺失"}
+            </Callout>
           )}
 
           <dl className="mt-3 divide-y divide-line border-y border-line">

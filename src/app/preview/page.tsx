@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/Button";
 import { LinkButton } from "@/components/ui/LinkButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { QualifyConclusionCard, type QualifyLevel } from "@/components/ui/QualifyConclusionCard";
 import { track, trackOncePerUser } from "@/lib/analytics/eventService";
 import { USER_COPY } from "@/lib/ux/userCopy";
 import { stageLabel } from "@/lib/ia/labels";
@@ -107,26 +108,29 @@ function NotOpenSubject({
   return (
     <div className="min-h-screen bg-canvas">
       <div className="max-w-lg mx-auto px-4 py-10">
-        <Card className="text-center py-10">
-          <div className="w-14 h-14 bg-warn-soft rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-2xl" aria-hidden="true">🚧</span>
-          </div>
-          <h1 className="text-xl font-bold text-ink mb-2">
+        <Card className="rounded-xl border-line p-6 text-center shadow-1 sm:p-8">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-surface-2 text-ink-2" aria-hidden="true">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3l7 3v6c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z" />
+              <path d="M9 12l2 2 4-4" />
+            </svg>
+          </span>
+          <h1 className="mt-4 text-xl font-bold text-ink">
             「{subjectLabel}」教师公开招聘匹配尚未开放
           </h1>
-          <p className="text-sm text-ink-muted leading-relaxed mb-6">
+          <p className="mt-2 text-sm leading-relaxed text-ink-muted">
             当前先开放<strong className="text-ink">语文</strong>教师公开招聘。
             为了避免误导，我们不会用语文岗位为你生成不相关的匹配结果。
           </p>
           {intentionLeft ? (
-            <div className="rounded-lg bg-success-soft border border-success/30 px-4 py-3 text-sm text-success">
+            <div className="mt-5 rounded-md border border-ok-line bg-ok-bg px-4 py-3 text-sm text-ok-ink">
               已在本机记录你对「{subjectLabel}」的开注意向。
-              <p className="text-xs text-success mt-1">
+              <p className="mt-1 text-xs">
                 意向仅保存在当前浏览器，不会上传服务器；演示环境不会发送真实通知。
               </p>
             </div>
           ) : (
-            <Button size="lg" fullWidth onClick={onLeaveIntention}>
+            <Button size="lg" fullWidth onClick={onLeaveIntention} className="mt-5">
               留下「{subjectLabel}」开注意向
             </Button>
           )}
@@ -135,7 +139,7 @@ function NotOpenSubject({
               {error}
             </p>
           )}
-          <p className="text-xs text-ink-muted mt-3">
+          <p className="mt-3 text-xs text-ink-muted">
             意向只保存在这台设备，不上传、不发送真实通知。
           </p>
         </Card>
@@ -258,7 +262,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
       return (
         <div className="min-h-screen bg-canvas">
           <div className="mx-auto max-w-lg px-4 py-10">
-            <Card className="rounded-3xl border-brand/20 p-6 shadow-[0_12px_36px_rgba(30,64,120,0.07)]">
+            <Card className="rounded-xl border-brand/20 p-6 shadow-2 sm:p-7">
               <p className="text-xs font-semibold tracking-wide text-brand">还差一个信息</p>
               <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">
                 先选择一个能接受的地区
@@ -304,14 +308,28 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
   }
 
   const priority = view.priority;
+  // 四档分层标签文字（与 QualifyConclusionCard tagText 保持一致但不依赖默认值）
+  const priorityLevel: QualifyLevel =
+    priority.status === "preliminary_eligible"
+      ? "ok"
+      : priority.status === "need_more_info"
+        ? "miss"
+        : priority.status === "manual_review"
+          ? "ask"
+          : "no";
   const priorityStatusText =
     priority.status === "preliminary_eligible"
-      ? "可能适合"
+      ? "建议重点关注"
       : priority.status === "need_more_info"
-        ? "补充信息后再判断"
+        ? "信息补充后再判断"
         : priority.status === "manual_review"
-          ? "需要向招聘单位确认"
-          : "暂不符合";
+          ? "需要你确认"
+          : "当前条件可能不符合";
+  // 关键限制条件：从 dimensions 中取出第一个 UNKNOWN / MANUAL_REVIEW / FAIL 作为 reasons
+  const priorityReasons = priority.dimensions
+    .filter((d) => d.value !== "PASS")
+    .slice(0, 3)
+    .map((d) => `${d.label}：${d.reason}`);
   const otherPreliminary = view.preliminary.filter((row) => row.unitId !== priority.unitId);
   const moreResultCount =
     otherPreliminary.length +
@@ -321,7 +339,8 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-        {/* 真实监测事实与虚构示例彻底分开，避免把示例误认成可报名机会。 */}
+        {/* 真实监测事实（保留旧 Hero 组件：渐变背景由首页统一，preview 维持 surface 风
+            以便与下方"示例判断"区在视觉上明确分隔真实监测事实 vs 虚构示例）。 */}
         <Hero
           meta="真实机会监测"
           conclusion={
@@ -342,7 +361,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
         {/* 示例判断：只解释产品会怎样帮助，不提供保存或报名动作。 */}
         <section id="demo-opportunity" className="scroll-mt-20 space-y-3">
           <div>
-            <span className="inline-flex rounded-full bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn">
+            <span className="inline-flex rounded-pill bg-warn-soft px-2.5 py-1 text-xs font-semibold text-warn">
               功能示例 · 不是当前真实岗位
             </span>
             <h2 className="mt-2 text-lg font-semibold text-ink">看看以后会怎样帮你判断</h2>
@@ -350,6 +369,26 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
               按你填写的信息，这个虚构机会会被标为「{priorityStatusText}」。
             </p>
           </div>
+          {/* 四档分层结论卡（基于 evaluateOpportunity 结果，不写死判断）：
+              level 由 priority.status 直接映射，reasons 来自 dimensions 中非 PASS 项 */}
+          <QualifyConclusionCard
+            level={priorityLevel}
+            label={priorityStatusText}
+            summary={priority.oneLineReason}
+            reasons={priorityReasons}
+            updatedAt={priority.checkedAtText}
+            nextActions={[
+              <LinkButton
+                key="modify"
+                href="/onboarding?from=preview"
+                variant="ghost"
+                size="sm"
+                className="text-brand"
+              >
+                修改报考信息后重新判断
+              </LinkButton>,
+            ]}
+          />
           <OpportunityCard
             row={priority}
             priority
@@ -475,7 +514,7 @@ function UncoveredRegionsCard({ regionLabels }: { regionLabels: string[] }) {
   return (
     <section
       data-testid="uncovered-regions"
-      className="rounded-2xl border border-dashed border-line bg-canvas px-4 py-3"
+      className="rounded-lg border border-dashed border-line bg-canvas px-4 py-3"
     >
       <h2 className="text-sm font-semibold text-ink">
         这些地区当前暂未收录官方公告
@@ -503,7 +542,7 @@ function LimitationsCard({ limitations }: { limitations: ProfileLimitation[] }) 
     <section
       aria-label="暂未提供信息导致的结果限制"
       data-testid="profile-limitations"
-      className="rounded-2xl border border-warn/30 bg-warn-soft/70 px-4 py-3"
+      className="rounded-lg border border-warn/30 bg-warn-soft/70 px-4 py-3"
     >
       <h2 className="text-sm font-semibold text-warn">
         有 {limitations.length} 项信息你暂未提供，结果已相应收窄

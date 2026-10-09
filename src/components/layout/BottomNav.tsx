@@ -18,7 +18,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="主导航"
-      className="fixed bottom-0 left-0 right-0 z-50 bg-surface md:hidden"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-canvas/97 backdrop-blur md:hidden"
       style={{
         // 移动端安全区：避开 iPhone 底部 Home Indicator
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
@@ -33,14 +33,14 @@ export function BottomNav() {
               href={item.href}
               aria-current={active ? "page" : undefined}
               className={cn(
-                "-mt-px flex flex-1 flex-col items-center justify-center gap-1 border-t-2 transition-colors",
+                "flex flex-1 flex-col items-center justify-center gap-0.5 transition-colors",
                 active
-                  ? "border-brand text-brand"
-                  : "border-transparent text-ink-muted hover:text-ink"
+                  ? "text-ink-2"
+                  : "text-ink-muted hover:text-ink"
               )}
             >
               <NavIcon id={item.id} className="h-6 w-6" />
-              <span className={cn("text-xs", active ? "font-semibold" : "font-medium")}>
+              <span className={cn("text-[11px]", active ? "font-semibold" : "font-medium")}>
                 {item.label}
               </span>
               {active && <span className="sr-only">（当前页面）</span>}

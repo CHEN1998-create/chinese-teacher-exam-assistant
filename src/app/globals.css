@@ -1,34 +1,72 @@
 @import "tailwindcss";
 
 /*
- * 设计 Token（v6.1 模块 0A 视觉系统：清透蓝 + 冷白，80 / 15 / 5 用色比例）
+ * 设计 Token（v7 视觉系统：温暖米白 + 深海军蓝，大圆角、克制阴影）
  *
  * - 原始值集中在 :root，便于跨场景复用与平滑迁移；
  * - 通过 @theme inline 暴露为 Tailwind 工具类（bg-canvas / bg-surface /
- *   text-ink / text-ink-muted / bg-brand / bg-brand-soft / border-line /
- *   bg-success-soft / bg-warn-soft / bg-danger-soft 等）；
+ *   bg-surface-2 / text-ink / text-ink-muted / bg-brand / bg-brand-soft /
+ *   border-line / bg-fit / bg-violet / bg-cyan 等）；
+ * - 四档匹配状态色（ok/miss/ask/no/note）直接对应资格判断分层表达；
  * - 旧变量（--background / --primary 等）同步更新到新色值，作为历史引用的
  *   兼容层，避免引用 var(--primary) 的旧代码意外回到旧蓝；
  * - 国内网络基线：不加载任何网络字体、不引入远程图标，仅设备自带字体。
  */
 :root {
-  /* 主语义层 */
-  --color-canvas: #f6f8fc;       /* 页面背景：冷白灰 */
-  --color-surface: #ffffff;       /* 内容表面：白 */
-  --color-ink: #172033;           /* 主文字：深蓝黑 */
-  --color-ink-muted: #667085;     /* 次文字：中性灰蓝 */
-  --color-brand: #3973e6;         /* 品牌主色：明亮但不过饱和的蓝 */
-  --color-brand-strong: #2f63c7;  /* 品牌悬停：更深一档 */
-  --color-brand-soft: #edf3ff;    /* 品牌浅色：背景与标签 */
-  --color-line: #e4e9f2;          /* 默认边框：低对比冷灰 */
-  --color-success: #21835a;       /* 成功：清晰绿 */
-  --color-success-soft: #eaf7f0;
-  --color-warn: #9a6818;          /* 提醒：琥珀 */
-  --color-warn-soft: #fff7e7;
-  --color-danger: #c24848;        /* 风险：克制红 */
-  --color-danger-soft: #fff0f0;
-  --color-info: #3973e6;          /* 信息：与品牌一致 */
-  --color-info-soft: #edf3ff;
+  /* 主语义层（对齐 prototype-v7 视觉系统） */
+  --color-canvas: #FCFBF8;        /* 页面主背景：温暖米白 */
+  --color-surface: #FFFFFF;       /* 内容表面：白 */
+  --color-surface-2: #F5F3EE;     /* 次级米白：分组/卡片底 */
+  --color-ink: #071A31;           /* 主深色：深海军蓝 */
+  --color-ink-2: #0E396A;         /* 次级深蓝：强调与链接 */
+  --color-ink-muted: #5F6D77;     /* 正文灰 */
+  --color-brand: #6BB1FF;         /* 品牌浅蓝 */
+  --color-brand-strong: #0E396A;  /* 品牌悬停：深蓝 */
+  --color-brand-soft: #C1DEFE;    /* 产品界面浅蓝 */
+  --color-bar: #84C1FF;           /* 公告栏浅蓝 */
+  --color-line: #D8DCE0;          /* 浅灰边框 */
+  --color-grey-bg: #E4E6E9;       /* 浅灰背景 */
+  --color-fit: #F2F8DE;           /* 辅助浅绿（适配/正向） */
+  --color-violet: #D4C2FF;        /* 辅助浅紫（演示/标记） */
+  --color-cyan: #BAF0EC;          /* 辅助浅青 */
+  --color-on-dark: #FCFBF8;       /* 深色背景上的前景 */
+
+  /* Hero 渐变（仅重点区域使用） */
+  --color-hero: linear-gradient(135deg, #315A9D 0%, #4F8DDE 55%, #C5A8F5 100%);
+
+  /* 四档匹配状态（资格判断分层表达：建议关注 / 待补充 / 需确认 / 可能不符合） */
+  --color-ok-ink: #2F6B2B;    --color-ok-bg: #F2F8DE;    --color-ok-line: #CFE0A8;
+  --color-miss-ink: #0E396A;  --color-miss-bg: #E8EEF5;  --color-miss-line: #C7D6E6;
+  --color-ask-ink: #8A5A00;   --color-ask-bg: #FDF3DC;   --color-ask-line: #EBD6A6;
+  --color-no-ink: #9B3B33;    --color-no-bg: #FBEAE7;    --color-no-line: #EFC9C2;
+  --color-note-ink: #0E396A;  --color-note-bg: #C1DEFE;
+
+  /* 语义状态（业务原有 success/warn/danger/info，对齐新色板） */
+  --color-success: #2F6B2B;       --color-success-soft: #F2F8DE;
+  --color-warn: #8A5A00;          --color-warn-soft: #FDF3DC;
+  --color-danger: #9B3B33;        --color-danger-soft: #FBEAE7;
+  --color-info: #0E396A;           --color-info-soft: #C1DEFE;
+
+  /* 圆角阶梯 */
+  --radius-xs: 8px;
+  --radius-sm: 12px;
+  --radius: 16px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+  --radius-2xl: 40px;
+  --radius-pill: 999px;
+
+  /* 阴影：默认不使用；仅悬浮 / 选中 / 浮层使用 */
+  --shadow-1: 0 1px 2px rgba(7, 26, 49, 0.06);
+  --shadow-2: 0 8px 24px rgba(7, 26, 49, 0.08);
+  --shadow-3: 0 20px 48px rgba(7, 26, 49, 0.12);
+
+  /* 动效时长与缓动（尊重 prefers-reduced-motion） */
+  --dur-feedback: 240ms;
+  --dur-quiet: 340ms;
+  --dur-page: 460ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
 
   /* 兼容层：保留旧变量名，指向新色值 */
   --background: var(--color-canvas);
@@ -47,18 +85,39 @@
   --muted: var(--color-ink-muted);
   --card: var(--color-surface);
   --border: var(--color-line);
-  --radius: 0.75rem;
 }
 
 @theme inline {
   --color-canvas: var(--color-canvas);
   --color-surface: var(--color-surface);
+  --color-surface-2: var(--color-surface-2);
   --color-ink: var(--color-ink);
+  --color-ink-2: var(--color-ink-2);
   --color-ink-muted: var(--color-ink-muted);
   --color-brand: var(--color-brand);
   --color-brand-strong: var(--color-brand-strong);
   --color-brand-soft: var(--color-brand-soft);
+  --color-bar: var(--color-bar);
   --color-line: var(--color-line);
+  --color-grey-bg: var(--color-grey-bg);
+  --color-fit: var(--color-fit);
+  --color-violet: var(--color-violet);
+  --color-cyan: var(--color-cyan);
+  --color-on-dark: var(--color-on-dark);
+  --color-ok-ink: var(--color-ok-ink);
+  --color-ok-bg: var(--color-ok-bg);
+  --color-ok-line: var(--color-ok-line);
+  --color-miss-ink: var(--color-miss-ink);
+  --color-miss-bg: var(--color-miss-bg);
+  --color-miss-line: var(--color-miss-line);
+  --color-ask-ink: var(--color-ask-ink);
+  --color-ask-bg: var(--color-ask-bg);
+  --color-ask-line: var(--color-ask-line);
+  --color-no-ink: var(--color-no-ink);
+  --color-no-bg: var(--color-no-bg);
+  --color-no-line: var(--color-no-line);
+  --color-note-ink: var(--color-note-ink);
+  --color-note-bg: var(--color-note-bg);
   --color-success: var(--color-success);
   --color-success-soft: var(--color-success-soft);
   --color-warn: var(--color-warn);
@@ -79,11 +138,23 @@
   --color-card: var(--color-surface);
   --color-border: var(--color-line);
 
+  --radius-xs: var(--radius-xs);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --radius-2xl: var(--radius-2xl);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-1: var(--shadow-1);
+  --shadow-2: var(--shadow-2);
+  --shadow-3: var(--shadow-3);
+
   /* 系统字体栈：覆盖 Windows / macOS / iOS / Android / 鸿蒙 / 常见 Linux；
-     全部为设备自带字体名，不发起任何网络请求（模块 0A 国内网络基线）。 */
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC",
-    "Noto Sans CJK SC", "WenQuanYi Micro Hei", "Helvetica Neue", Arial,
+     全部为设备自带字体名，不发起任何网络请求（国内网络基线）。 */
+  --font-sans: "PingFang SC", "Microsoft YaHei", "Source Han Sans SC",
+    "Noto Sans CJK SC", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Hiragino Sans GB", "WenQuanYi Micro Hei", "Helvetica Neue", Arial,
     sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
     "Liberation Mono", "Courier New", monospace;
@@ -97,7 +168,7 @@ body {
 }
 
 ::selection {
-  background: #cfe0ff;
+  background: var(--color-brand-soft);
   color: var(--color-ink);
 }
 
@@ -108,7 +179,7 @@ samp {
   font-family: var(--font-mono);
 }
 
-/* 自定义滚动条：低调、不喧宾夺主 */
+/* 自定义滚动条：低调、不喧宾夺主，对齐米白系 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -119,12 +190,19 @@ samp {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd3e1;
+  background: #d8dce0;
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #aeb9cb;
+  background: #c1c6cc;
+}
+
+/* 焦点可见：键盘操作清晰，不只靠颜色 */
+:focus-visible {
+  outline: 3px solid #2F6DBF;
+  outline-offset: 2px;
+  border-radius: var(--radius-xs);
 }
 
 /* 尊重用户的减少动效偏好（核心交互仍可用） */

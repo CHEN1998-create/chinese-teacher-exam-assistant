@@ -19,6 +19,8 @@ import { OpportunityListItem } from "@/components/opportunities/OpportunityListI
 import { CoverageBanner } from "@/components/opportunities/CoverageBanner";
 import { DatasetScopeNotice } from "@/components/opportunities/DatasetScopeNotice";
 import { StatusMessage, StatusMessageRegion } from "@/components/ui/StatusMessage";
+import { Callout } from "@/components/ui/Callout";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
 const NO_PROFILE_COPY: Record<string, { title: string; description: string }> = {
   no_draft: {
@@ -53,8 +55,8 @@ export default function OpportunitiesPage() {
     actionFeedback,
     clearActionFeedback,
     toggleFollow,
-  } =
-    useOpportunities();
+  } = useOpportunities();
+  const online = useOnlineStatus();
 
   if (state.status === "loading") return <LoadingPage />;
 
@@ -75,8 +77,12 @@ export default function OpportunitiesPage() {
   if (state.status === "error") {
     return (
       <ErrorState
-        title="机会暂时加载失败"
-        description={`${state.error}。正式结果来自已登录的后端服务，不会用本地演示数据替代；请检查服务后重试。`}
+        title={online ? "机会暂时加载失败" : "当前离线，无法加载机会列表"}
+        description={
+          online
+            ? `${state.error}。正式结果来自已登录的后端服务，不会用本地演示数据替代；请检查服务后重试。`
+            : "网络已断开。恢复网络后点击重试，或返回后再打开。"
+        }
         onRetry={reload}
       />
     );
@@ -138,7 +144,7 @@ export default function OpportunitiesPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-2">
+    <div className="mx-auto max-w-2xl space-y-7 pb-2">
       {actionFeedback && (
         <StatusMessageRegion>
           <StatusMessage
@@ -161,6 +167,11 @@ export default function OpportunitiesPage() {
             onDismiss={() => setLoginNotice(null)}
           />
         </StatusMessageRegion>
+      )}
+      {!online && (
+        <Callout variant="ask" title="当前离线">
+          显示的是之前加载的机会列表，可能不是最新结果。恢复网络后会自动刷新。
+        </Callout>
       )}
       <Hero
         meta={`机会结论 · ${formatEvaluatedAt(evaluatedAt)} 更新`}
@@ -220,17 +231,21 @@ export default function OpportunitiesPage() {
       )}
 
       {actionError && (
-        <p
-          role="alert"
-          className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger"
-        >
-          操作未完成：{actionError}
-        </p>
+        <Callout variant="no" title="操作未完成">
+          {actionError}
+        </Callout>
       )}
 
       {featured && (
-        <div id="priority-opportunity" className="scroll-mt-20 space-y-2">
-          <h2 className="text-sm font-semibold text-ink">
+        <section
+          id="priority-opportunity"
+          aria-labelledby="priority-opportunity-heading"
+          className="scroll-mt-20 space-y-3 rounded-lg bg-surface-2 p-4"
+        >
+          <h2
+            id="priority-opportunity-heading"
+            className="text-sm font-semibold text-ink"
+          >
             {featured.unit.id === view.primaryTargetUnitId ? "重点准备的机会" : "优先查看"}
           </h2>
           <OpportunityListItem
@@ -240,12 +255,12 @@ export default function OpportunitiesPage() {
             followBusy={followBusyId === featured.unit.id}
             onToggleFollow={toggleFollow}
           />
-        </div>
+        </section>
       )}
 
       {visibleSecondary.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold text-ink">其他值得查看</h2>
+        <section aria-labelledby="secondary-heading" className="space-y-3">
+          <h2 id="secondary-heading" className="text-sm font-semibold text-ink">其他值得查看</h2>
           {visibleSecondary.map((unit) => (
             <OpportunityListItem
               key={unit.unit.id}

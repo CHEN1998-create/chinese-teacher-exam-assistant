@@ -8,6 +8,7 @@ import { Tabs, TabPanel } from "@/components/ui/Tabs";
 import { Hero } from "@/components/ia/Hero";
 import { Disclosure } from "@/components/ia/Layer";
 import { StatusMessage, StatusMessageRegion } from "@/components/ui/StatusMessage";
+import { Callout } from "@/components/ui/Callout";
 import { useCurrentExamTarget } from "@/lib/targets/useCurrentExamTarget";
 import { materialService } from "@/lib/materials/materialService";
 import { useMaterialsModule } from "@/lib/materials/useMaterials";
@@ -83,7 +84,7 @@ export default function MaterialsPage() {
   const showDiagnosis = () => setActiveTab("diagnosis");
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-7">
       <header>
         <p className="text-xs font-semibold tracking-wide text-brand">备考资料</p>
         <h1 className="mt-1 text-xl font-bold text-ink">资料与准备情况</h1>
@@ -104,6 +105,12 @@ export default function MaterialsPage() {
             : `当前有 ${materials.length} 份资料${snapshot ? `，已分析 ${snapshot.materialDiagnoses.length} 份` : ""}。系统只结合这次考试的已核对考情给出建议。`}
         </p>
       </Hero>
+
+      {stale && (
+        <Callout variant="note" title="资料或考情已变化">
+          上次分析后资料或考试内容发生了变化，当前使用建议可能已过时。前往「使用建议」更新分析。
+        </Callout>
+      )}
 
       {target.name.includes("【演示案例") && (
         <Disclosure title="这是内置演示目标">

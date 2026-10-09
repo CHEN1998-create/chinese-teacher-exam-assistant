@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <DesktopNav />
       <Header />
       <main className="pb-16 md:pb-0">
-        <div className="mx-auto max-w-5xl px-4 py-6 md:px-8">
+        <div className="mx-auto max-w-[1200px] px-4 py-6 md:px-6">
           <RequireAuth>{children}</RequireAuth>
         </div>
       </main>

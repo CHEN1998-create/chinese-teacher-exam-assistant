@@ -8,17 +8,22 @@ import { LayerHeading } from "@/components/ia/Layer";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { LoadingPage } from "@/components/ui/Loading";
+import { Callout } from "@/components/ui/Callout";
+import { useOnlineStatus } from "@/lib/useOnlineStatus";
 
 export default function SchedulePage() {
   const { state, reload, toggleMute } = useSchedule();
+  const online = useOnlineStatus();
 
   if (state.status === "loading") return <LoadingPage />;
 
   if (state.status === "error") {
     return (
       <ErrorState
-        title="日程暂时加载失败"
-        description={state.error}
+        title={online ? "日程暂时加载失败" : "当前离线，无法加载日程"}
+        description={
+          online ? state.error : "网络已断开。恢复网络后点击重试，或返回后再打开。"
+        }
         onRetry={reload}
       />
     );
@@ -44,7 +49,12 @@ export default function SchedulePage() {
   const nextAction = state.data.nextAction;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 pb-2">
+    <div className="mx-auto max-w-2xl space-y-7 pb-2">
+      {!online && (
+        <Callout variant="ask" title="当前离线">
+          显示的是之前加载的日程，可能不是最新安排。恢复网络后会自动刷新。
+        </Callout>
+      )}
       {nextAction ? (
         <Hero
           meta="当前最重要的一步"
@@ -98,18 +108,17 @@ export default function SchedulePage() {
 
       {/* 时间冲突提示：只提示，不替用户自动放弃 */}
       {view.conflicts.length > 0 && (
-        <div className="rounded-xl border border-warn/30 bg-warn-soft p-4">
-          <p className="text-sm font-semibold text-warn">时间冲突提醒</p>
-          <ul className="mt-2 space-y-1.5">
+        <Callout variant="ask" title="时间冲突提醒">
+          <ul className="space-y-1.5">
             {view.conflicts.map((c) => (
-              <li key={c.dateIso} className="text-sm text-warn">
+              <li key={c.dateIso}>
                 <span className="font-medium">{c.dateText}</span>：
                 {c.items.map((i) => `${i.unitName}·${i.kindLabel}`).join("；")}
                 。请自行取舍，系统不会替你放弃任何机会。
               </li>
             ))}
           </ul>
-        </div>
+        </Callout>
       )}
 
       {/* 第二层：按关注机会分组的时间线；不默认展示月历 */}

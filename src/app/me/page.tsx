@@ -54,7 +54,7 @@ export default function MePage() {
   if (!user || !role) return null;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-4 pb-4">
+    <div className="mx-auto max-w-2xl space-y-6 pb-4">
       <header>
         <p className="text-xs font-semibold tracking-wide text-brand">我的</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">

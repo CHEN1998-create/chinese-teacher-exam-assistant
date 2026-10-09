@@ -32,11 +32,11 @@ export function DesktopNav() {
   return (
     <header
       className={cn(
-        "sticky z-40 hidden border-b border-line bg-surface/95 backdrop-blur md:block",
+        "sticky z-40 hidden border-b border-line bg-canvas/92 backdrop-blur md:block",
         isDemoMode ? "top-8" : "top-0",
       )}
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center gap-8 px-6">
+      <div className="mx-auto flex min-h-[68px] max-w-[1200px] items-center gap-4 px-6">
         <Link href="/opportunities" aria-label="教招有据首页" className="shrink-0">
           <BrandMark size="sm" />
         </Link>
@@ -50,14 +50,13 @@ export function DesktopNav() {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative inline-flex h-full items-center px-4 text-sm font-medium transition-colors",
-                  active ? "text-brand" : "text-ink-muted hover:text-ink",
+                  "inline-flex min-h-[44px] items-center rounded-sm px-3 text-sm font-medium transition-colors",
+                  active
+                    ? "bg-brand-soft font-semibold text-ink-2"
+                    : "text-ink-muted hover:bg-surface-2 hover:text-ink",
                 )}
               >
                 {item.label}
-                {active && (
-                  <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-brand" aria-hidden="true" />
-                )}
               </Link>
             );
           })}
@@ -78,7 +77,7 @@ export function DesktopNav() {
                   onClick={() => setMenuOpen((open) => !open)}
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
-                  className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink hover:bg-canvas"
+                  className="flex h-9 items-center gap-2 rounded-lg border border-line bg-surface px-2.5 text-sm text-ink hover:bg-surface-2"
                 >
                   <span className="flex h-6 w-6 items-center justify-center rounded-full bg-brand-soft text-xs font-semibold text-brand">
                     {(user.name || "我").slice(0, 1)}
@@ -89,18 +88,18 @@ export function DesktopNav() {
                   </svg>
                 </button>
                 {menuOpen && (
-                  <div role="menu" className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg">
+                  <div role="menu" className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-lg border border-line bg-surface py-1 shadow-2">
                     <div className="border-b border-line px-3 py-2">
                       <p className="truncate text-sm font-medium text-ink">{user.name}</p>
                       <p className="text-xs text-ink-muted">{role ? USER_ROLE_LABELS[role] : ""}</p>
                     </div>
-                    <Link role="menuitem" href="/settings" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-canvas">
+                    <Link role="menuitem" href="/settings" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-surface-2">
                       设置
                     </Link>
-                    <Link role="menuitem" href="/materials" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-canvas">
+                    <Link role="menuitem" href="/materials" onClick={() => setMenuOpen(false)} className="block px-3 py-2 text-sm text-ink hover:bg-surface-2">
                       我的资料
                     </Link>
-                    <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); logout(); }} className="w-full px-3 py-2 text-left text-sm text-ink hover:bg-canvas">
+                    <button role="menuitem" type="button" onClick={() => { setMenuOpen(false); logout(); }} className="w-full px-3 py-2 text-left text-sm text-ink hover:bg-surface-2">
                       退出登录
                     </button>
                   </div>

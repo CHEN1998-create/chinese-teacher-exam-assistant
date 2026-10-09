@@ -6,7 +6,7 @@
  * - 个人画像、地区偏好、用工偏好、通知、隐私、纠错记录统一收入「我的」；
  * - 不设置独立「备考」主导航：备考能力仅在用户设置主要目标后，
  *   从目标上下文与「我的」次级入口进入；旧 /study 路由与数据保留；
- * - 高亮以新路由为准；旧路由 /exam /today /plan 经 middleware.ts 跳转，不参与高亮。
+ * - 高亮以新路由为准；旧路由 /exam /today /plan 经 src/proxy.ts 跳转，不参与高亮。
  */
 
 export type PrimaryNavId = "opportunities" | "schedule" | "me";
@@ -40,8 +40,8 @@ export function activeNavId(pathname: string): PrimaryNavId | null {
 
 /**
  * v5.2 → v6.1 旧路由跳转表。
- * 注意：src/middleware.ts 在 Edge 边界运行、不能可靠共享模块，此表只用于测试与
- * 页面内提示；修改时必须同步 middleware.ts 中的同名字典。
+ * 注意：src/proxy.ts 与渲染代码分离部署、不建议依赖共享模块，此表只用于测试与
+ * 页面内提示；修改时必须同步 src/proxy.ts 中的同名字典。
  */
 export const LEGACY_ROUTE_REDIRECTS: Readonly<Record<string, string>> = {
   "/exam": "/opportunities",

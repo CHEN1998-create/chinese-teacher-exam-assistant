@@ -15,3 +15,21 @@ export { TaskCard } from "./TaskCard";
 export { Disclosure } from "./Disclosure";
 export { Drawer } from "./Drawer";
 export { StatusMessage, StatusMessageRegion } from "./StatusMessage";
+
+// v7 视觉系统新增组件
+export { Toast, Toaster } from "./Toast";
+export type { ToastProps, ToastVariant } from "./Toast";
+export { Timeline } from "./Timeline";
+export type { TimelineItem, TimelineStatus } from "./Timeline";
+export { QualifyConclusionCard } from "./QualifyConclusionCard";
+export type { QualifyLevel } from "./QualifyConclusionCard";
+export { EvidenceCard } from "./EvidenceCard";
+export type { EvidenceRow, EvidenceSource } from "./EvidenceCard";
+export { FeedbackBar } from "./FeedbackBar";
+export { OpportunityCard } from "./OpportunityCard";
+export type { OpportunityFact } from "./OpportunityCard";
+export { ApplicationTargetCard } from "./ApplicationTargetCard";
+export { MaterialList } from "./MaterialList";
+export type { MaterialListItem, MaterialListItemStatus } from "./MaterialList";
+export { Callout } from "./Callout";
+export type { CalloutVariant } from "./Callout";
