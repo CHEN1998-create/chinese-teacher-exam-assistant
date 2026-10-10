@@ -6,6 +6,7 @@ import {
   buildActiveProfile,
   type ActiveProfileReason,
 } from "@/lib/profile/activeProfile";
+import { profileApi } from "@/lib/profile/profileApi";
 import type { UserRecruitmentProfile } from "@/lib/profile/types";
 import { opportunitiesApi } from "./api";
 import { trackOncePerUser } from "@/lib/analytics/eventService";
@@ -76,18 +77,23 @@ export function useOpportunities(): OpportunitiesApi {
 
   const reload = useCallback(async (silent = false) => {
     if (!silent) setState({ status: "loading" });
-    let profile: UserRecruitmentProfile;
-    if (AUTH_MODE === "invited") {
-      profile = INVITED_PLACEHOLDER_PROFILE;
-    } else {
-      const active = buildActiveProfile();
-      if (!active.ready) {
-        setState({ status: "no-profile", reason: active.reason });
-        return;
-      }
-      profile = active.profile;
-    }
     try {
+      let profile: UserRecruitmentProfile;
+      if (AUTH_MODE === "invited") {
+        const persistedProfile = await profileApi.getProfile();
+        if (!persistedProfile) {
+          setState({ status: "no-profile", reason: "incomplete" });
+          return;
+        }
+        profile = persistedProfile;
+      } else {
+        const active = buildActiveProfile();
+        if (!active.ready) {
+          setState({ status: "no-profile", reason: active.reason });
+          return;
+        }
+        profile = active.profile;
+      }
       const data = await opportunitiesApi.match(profile);
       recordRevealed(data);
       setState({ status: "ready", data, profile });
@@ -105,23 +111,25 @@ export function useOpportunities(): OpportunitiesApi {
   // 初次加载：setState 均在异步回调中
   useEffect(() => {
     let cancelled = false;
-    const profile =
-      AUTH_MODE === "invited"
-        ? INVITED_PLACEHOLDER_PROFILE
-        : (() => {
-            const active = buildActiveProfile();
-            return active.ready ? active.profile : null;
-          })();
-    if (profile === null) return;
-    opportunitiesApi
-      .match(profile)
-      .then((data) => {
-        if (!cancelled) {
-          recordRevealed(data);
-          setState({ status: "ready", data, profile });
-        }
-      })
-      .catch((error) => {
+    (async () => {
+      const profile =
+        AUTH_MODE === "invited"
+          ? await profileApi.getProfile()
+          : (() => {
+              const active = buildActiveProfile();
+              return active.ready ? active.profile : null;
+            })();
+      if (cancelled) return;
+      if (profile === null) {
+        setState({ status: "no-profile", reason: "incomplete" });
+        return;
+      }
+      const data = await opportunitiesApi.match(profile);
+      if (!cancelled) {
+        recordRevealed(data);
+        setState({ status: "ready", data, profile });
+      }
+    })().catch((error) => {
         if (!cancelled) {
           const msg = error instanceof Error ? error.message : "机会加载失败";
           if (msg.includes("尚未保存画像")) {

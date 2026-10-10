@@ -126,7 +126,9 @@ function computeUncoveredRegions(
   profile: UserRecruitmentProfile | undefined,
   response: MatchResponse,
 ): UncoveredRegion[] {
-  if (!profile || profile.regions.length === 0) return [];
+  // 受邀模式在会话恢复期间可能暂时传入不完整画像。
+  // 未取到地区时只是无法计算“暂未收录地区”，不应让整个机会页崩溃。
+  if (!profile?.regions?.length) return [];
   const allUnits = [
     ...response.groups.preliminary,
     ...response.groups.needInfo.flatMap((g) => g.units),

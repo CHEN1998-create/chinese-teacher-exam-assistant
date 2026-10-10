@@ -362,6 +362,20 @@ describe("buildListViewModel：模块 5 异常态与地区分流", () => {
     ]);
   });
 
+  it("受邀模式传入空占位画像时，机会页不应因缺少 regions 而崩溃", () => {
+    const response = makeResponse({
+      hangzhou: makeUnit("unit-hangzhou-01", "preliminary_eligible"),
+    });
+
+    expect(() =>
+      buildListViewModel(response, {} as UserRecruitmentProfile),
+    ).not.toThrow();
+    expect(
+      buildListViewModel(response, {} as UserRecruitmentProfile)
+        .uncoveredRegions,
+    ).toEqual([]);
+  });
+
   it("四档全空且 closed 也为空时 emptyResult=true；有留档记录时不算空结果", () => {
     const empty = makeResponse({} as never);
     expect(buildListViewModel(empty).emptyResult).toBe(true);
