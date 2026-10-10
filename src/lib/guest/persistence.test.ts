@@ -86,11 +86,11 @@ describe("访客画像：刷新恢复", () => {
   });
 
   it("返回上一组时只保存草稿不回退已完成进度", () => {
-    guestSessionService.save({ draft: FULL_DRAFT, step: 5 });
+    guestSessionService.save({ draft: FULL_DRAFT, step: TOTAL_PROFILE_STEPS });
     // 返回修改（不带 step）：草稿更新，进度保持
     guestSessionService.save({ draft: { majorFullName: "汉语言文学" } });
     const session = guestSessionService.load()!;
-    expect(session.step).toBe(5);
+    expect(session.step).toBe(TOTAL_PROFILE_STEPS);
     expect(session.draft.majorFullName).toBe("汉语言文学");
     expect(session.draft.regions).toHaveLength(2);
   });
@@ -112,7 +112,7 @@ describe("访客画像：刷新恢复", () => {
   });
 
   it("clear 后会话消失", () => {
-    guestSessionService.save({ draft: FULL_DRAFT, step: 5 });
+    guestSessionService.save({ draft: FULL_DRAFT, step: TOTAL_PROFILE_STEPS });
     expect(guestSessionService.load()).not.toBeNull();
     guestSessionService.clear();
     expect(guestSessionService.load()).toBeNull();
@@ -122,20 +122,35 @@ describe("访客画像：刷新恢复", () => {
     const draft: GuestProfileDraft = {
       ...FULL_DRAFT,
       majorFullName: undefined,
-      skippedSteps: [3],
+      // step 2（资格条件）标记为跳过
+      educationLevel: undefined,
+      degree: undefined,
+      teacherCert: undefined,
+      acceptedEmploymentNatures: [],
+      skippedSteps: [2],
     };
-    guestSessionService.save({ draft, step: 5 });
+    guestSessionService.save({ draft, step: TOTAL_PROFILE_STEPS });
     const restored = guestSessionService.load()!;
-    expect(restored.draft.skippedSteps).toEqual([3]);
+    expect(restored.draft.skippedSteps).toEqual([2]);
     expect(restored.draft.majorFullName).toBeUndefined();
     expect(guestSessionService.isComplete()).toBe(true); // 跳过的步骤视为完成
   });
 
   it("补填内容后的保存会自动清掉对应跳过标记", () => {
+    // 清空 step 2 的字段并标记为跳过
     guestSessionService.save({
-      draft: { ...FULL_DRAFT, majorFullName: undefined, skippedSteps: [3] },
-      step: 5,
+      draft: {
+        ...FULL_DRAFT,
+        educationLevel: undefined,
+        degree: undefined,
+        majorFullName: undefined,
+        teacherCert: undefined,
+        acceptedEmploymentNatures: [],
+        skippedSteps: [2],
+      },
+      step: TOTAL_PROFILE_STEPS,
     });
+    // 补填专业名称：step 2 现在有内容，跳过标记自动移除
     guestSessionService.save({ draft: { majorFullName: "汉语言文学" } });
     expect(guestSessionService.load()!.draft.skippedSteps ?? []).toEqual([]);
   });

@@ -99,9 +99,23 @@ export function OpportunityListItem({
           )}
         </div>
 
-        <p className="mt-2 text-sm text-ink-muted">
-          {natureShortLabel(unit.unit.employmentNature.code as never)} ·{" "}
-          {stageLabel(unit.unit.stage)} · 招 {unit.unit.headcount} 人
+        {/* 真实/演示明确区分：演示固定显示"虚拟示例"，真实展示来源与核对状态 */}
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          {unit.announcement.dataset === "demo" ? (
+            <span className="inline-flex items-center rounded-full bg-canvas px-2 py-0.5 font-medium text-ink-muted ring-1 ring-line">
+              虚拟示例
+            </span>
+          ) : (
+            <span className="inline-flex items-center rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
+              {unit.announcement.reviewStatus === "human_reviewed"
+                ? "真实公告 · 已人工核对"
+                : "真实记录 · AI 初核待人工复核"}
+            </span>
+          )}
+          <span className="text-ink-muted">
+            {natureShortLabel(unit.unit.employmentNature.code as never)} ·{" "}
+            {stageLabel(unit.unit.stage)} · 招 {unit.unit.headcount} 人
+          </span>
         </p>
 
         <p
@@ -110,7 +124,7 @@ export function OpportunityListItem({
             closedGate || deadline.closed ? "text-ink-muted" : "text-ink-muted",
           )}
         >
-          {unit.announcement.dataset === "demo" ? "示例报名" : "报名"}{deadline.text}
+          报名{deadline.text}
         </p>
 
         {/* 一条关键依据或风险：闸门失败时优先显示异常原因 */}
@@ -125,11 +139,6 @@ export function OpportunityListItem({
 
         {!compact && unit.announcement.dataset === "real" && (
           <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-            <span className="inline-flex items-center rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">
-              {unit.announcement.reviewStatus === "human_reviewed"
-                ? "真实公告 · 已人工核对"
-                : "真实记录 · AI 初核待人工复核"}
-            </span>
             <a
               href={unit.announcement.officialUrl}
               target="_blank"

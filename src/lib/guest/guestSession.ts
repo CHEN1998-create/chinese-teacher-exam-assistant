@@ -37,8 +37,16 @@ import type {
 import { STORAGE_KEYS } from "@/lib/mock-data";
 import { loadFromStorage, saveToStorageStrict, removeFromStorage } from "@/lib/storage";
 
-/** 五组基础画像，分步采集；每组在完成前都允许部分填写 */
-export const TOTAL_PROFILE_STEPS = 5;
+/**
+ * 三阶段基础画像采集（v7 调整）：
+ * 1. 求职方向 — 意向地区、毕业时间、当前状态
+ * 2. 资格条件 — 学历学位、专业全称、教师资格、用工形式偏好
+ * 3. 补充信息 — 说明后续按需补充的条件（户籍、工作经历等），可直接进入结果
+ *
+ * 草稿数据模型（GuestProfileDraft）不变，仅重组字段分组与步骤数。
+ * 旧 5 步草稿的 session.step 值会在读取时自动归入新 3 步范围。
+ */
+export const TOTAL_PROFILE_STEPS = 3;
 
 /** 当前唯一开放学科；其他学科在访客流程中明确分流，不生成匹配结果 */
 export const OPEN_SUBJECT = "chinese" as const;
@@ -269,13 +277,11 @@ export function subjectLabel(code: SubjectCode | undefined): string {
 
 // ==================== 分组完成度（页面“下一步”门禁唯一口径） ====================
 
-/** 每组信息「用来做什么」的说明（页面逐组展示，避免用户盲填） */
+/** 每阶段信息「用来做什么」的说明（页面逐阶段展示，避免用户盲填） */
 export const STEP_PURPOSE: Record<number, string> = {
-  1: "用来圈定你能接受的地区：只按这些地区筛选官方公告，不会推荐你明确不去的地方。",
-  2: "用来比对公告里的学历、学位门槛，例如「本科及以上」「学士及以上学位」。",
-  3: "用来逐条比对公告的专业要求目录；名称不完整或存在解释空间时不会硬判。",
-  4: "用来按每条公告的口径判断你是否属于应届或社会人员，不提前给你贴身份标签。",
-  5: "用来核对岗位要求的教师资格证/合格证明、学科与学段；用工形式决定哪些岗位会出现。",
+  1: "先告诉我们你能接受去哪里、大概什么时候毕业。用来圈定地区范围，并按每条公告判断你的应届或社会人员身份。",
+  2: "核对公告的学历、专业和教师资格门槛。逐条比对，名称不完整或存在解释空间时不会硬判。",
+  3: "以下信息在具体机会需要时再补充，不影响现在查看结果。缺少非必要信息时结果标为「信息不足」，不会阻止你继续。",
 };
 
 /** 「暂不确定 / 暂不提供」按钮文案与跳过后的结果限制提示 */
@@ -288,20 +294,12 @@ export const STEP_SKIP_COPY: Record<
     confirm: "未选地区时不会给出任何「初步符合」结果：所有岗位都要等你补充地区后才能判断，这不是不符合。",
   },
   2: {
-    action: "学历/学位暂不确定，先跳过",
-    confirm: "缺少学历、学位时，相关岗位只能停留在「补充信息后判断」，不会给初步符合结论。",
+    action: "资格条件暂不提供，先跳过",
+    confirm: "缺少学历、专业或教师资格信息时，相关岗位只能停留在「补充信息后判断」，不会被当作不符合。",
   },
   3: {
-    action: "专业全称暂不确定，先跳过",
-    confirm: "缺少专业名称时，限专业的岗位只能停留在「补充信息后判断」，不会被当作专业不符。",
-  },
-  4: {
-    action: "毕业时间/状态暂不确定，先跳过",
-    confirm: "缺少毕业信息时，区分应届与社会人员的岗位无法判断，补充后才会出结论。",
-  },
-  5: {
-    action: "教师资格情况暂不提供，先跳过",
-    confirm: "缺少教师资格信息时，相关岗位只能停留在「补充信息后判断」，不会被当作没有资格。",
+    action: "全部稍后补充",
+    confirm: "可以直接查看筛选结果。缺少的信息会导致相关条件标为「信息不足」，补充后会重新判断。",
   },
 };
 
@@ -317,15 +315,23 @@ export function isStepSkipped(draft: GuestProfileDraft, step: number): boolean {
 export function stepHasContent(draft: GuestProfileDraft, step: number): boolean {
   switch (step) {
     case 1:
-      return draft.regions.length > 0;
+      // 求职方向：意向地区、毕业时间、当前状态
+      return (
+        draft.regions.length > 0 ||
+        !!draft.graduationDate ||
+        draft.employmentStatus !== undefined
+      );
     case 2:
-      return draft.educationLevel !== undefined && draft.degree !== undefined;
+      // 资格条件：学历学位、专业、教师资格、用工形式
+      return (
+        (draft.educationLevel !== undefined && draft.degree !== undefined) ||
+        (draft.majorFullName ?? "").trim().length > 0 ||
+        !!draft.teacherCert?.status ||
+        draft.acceptedEmploymentNatures.length > 0
+      );
     case 3:
-      return (draft.majorFullName ?? "").trim().length > 0;
-    case 4:
-      return !!draft.graduationDate && draft.employmentStatus !== undefined;
-    case 5:
-      return !!draft.teacherCert?.status;
+      // 补充信息：无强制字段，始终返回 false（允许直接跳过到结果）
+      return false;
     default:
       return false;
   }
@@ -337,14 +343,14 @@ export function stepHasContent(draft: GuestProfileDraft, step: number): boolean 
  */
 export function pruneSkippedSteps(draft: GuestProfileDraft): GuestProfileDraft {
   const before = draft.skippedSteps ?? [];
-  // 去重 + 限定 1..5 + 已有实质内容的步骤自动取消跳过
+  // 去重 + 限定 1..TOTAL + 已有实质内容的步骤自动取消跳过
   const seen = new Set<number>();
   const skipped = before.filter((step) => {
     if (seen.has(step)) return false;
     seen.add(step);
     return step >= 1 && step <= TOTAL_PROFILE_STEPS && !stepHasContent(draft, step);
   });
-  if (before.length === skipped.length) return draft; // 过滤结果与原数组一致，无需变更
+  if (before.length === skipped.length) return draft;
   return { ...draft, skippedSteps: skipped.length > 0 ? skipped : undefined };
 }
 
@@ -352,24 +358,31 @@ export function isStepComplete(draft: GuestProfileDraft, step: number): boolean 
   if (isStepSkipped(draft, step)) return true;
   switch (step) {
     case 1:
+      // 求职方向：至少需要意向地区（最低门槛）；毕业时间和状态可稍后补充
       return draft.regions.length > 0;
-    case 2:
-      return draft.educationLevel !== undefined && draft.degree !== undefined;
-    case 3:
-      return (draft.majorFullName ?? "").trim().length > 0;
-    case 4:
-      return !!draft.graduationDate && draft.employmentStatus !== undefined;
-    case 5: {
-      if (draft.acceptedEmploymentNatures.length === 0) return false;
-      // 第 5 步被跳过时 teacherCert 允许缺失（isStepSkipped 已在上方放行）
+    case 2: {
+      // 资格条件：被跳过时已放行；否则检查关键字段
       const cert = draft.teacherCert;
-      if (!cert || !cert.status) return false;
-      if (cert.status === "none") return draft.intendedSubject !== undefined;
-      // 在途/已取得：学科与学段必填；在途还需预计取得时间（供匹配引擎判断）
-      if (!cert.subject || !cert.stage) return false;
-      if (cert.status === "in_progress" && !cert.expectedDate) return false;
-      return draft.intendedSubject !== undefined;
+      // teacherCert 未选状态时不算完成（除非整步跳过）
+      if (cert && cert.status) {
+        if (cert.status === "none") {
+          return draft.intendedSubject !== undefined;
+        }
+        if (!cert.subject || !cert.stage) return false;
+        if (cert.status === "in_progress" && !cert.expectedDate) return false;
+      }
+      // 非跳过时，学历学位和专业至少有一项才允许继续
+      // 但允许只填部分（匹配引擎对缺字段判 UNKNOWN）
+      return (
+        draft.educationLevel !== undefined ||
+        draft.degree !== undefined ||
+        (draft.majorFullName ?? "").trim().length > 0 ||
+        !!cert?.status
+      );
     }
+    case 3:
+      // 补充信息：始终允许通过（无强制字段）
+      return true;
     default:
       return false;
   }
@@ -398,25 +411,17 @@ export interface ProfileLimitation {
 
 const LIMITATION_COPY: Record<number, { label: string; impact: string }> = {
   1: {
-    label: "能接受的地区",
+    label: "能接受的地区与毕业时间",
     impact:
-      "没有地区意向时不会给出任何「初步符合」结果：所有岗位都要等你补充地区后才能判断，这不代表你不符合。",
+      "没有地区意向时不会给出任何「初步符合」结果。缺少毕业时间时，区分应届与社会人员的岗位暂时无法判断。",
   },
   2: {
-    label: "最高学历与学位",
-    impact: "涉及学历、学位门槛的岗位只能停留在「补充信息后判断」，不会给出初步符合结论。",
+    label: "学历、专业与教师资格",
+    impact: "涉及学历、专业或教师资格门槛的岗位只能停留在「补充信息后判断」，不会被当作不符合。",
   },
   3: {
-    label: "毕业证专业全称",
-    impact: "限专业的岗位只能停留在「补充信息后判断」，不会被当作「专业不符」。",
-  },
-  4: {
-    label: "毕业时间与当前状态",
-    impact: "区分应届与社会人员的岗位暂时无法判断，补充这一组后才会出结论。",
-  },
-  5: {
-    label: "教师资格情况",
-    impact: "要求教师资格证或合格证明的岗位只能停留在「补充信息后判断」，不会被当作没有资格。",
+    label: "补充信息",
+    impact: "户籍、工作经历等信息在具体机会需要时再补充，不影响当前查看结果。",
   },
 };
 
@@ -427,6 +432,9 @@ const LIMITATION_COPY: Record<number, { label: string; impact: string }> = {
 export function buildProfileLimitations(draft: GuestProfileDraft): ProfileLimitation[] {
   const limitations: ProfileLimitation[] = [];
   for (let step = 1; step <= TOTAL_PROFILE_STEPS; step += 1) {
+    // 第 3 阶段（补充信息）无强制字段，始终「无内容」，
+    // 但其限制说明是信息性的（「不影响当前查看结果」），不是真正的结果限制
+    if (step === 3) continue;
     if (stepHasContent(draft, step)) continue;
     const copy = LIMITATION_COPY[step];
     if (copy) limitations.push({ step, ...copy });

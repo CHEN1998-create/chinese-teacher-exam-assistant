@@ -70,12 +70,11 @@ export default function Home() {
   // 原型 .hero__safe 三标签：明确"无注册 / 步步有反馈 / 可回看原文"
   const safeChips = ["无需登录即可初筛", "每一步都有反馈", "结论可回到官方原文核对"];
 
-  // 原型 .od-grid 四步流程（保留现有跳转，不引入假路由）
+  // 三步核心流程（v7：找机会 → 判资格 → 跟报名；备考弱化为补充说明，不与主操作争夺）
   const flow: Array<[string, string, string, string]> = [
-    ["01", "资格初筛", "逐条核对公告条件", "/onboarding"],
-    ["02", "准备报名", "整理材料并前往官方系统", "/applications"],
-    ["03", "跟进进度", "记录审核、缴费和考试状态", "/applications"],
-    ["04", "安排备考", "围绕主目标生成本周任务", "/study"],
+    ["01", "找到招聘机会", "汇总已覆盖的官方教师招聘", "/onboarding"],
+    ["02", "看懂是否符合", "逐条核对条件，解释判断依据", "/onboarding"],
+    ["03", "跟进报名节点", "整理材料，记录审核与考试状态", "/applications"],
   ];
 
   return (
@@ -98,13 +97,13 @@ export default function Home() {
             {/* 左：价值表达 + 主行动 + 安全标签 */}
             <div className="min-w-0">
               <p className="text-[13px] font-semibold uppercase tracking-[0.14em] text-on-dark/85">
-                教师招聘、报考与备考助手
+                教师招聘机会发现与资格判断
               </p>
               <h1 className="mt-3.5 text-[34px] font-bold leading-[1.16] tracking-[-0.01em] sm:text-[40px] md:text-[clamp(38px,4.6vw,54px)]">
-                先看看，你可能能报哪些教师岗位
+                找到真正适合你报考的教师招聘机会
               </h1>
               <p className="mt-4 max-w-[30em] text-[15px] leading-[1.65] text-on-dark/92 md:text-[17px]">
-                先找到值得报名的机会，再继续准备材料、跟进报名和安排备考。
+                根据你的地区、学段学科和资格条件，解释你是否符合，并帮你整理报名材料与关键时间节点。
               </p>
 
               <div className="mt-5 flex max-w-sm flex-col gap-3 sm:max-w-none sm:flex-row sm:items-center">
@@ -119,15 +118,15 @@ export default function Home() {
                     </svg>
                   }
                 >
-                  回答第一个问题
+                  开始匹配机会
                 </Button>
                 <LinkButton
-                  href="/learn"
+                  href="/preview"
                   variant="ghost"
                   data-testid="open-learn"
                   className="h-[52px] border-on-dark/30 text-on-dark hover:bg-on-dark/10"
                 >
-                  先看看怎么判断
+                  先看看匹配示例
                 </LinkButton>
               </div>
 
@@ -152,10 +151,10 @@ export default function Home() {
                 30 秒开始
               </p>
               <h2 className="mt-1.5 text-lg font-bold leading-snug text-ink">
-                先回答一个问题
+                告诉我们能去哪里当老师
               </h2>
               <p className="mt-1.5 text-sm leading-6 text-ink-muted">
-                我们会先问你能接受去哪里当老师，只看相关招聘。
+                选择你能接受的地区，只看相关的招聘机会。
               </p>
 
               <div className="mt-4 grid gap-2.5">
@@ -165,15 +164,15 @@ export default function Home() {
                   data-testid="hero-question-start"
                   className="w-full"
                 >
-                  选择能接受的地区
+                  开始匹配机会
                 </Button>
                 <LinkButton
-                  href="/onboarding"
+                  href="/preview"
                   variant="ghost"
                   size="sm"
                   className="justify-center text-ink-muted"
                 >
-                  还没想好，先看看完整引导
+                  先看看匹配示例
                 </LinkButton>
               </div>
 
@@ -184,8 +183,8 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 完整流程：原型 .od-grid 四步卡 */}
-        <section className="mt-12 grid gap-3 md:mt-16 md:grid-cols-4 md:gap-3.5">
+        {/* 三步核心流程（v7：找机会 → 判资格 → 跟报名） */}
+        <section className="mt-12 grid gap-3 md:mt-16 md:grid-cols-3 md:gap-3.5">
           {flow.map(([no, title, desc, href]) => (
             <Link
               key={no}
@@ -200,6 +199,15 @@ export default function Home() {
             </Link>
           ))}
         </section>
+
+        {/* 备考弱化说明：确定主目标后才进入，不与首页主操作争夺 */}
+        <p className="mt-4 text-center text-[13px] leading-5 text-ink-muted">
+          确定主目标后，还可以继续
+          <Link href="/study" className="mx-0.5 font-medium text-brand hover:underline">
+            制定备考计划
+          </Link>
+          。
+        </p>
 
         {/* 三个核心能力：原型 .od-grid cols-3 */}
         <section className="mt-12 grid gap-3.5 md:mt-16 md:grid-cols-3">

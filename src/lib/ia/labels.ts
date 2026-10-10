@@ -8,7 +8,10 @@ import type {
   EmploymentNatureCode,
   RegionRef,
   StageCode,
+  SubjectCode,
 } from "@/lib/announcements/types";
+import type { MaterialStatus } from "@/lib/announcements/types";
+import type { FollowStatus, StudyTargetRole } from "@/lib/opportunities/types";
 
 /** 学段（v6.1 StageCode 用户可见文案） */
 export const STAGE_LABELS: Record<string, string> = {
@@ -20,6 +23,74 @@ export const STAGE_LABELS: Record<string, string> = {
 export function stageLabel(stage: StageCode): string {
   return STAGE_LABELS[stage] ?? "其他学段";
 }
+
+/** 学科（SubjectCode 用户可见文案） */
+export const SUBJECT_LABELS: Record<string, string> = {
+  chinese: "语文",
+  mathematics: "数学",
+  english: "英语",
+  physics: "物理",
+  chemistry: "化学",
+  biology: "生物",
+  history: "历史",
+  geography: "地理",
+  politics: "政治",
+  music: "音乐",
+  pe: "体育",
+  art: "美术",
+  it: "信息技术",
+};
+
+export function subjectLabel(subject: SubjectCode): string {
+  return SUBJECT_LABELS[subject] ?? "其他学科";
+}
+
+/**
+ * 学段与学科组合的用户可见文案，统一格式「初中 · 语文」。
+ * 页面不得直接拼接 stage + subject 枚举值（会产生 "middlechinese" 等内部串）。
+ */
+export function stageSubjectLabel(
+  stage: StageCode,
+  subject: SubjectCode,
+): string {
+  return `${stageLabel(stage)} · ${subjectLabel(subject)}`;
+}
+
+/** 报名材料状态用户可见文案 */
+export const MATERIAL_STATUS_LABELS: Record<MaterialStatus, string> = {
+  not_started: "未开始",
+  in_progress: "准备中",
+  done: "已完成",
+  not_applicable: "不适用",
+};
+
+export function materialStatusLabel(status: MaterialStatus): string {
+  return MATERIAL_STATUS_LABELS[status] ?? status;
+}
+
+/** 关注/跟进状态用户可见文案（与 FOLLOW_STATUS_LABELS 保持一致，集中维护） */
+export const FOLLOW_STATUS_UI_LABELS: Record<FollowStatus, string> = {
+  considering: "考虑中",
+  preparing: "准备报名",
+  registered: "已报名",
+  abandoned: "已放弃",
+  closed: "已结束",
+};
+
+export const STUDY_TARGET_ROLE_UI_LABELS: Record<StudyTargetRole, string> = {
+  primary: "重点准备",
+  backup: "备选机会",
+};
+
+/** 通用任务/进度状态的用户可见文案 */
+export const TASK_STATUS_LABELS: Record<string, string> = {
+  pending: "待确认",
+  not_started: "未开始",
+  in_progress: "准备中",
+  completed: "已完成",
+  partial: "部分完成",
+  abandoned: "已放弃",
+};
 
 /** 用工性质短标签：编码稳定，文案比 officialName 更短，适合卡片一行展示 */
 export const NATURE_SHORT_LABELS: Record<EmploymentNatureCode, string> = {

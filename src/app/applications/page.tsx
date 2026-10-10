@@ -22,7 +22,7 @@ import type {
 } from "@/lib/opportunities/api-types";
 import { FOLLOW_STATUS_LABELS } from "@/lib/opportunities";
 import { safeOfficialLink } from "@/lib/links/official";
-import { daysUntil } from "@/lib/ia/labels";
+import { daysUntil, stageSubjectLabel } from "@/lib/ia/labels";
 import { track } from "@/lib/analytics/eventService";
 import { useOnlineStatus, isForbiddenError } from "@/lib/useOnlineStatus";
 
@@ -333,7 +333,7 @@ export default function ApplicationsPage() {
             <ApplicationTargetCard
               key={goal.unitId}
               unitName={goal.unitName}
-              position={`${goal.region.province}${goal.region.city ? " " + goal.region.city : ""} · ${goal.stage}${goal.subject}`}
+              position={`${goal.region.province}${goal.region.city ? " " + goal.region.city : ""} · ${stageSubjectLabel(goal.stage, goal.subject)}`}
               isPrimary={goal.unitId === primaryGoal.unitId}
               statusLabel={FOLLOW_STATUS_LABELS[follow?.status ?? goal.followStatus]}
               statusVariant={statusVariantFor(follow?.status ?? goal.followStatus)}

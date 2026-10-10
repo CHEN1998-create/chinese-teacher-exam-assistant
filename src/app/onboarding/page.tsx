@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState, type ChangeEvent } from "react";
+import { Suspense, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
@@ -40,16 +40,14 @@ import type {
 import { NATURE_SHORT_LABELS } from "@/lib/ia/labels";
 
 /**
- * v6.1 五组基础画像采集（一次只问一组）：
- * 1. 可接受地区（必须接受 / 优先 / 可以考虑）
- * 2. 最高学历和学位
- * 3. 毕业证专业全称
- * 4. 毕业时间和当前就业状态
- * 5. 教师资格（状态/学科/学段）+ 用工形式接受程度
+ * v7 三阶段基础画像采集：
+ * 1. 求职方向 — 意向地区、毕业时间、当前状态
+ * 2. 资格条件 — 学历学位、专业全称、教师资格、用工形式偏好
+ * 3. 补充信息 — 说明后续按需补充的条件，可直接进入结果
  *
  * - 未登录可完成，草稿自动保存在本机浏览器，刷新可恢复；
  * - 随时返回修改，已填内容保留；
- * - 每组都可「暂不确定 / 暂不提供」：允许继续，但相关维度引擎只能判 UNKNOWN，
+ * - 每阶段都可「暂不确定 / 暂不提供」：允许继续，但相关维度引擎只能判 UNKNOWN，
  *   结果页明确标注限制，绝不把缺失信息当作「不符合」；
  * - 本机存储写入失败时页面输入不丢失，明确提示重试；
  * - 年龄/户籍/社保/工作经历不在此收齐，结果页按需说明补问原因；
@@ -58,20 +56,16 @@ import { NATURE_SHORT_LABELS } from "@/lib/ia/labels";
  */
 
 const STEP_TITLES = [
-  "你能接受去哪些地区当老师？",
-  "你的最高学历和学位？",
-  "毕业证上写的专业全称是什么？",
-  "你什么时候毕业？现在是什么状态？",
-  "你的教师资格情况？",
+  "你能接受去哪些地区？什么时候毕业？",
+  "你的学历、专业和教师资格情况？",
+  "还有哪些信息可以稍后补充？",
 ];
 
-const STEP_LABELS = ["地区偏好", "学历学位", "专业信息", "毕业情况", "教师资格"];
+const STEP_LABELS = ["求职方向", "资格条件", "补充信息"];
 
 const STEP_FEEDBACK: Record<number, string> = {
-  1: "很好，已缩小一部分范围。接下来核对学历条件",
-  2: "已记录，这会帮助我们排除明显不符合的岗位",
-  3: "专业信息已记住，接下来判断毕业身份",
-  4: "还差两步，就能看到初步结果",
+  1: "已记住你的地区意向和毕业信息，接下来核对资格条件",
+  2: "资格条件已记录，马上就能看到初步结果",
 };
 
 function OnboardingForm() {
@@ -112,6 +106,19 @@ function OnboardingForm() {
     key: number;
   } | null>(null);
 
+  // 步骤切换后将焦点移到标题，辅助屏幕阅读器播报新内容
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null);
+  const prevViewRef = useRef(view);
+  useEffect(() => {
+    if (prevViewRef.current !== view) {
+      prevViewRef.current = view;
+      // 延迟到下一帧，确保新内容已渲染
+      requestAnimationFrame(() => {
+        stepHeadingRef.current?.focus();
+      });
+    }
+  }, [view]);
+
   useEffect(() => {
     if (status === "loading") return;
     if (status === "authenticated") {
@@ -129,7 +136,7 @@ function OnboardingForm() {
     }
   }, [status, router, editing]);
 
-  // 任何一组补填了实质内容，自动取消该组的「暂不提供」标记（由纯函数规整）
+  // 任何一阶段补填了实质内容，自动取消该阶段的「暂不提供」标记（由纯函数规整）
   const updateDraft = (patch: Partial<GuestProfileDraft>) => {
     setSaveError(false);
     setDraft((prev) => pruneSkippedSteps({ ...prev, ...patch }));
@@ -197,7 +204,7 @@ function OnboardingForm() {
     }
   };
 
-  /** 返回上一组：草稿照样保留（即使本组尚未答完或已跳过） */
+  /** 返回上一阶段：草稿照样保留（即使本阶段尚未答完或已跳过） */
   const goBack = () => {
     persist(); // 返回修改时也尝试落盘；失败不拦截返回（输入仍在当前会话里）
     setView((v) => Math.max(v - 1, 1));
@@ -251,13 +258,13 @@ function OnboardingForm() {
       setRecentFeedback({
         variant: "note",
         key: Date.now(),
-        message: `已跳过${STEP_LABELS[view - 1]}，结果中会明确标出影响`,
+        message: `已跳过${STEP_LABELS[view - 1]}阶段，结果中会明确标出影响`,
       });
       setView(view + 1);
     }
   };
 
-  /** 撤销本组的「暂不提供」，留在本组填写 */
+  /** 撤销本阶段的「暂不提供」，留在本阶段填写 */
   const undoSkip = () => {
     updateDraft({
       skippedSteps: (draft.skippedSteps ?? []).filter((step) => step !== view),
@@ -310,7 +317,7 @@ function OnboardingForm() {
           aria-valuemin={1}
           aria-valuemax={TOTAL_PROFILE_STEPS}
           aria-valuenow={view}
-          aria-label={`报考信息填写进度：第 ${view} 组，共 ${TOTAL_PROFILE_STEPS} 组`}
+          aria-label={`报考信息填写进度：第 ${view} 阶段，共 ${TOTAL_PROFILE_STEPS} 阶段`}
         >
           {Array.from({ length: TOTAL_PROFILE_STEPS }).map((_, i) => {
             const stepNo = i + 1;
@@ -318,7 +325,7 @@ function OnboardingForm() {
             return (
               <div
                 key={i}
-                title={isSkipped ? `第 ${stepNo} 组：暂不提供` : undefined}
+                title={isSkipped ? `第 ${stepNo} 阶段：暂不提供` : undefined}
                 className={`h-1 flex-1 rounded-pill transition-colors duration-300 ${
                   isSkipped
                     ? "bg-warn"
@@ -343,11 +350,15 @@ function OnboardingForm() {
         )}
 
         <section className="rounded-xl border border-line bg-surface p-5 shadow-1 sm:p-7">
-          <p className="mb-2 text-xs font-semibold tracking-wide text-brand">第 {view} 步</p>
-          <h1 className="text-xl font-bold leading-snug tracking-[-0.02em] text-ink sm:text-2xl">
+          <p className="mb-2 text-xs font-semibold tracking-wide text-brand">{view} / {TOTAL_PROFILE_STEPS} {STEP_LABELS[view - 1]}</p>
+          <h1
+            ref={stepHeadingRef}
+            tabIndex={-1}
+            className="text-xl font-bold leading-snug tracking-[-0.02em] text-ink focus:outline-none sm:text-2xl"
+          >
             {STEP_TITLES[view - 1]}
           </h1>
-          {/* 短提示：每组只先说一句"这条信息用来做什么" */}
+          {/* 短提示：每阶段先说一句"这些信息用来做什么" */}
           <p className="mt-2 text-sm leading-6 text-ink-muted">{STEP_PURPOSE[view]}</p>
 
           {/* "为什么问这个？"长解释按需展开（模块 0A 第七节） */}
@@ -367,40 +378,53 @@ function OnboardingForm() {
               data-testid={`skipped-banner-${view}`}
             >
               <p className="text-sm text-warn">
-                已选择「暂不提供」这一组。{STEP_SKIP_COPY[view].confirm}
+                已选择「暂不提供」这一阶段。{STEP_SKIP_COPY[view].confirm}
               </p>
               <button
                 type="button"
                 onClick={undoSkip}
                 className="mt-1.5 text-sm font-medium text-warn underline underline-offset-2 hover:text-warn/80"
               >
-                现在补上这一组
+                现在补上这一阶段
               </button>
             </div>
           )}
 
-          {view === 1 && <StepRegions value={draft.regions} onChange={(regions) => updateDraft({ regions })} />}
+          {view === 1 && (
+            <>
+              <StepRegions value={draft.regions} onChange={(regions) => updateDraft({ regions })} />
+              <div className="mt-5 border-t border-line pt-4">
+                <p className="mb-1 text-xs font-semibold text-ink-muted">毕业时间与当前状态</p>
+                <p className="mb-3 text-xs leading-5 text-ink-muted/70">
+                  用来按每条公告的口径判断你是否属于应届或社会人员
+                </p>
+                <StepGraduation
+                  graduationDate={draft.graduationDate ?? ""}
+                  employmentStatus={draft.employmentStatus}
+                  onChange={(patch) => updateDraft(patch)}
+                />
+              </div>
+            </>
+          )}
           {view === 2 && (
-            <StepEducation
-              educationLevel={draft.educationLevel}
-              degree={draft.degree}
-              onChange={(patch) => updateDraft(patch)}
-            />
+            <>
+              <StepEducation
+                educationLevel={draft.educationLevel}
+                degree={draft.degree}
+                onChange={(patch) => updateDraft(patch)}
+              />
+              <div className="mt-5 border-t border-line pt-4">
+                <StepMajor
+                  major={draft.majorFullName ?? ""}
+                  onChange={(majorFullName) => updateDraft({ majorFullName })}
+                />
+              </div>
+              <div className="mt-5 border-t border-line pt-4">
+                <StepCert draft={draft} onChange={updateDraft} />
+              </div>
+            </>
           )}
-          {view === 3 && (
-            <StepMajor
-              major={draft.majorFullName ?? ""}
-              onChange={(majorFullName) => updateDraft({ majorFullName })}
-            />
-          )}
-          {view === 4 && (
-            <StepGraduation
-              graduationDate={draft.graduationDate ?? ""}
-              employmentStatus={draft.employmentStatus}
-              onChange={(patch) => updateDraft(patch)}
-            />
-          )}
-          {view === 5 && <StepCert draft={draft} onChange={updateDraft} />}
+          {view === 3 && <StepSupplementary draft={draft} />}
 
           {/* 最后一步只提示唯一最低门槛，其余空缺在结果中按 UNKNOWN 处理。 */}
           {view === TOTAL_PROFILE_STEPS && needsRegion && (
@@ -446,7 +470,7 @@ function OnboardingForm() {
             )}
           </div>
 
-          {/* 暂不提供：低强调文字操作（模块 0A 第六节），仅在本组无实质内容时出现 */}
+          {/* 暂不提供：低强调文字操作（模块 0A 第六节），仅在本阶段无实质内容时出现 */}
           {!skippedHere && !hasContentHere && (
             <button
               type="button"
@@ -468,7 +492,7 @@ function OnboardingForm() {
               <svg aria-hidden="true" className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m15 18-6-6 6-6" />
               </svg>
-              返回上一组修改
+              返回上一阶段修改
             </button>
           </div>
         )}
@@ -577,28 +601,32 @@ function StepRegions({
                   </select>
                 </label>
               </div>
-              <div>
-                <span className="text-xs font-medium text-ink-muted">接受程度</span>
-                <div className="mt-1.5 grid grid-cols-3 gap-2">
-                  {REGION_LEVEL_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() =>
-                        updateRow(index, regionFromSelect(provinceCode, cityCode, opt.value))
-                      }
-                      title={opt.hint}
-                      className={`min-h-11 rounded-xl border px-2 py-2 text-sm font-medium transition-all ${
-                        region.level === opt.value
-                          ? "border-brand bg-brand-soft text-brand ring-1 ring-brand/10"
-                          : "border-line bg-surface text-ink-muted hover:border-brand/30 hover:text-ink"
-                      }`}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+              <fieldset className="m-0 border-0 p-0">
+                <legend className="text-xs font-medium text-ink-muted">接受程度</legend>
+                <div className="mt-1.5 grid grid-cols-3 gap-2" role="group">
+                  {REGION_LEVEL_OPTIONS.map((opt) => {
+                    const selected = region.level === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          updateRow(index, regionFromSelect(provinceCode, cityCode, opt.value))
+                        }
+                        title={opt.hint}
+                        aria-pressed={selected}
+                        className={`min-h-11 rounded-xl border px-2 py-2 text-sm font-medium transition-all ${
+                          selected
+                            ? "border-brand bg-brand-soft text-brand ring-1 ring-brand/10"
+                            : "border-line bg-surface text-ink-muted hover:border-brand/30 hover:text-ink"
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
                 </div>
-              </div>
+              </fieldset>
               {rows.length > 1 && (
                 <button
                   type="button"
@@ -648,26 +676,30 @@ function OptionList<T extends string>({
   onSelect: (value: T) => void;
 }) {
   return (
-    <div className="grid grid-cols-2 gap-2">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          type="button"
-          onClick={() => onSelect(opt.value)}
-          className={`flex min-h-12 items-center justify-between rounded-xl border p-3 text-left text-sm font-medium transition-all ${
-            value === opt.value
-              ? "border-brand bg-brand-soft text-brand ring-1 ring-brand/10"
-              : "border-line bg-surface text-ink hover:border-brand/30 hover:bg-brand-soft/30"
-          }`}
-        >
-          <span>{opt.label}</span>
-          {value === opt.value && (
-            <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-      ))}
+    <div className="grid grid-cols-2 gap-2" role="group">
+      {options.map((opt) => {
+        const selected = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onSelect(opt.value)}
+            aria-pressed={selected}
+            className={`flex min-h-12 items-center justify-between rounded-xl border p-3 text-left text-sm font-medium transition-all ${
+              selected
+                ? "border-brand bg-brand-soft text-brand ring-1 ring-brand/10"
+                : "border-line bg-surface text-ink hover:border-brand/30 hover:bg-brand-soft/30"
+            }`}
+          >
+            <span>{opt.label}</span>
+            {selected && (
+              <svg aria-hidden="true" className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="m5 10 3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -683,22 +715,22 @@ function StepEducation({
 }) {
   return (
     <div className="mt-4 space-y-5">
-      <div>
-        <p className="mb-2 text-sm font-medium text-ink">最高学历</p>
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-medium text-ink">最高学历</legend>
         <OptionList
           options={CREDENTIAL_LEVEL_OPTIONS}
           value={educationLevel}
           onSelect={(v) => onChange({ educationLevel: v })}
         />
-      </div>
-      <div>
-        <p className="mb-2 text-sm font-medium text-ink">最高学位</p>
+      </fieldset>
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-medium text-ink">最高学位</legend>
         <OptionList
           options={DEGREE_OPTIONS}
           value={degree}
           onSelect={(v) => onChange({ degree: v })}
         />
-      </div>
+      </fieldset>
     </div>
   );
 }
@@ -749,8 +781,11 @@ function StepGraduation({
   return (
     <div className="mt-4 space-y-5">
       <div>
-        <p className="mb-2 text-sm font-medium text-ink">毕业（或预计毕业）时间</p>
+        <label htmlFor="graduation-month" className="mb-2 block text-sm font-medium text-ink">
+          毕业（或预计毕业）时间
+        </label>
         <input
+          id="graduation-month"
           type="month"
           value={monthValue}
           onChange={(e) =>
@@ -762,14 +797,14 @@ function StepGraduation({
           是否属于应届生会按每条公告单独判断
         </p>
       </div>
-      <div>
-        <p className="mb-2 text-sm font-medium text-ink">当前状态</p>
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-medium text-ink">当前状态</legend>
         <OptionList
           options={EMPLOYMENT_STATUS_OPTIONS}
           value={employmentStatus}
           onSelect={(v) => onChange({ employmentStatus: v })}
         />
-      </div>
+      </fieldset>
     </div>
   );
 }
@@ -849,14 +884,14 @@ function StepCert({
 
   return (
     <div className="mt-4 space-y-5">
-      <div>
-        <p className="mb-2 text-sm font-medium text-ink">教师资格</p>
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-medium text-ink">教师资格</legend>
         <OptionList
           options={TEACHER_CERT_STATUS_OPTIONS}
           value={cert.status}
           onSelect={changeStatus}
         />
-      </div>
+      </fieldset>
 
       {cert.status !== undefined && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -922,11 +957,11 @@ function StepCert({
         </div>
       )}
 
-      <div>
-        <p className="mb-2 text-sm font-medium text-ink">
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-medium text-ink">
           能接受哪些官方用工形式？（至少选一项）
-        </p>
-        <div className="grid grid-cols-2 gap-2">
+        </legend>
+        <div className="grid grid-cols-2 gap-2" role="group">
           {NATURE_OPTIONS.map((opt) => {
             const checked = draft.acceptedEmploymentNatures.includes(opt.value);
             return (
@@ -949,6 +984,68 @@ function StepCert({
             );
           })}
         </div>
+      </fieldset>
+    </div>
+  );
+}
+
+/* ================== 第 3 阶段：补充信息 ================== */
+
+function StepSupplementary({ draft }: { draft: GuestProfileDraft }) {
+  const filledItems: { label: string; status: string }[] = [
+    { label: "意向地区", status: draft.regions.length > 0 ? `已选 ${draft.regions.length} 个` : "未填" },
+    { label: "学历学位", status: draft.educationLevel ? "已填" : "未填" },
+    { label: "专业全称", status: (draft.majorFullName ?? "").trim() ? "已填" : "未填" },
+    { label: "毕业时间", status: draft.graduationDate ? "已填" : "未填" },
+    { label: "教师资格", status: draft.teacherCert?.status ? "已填" : "未填" },
+    { label: "用工形式偏好", status: draft.acceptedEmploymentNatures.length > 0 ? "已选" : "未选" },
+  ];
+
+  const laterItems = [
+    { label: "户籍或生源地", desc: "部分公告要求本地户籍或生源，需要时在机会详情中补问。" },
+    { label: "工作经历", desc: "部分岗位要求教学或相关工作经历，按需补充。" },
+    { label: "普通话等级", desc: "语文教师通常要求普通话二甲或以上，需要时补填。" },
+    { label: "年龄", desc: "部分公告有年龄上限，需要时根据身份证计算。" },
+    { label: "社保与编制状态", desc: "在职人员可能需要提供社保记录或单位同意报考证明。" },
+  ];
+
+  return (
+    <div className="mt-4 space-y-5">
+      <fieldset className="m-0 border-0 p-0">
+        <legend className="mb-2 text-sm font-medium text-ink">已填写信息</legend>
+        <ul className="grid grid-cols-2 gap-2">
+          {filledItems.map((item) => (
+            <li
+              key={item.label}
+              className="flex items-center justify-between rounded-lg border border-line bg-canvas/60 px-3 py-2 text-sm"
+            >
+              <span className="text-ink-muted">{item.label}</span>
+              <span className={item.status === "未填" || item.status === "未选" ? "text-ink-muted/60" : "font-medium text-ink"}>
+                {item.status}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+
+      <div className="rounded-xl border border-line bg-canvas/40 p-4">
+        <p className="text-sm font-medium text-ink" role="heading" aria-level={3}>以下信息在具体机会需要时再补充</p>
+        <p className="mt-1 text-xs leading-5 text-ink-muted">
+          不填这些不会阻止你查看结果。缺少非必要信息时，相关条件会标为「信息不足」，补充后会重新判断。
+        </p>
+        <ul className="mt-3 space-y-2.5">
+          {laterItems.map((item) => (
+            <li key={item.label} className="flex items-start gap-2 text-sm">
+              <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs text-ink-muted">
+                ·
+              </span>
+              <div>
+                <span className="font-medium text-ink">{item.label}</span>
+                <span className="ml-1.5 text-ink-muted">{item.desc}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );

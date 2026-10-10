@@ -245,23 +245,23 @@ describe("buildGuestPreview：Preview 只有一个主要行动，且不生成 7 
 });
 
 describe("buildGuestPreview：未完成画像", () => {
-  it("五组未答完时返回 incomplete，不产出机会", () => {
-    const draft = completeDraft({ majorFullName: undefined });
+  it("画像未完成时返回 incomplete，不产出机会", () => {
+    // 清空地区使 step 1 不完成
+    const draft = completeDraft({ regions: [] });
     const result = buildGuestPreview(draft, V61_SEED_ANNOUNCEMENTS, V61_NOW);
     expect(result.kind).toBe("incomplete");
   });
 });
 
 describe("buildGuestPreview：暂不确定/暂不提供（模块 4）", () => {
-  it("跳过专业：相关岗位只进「补充专业信息后判断」，绝不进明确不符合", () => {
+  it("缺专业：相关岗位只进「补充专业信息后判断」，绝不进明确不符合", () => {
     const draft = completeDraft({
       majorFullName: undefined,
-      skippedSteps: [3],
     });
     const r = ready(draft);
 
-    // 结果限制明示缺了哪组信息
-    expect(r.limitations.map((l) => l.step)).toContain(3);
+    // step 2 有其他内容（学历/证书/用工形式），不出现在限制列表
+    expect(r.limitations.map((l) => l.step)).not.toContain(2);
 
     const majorGroup = r.view.needInfoGroups.find((g) => g.dimension === "major");
     expect(majorGroup).toBeDefined();
@@ -282,6 +282,8 @@ describe("buildGuestPreview：暂不确定/暂不提供（模块 4）", () => {
   it("跳过地区：无初步符合、主行动为空，所有岗位并入「补充地区后判断」，南京学历硬不符仍保留在明确不符合", () => {
     const draft = completeDraft({
       regions: [],
+      graduationDate: undefined,
+      employmentStatus: undefined,
       skippedSteps: [1],
     });
     const r = ready(draft);
@@ -313,11 +315,11 @@ describe("buildGuestPreview：暂不确定/暂不提供（模块 4）", () => {
     ).toBe(false);
   });
 
-  it("跳过第 5 组教师资格：岗位教师维度 UNKNOWN，画像不崩、不判不符合", () => {
+  it("跳过教师资格：岗位教师维度 UNKNOWN，画像不崩、不判不符合", () => {
     const draft = completeDraft({
       teacherCert: undefined,
       intendedSubject: undefined,
-      skippedSteps: [5],
+      skippedSteps: [2],
     });
     const r = ready(draft);
     const certGroup = r.view.needInfoGroups.find((g) => g.dimension === "teacher_cert");
@@ -329,7 +331,7 @@ describe("buildGuestPreview：暂不确定/暂不提供（模块 4）", () => {
     ).toBe("UNKNOWN");
   });
 
-  it("五组全部跳过：仍可生成结果页模型（空态），限制数为 5，不抛错", () => {
+  it("三阶段全部跳过：仍可生成结果页模型（空态），限制数为 2（step 3 为信息性），不抛错", () => {
     const draft = completeDraft({
       regions: [],
       educationLevel: undefined,
@@ -339,10 +341,12 @@ describe("buildGuestPreview：暂不确定/暂不提供（模块 4）", () => {
       employmentStatus: undefined,
       teacherCert: undefined,
       intendedSubject: undefined,
-      skippedSteps: [1, 2, 3, 4, 5],
+      acceptedEmploymentNatures: [],
+      skippedSteps: [1, 2, 3],
     });
     const r = ready(draft);
-    expect(r.limitations).toHaveLength(5);
+    // step 1 和 step 2 无内容 → 2 条限制；step 3 在 buildProfileLimitations 中跳过
+    expect(r.limitations).toHaveLength(2);
     expect(r.view.priority).toBeNull();
     expect(r.primaryAction).toBeNull();
   });

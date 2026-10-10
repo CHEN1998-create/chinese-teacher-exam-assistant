@@ -47,10 +47,11 @@ describe("buildActiveProfile", () => {
     if (!result.ready) expect(result.reason).toBe("no_draft");
   });
 
-  it("五组未完成时引导回 onboarding（incomplete）", () => {
+  it("画像未完成时引导回 onboarding（incomplete）", () => {
+    // 清空地区使 step 1 未完成
     localStorage.setItem(
       STORAGE_KEYS.GUEST_PROFILE_V61,
-      JSON.stringify(completeSession({ majorFullName: undefined })),
+      JSON.stringify(completeSession({ regions: [] })),
     );
     const result = buildActiveProfile();
     expect(result.ready).toBe(false);

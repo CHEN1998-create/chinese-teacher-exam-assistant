@@ -55,6 +55,13 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
       <h3 className="sr-only">{row.unitName}</h3>
 
       <div className="p-4">
+        {/* 演示标识：访客预览中的机会均为虚拟示例，固定标出 */}
+        <p className="mb-2">
+          <span className="inline-flex items-center rounded-full bg-canvas px-2 py-0.5 text-xs font-medium text-ink-muted ring-1 ring-line">
+            虚拟示例
+          </span>
+        </p>
+
         {/* 五要素之一：地区 + 报考单元 + 状态 */}
         <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 text-sm font-semibold text-ink">
@@ -86,7 +93,7 @@ export function OpportunityCard({ row, expanded, onToggle, priority = false, reg
 
         {/* 五要素之三：报名截止 */}
         <p className={cn("mt-1 text-sm", closed ? "text-ink-muted" : "text-ink-muted")}>
-          示例报名{row.deadline}
+          报名{row.deadline}
         </p>
 
         {/* 五要素之四：一条关键依据或风险 */}
