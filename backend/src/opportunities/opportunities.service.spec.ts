@@ -413,6 +413,11 @@ describe('OpportunitiesService：关注与状态流转', () => {
     await service.follow('user-1', 'unit-hangzhou-01');
     const before = await service.listFollows('user-1');
     expect(before[0]?.version).toBe(0);
+    expect(before[0]?.materialStatuses).toEqual({
+      'id-card': 'not_started',
+      'edu-cert': 'not_started',
+      'teacher-cert': 'not_started',
+    });
 
     const after = await service.setMaterialStatus(
       'user-1',
@@ -420,7 +425,11 @@ describe('OpportunitiesService：关注与状态流转', () => {
       'id-card',
       'done',
     );
-    expect(after.materialStatuses).toEqual({ 'id-card': 'done' });
+    expect(after.materialStatuses).toEqual({
+      'id-card': 'done',
+      'edu-cert': 'not_started',
+      'teacher-cert': 'not_started',
+    });
     expect(after.version).toBe(1);
 
     // 同状态幂等
@@ -445,7 +454,11 @@ describe('OpportunitiesService：关注与状态流转', () => {
       ),
     ).rejects.toBeInstanceOf(ConflictException);
     const follows = await service.listFollows('user-1');
-    expect(follows[0]?.materialStatuses).toBeNull();
+    expect(follows[0]?.materialStatuses).toEqual({
+      'id-card': 'not_started',
+      'edu-cert': 'not_started',
+      'teacher-cert': 'not_started',
+    });
     expect(follows[0]?.version).toBe(0);
   });
 

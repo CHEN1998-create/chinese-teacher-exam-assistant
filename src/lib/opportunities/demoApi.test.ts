@@ -19,6 +19,11 @@ describe("公开演示的本地机会闭环", () => {
 
     const followed = await demoOpportunitiesApi.follow(unit!.id);
     expect(followed.status).toBe("considering");
+    expect(followed.materialStatuses).toEqual({
+      "id-card": "not_started",
+      "edu-cert": "not_started",
+      "teacher-cert": "not_started",
+    });
     const preparing = await demoOpportunitiesApi.transition(unit!.id, "preparing", {
       version: followed.version,
     });

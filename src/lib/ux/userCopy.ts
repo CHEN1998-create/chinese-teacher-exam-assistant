@@ -63,7 +63,7 @@ export const USER_COPY = {
 
   /** 关注/取消/主要目标的影响说明（用于 StatusMessage 与详情） */
   FOLLOW: {
-    ADDED: "已保存这个机会，相关时间已加入日程",
+    ADDED: "已保存这个机会，材料清单与相关时间已生成",
     REMOVED: "已移除这个机会",
     UNDO: "撤销",
     REMOVE_CONFIRM: "移除后，这个机会会从已保存列表和日程中消失。",

@@ -244,7 +244,7 @@ export const demoOpportunitiesApi = {
     const data = load();
     const existing = byUnit(data, unitId);
     if (existing) return existing;
-    const { announcement, version } = findUnit(unitId);
+    const { announcement, version, unit } = findUnit(unitId);
     const now = new Date().toISOString();
     const follow: DemoFollow = {
       id: `demo-${currentUserId()}-${unitId}`,
@@ -259,7 +259,9 @@ export const demoOpportunitiesApi = {
       newerVersion: false,
       remindersMuted: false,
       version: 1,
-      materialStatuses: null,
+      materialStatuses: Object.fromEntries(
+        (unit.materials ?? []).map((material) => [material.id, "not_started" as const]),
+      ),
       consultationNotes: null,
     };
     data.follows.push(follow);

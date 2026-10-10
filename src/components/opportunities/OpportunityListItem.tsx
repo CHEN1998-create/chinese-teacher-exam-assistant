@@ -99,11 +99,11 @@ export function OpportunityListItem({
           )}
         </div>
 
-        {/* 真实/演示明确区分：演示固定显示"虚拟示例"，真实展示来源与核对状态 */}
+        {/* 真实/演示明确区分：演示固定显示"虚构试用示例"，真实展示来源与核对状态 */}
         <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           {unit.announcement.dataset === "demo" ? (
             <span className="inline-flex items-center rounded-full bg-canvas px-2 py-0.5 font-medium text-ink-muted ring-1 ring-line">
-              虚拟示例
+              虚构试用示例
             </span>
           ) : (
             <span className="inline-flex items-center rounded-full bg-warn-soft px-2 py-0.5 font-medium text-warn">

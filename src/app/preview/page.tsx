@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useCurrentUser } from "@/lib/auth";
+import { AUTH_MODE, useCurrentUser } from "@/lib/auth";
 import {
   CREDENTIAL_LEVEL_OPTIONS,
   guestSessionService,
@@ -299,6 +299,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             actionLabel="修改报考信息"
             actionHref="/onboarding?from=preview"
           />
+          <InvitedTrialHandoff />
           <SummaryCard />
           <LimitationsCard limitations={limitations} />
           {archiveSections}
@@ -396,6 +397,7 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
             onToggle={() => setPriorityOpen((v) => !v)}
           />
           <SummaryCard />
+          <InvitedTrialHandoff />
         </section>
 
         {moreResultCount > 0 && (
@@ -456,6 +458,34 @@ function ReadyPreview({ preview }: { preview: GuestPreviewReady }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/** 受邀测试承接：把访客预筛自然交给登录后的完整机会闭环。 */
+function InvitedTrialHandoff() {
+  if (AUTH_MODE !== "invited") return null;
+
+  return (
+    <Card className="border-brand/25 bg-brand-soft/35 p-5 shadow-none">
+      <p className="text-xs font-semibold tracking-wide text-brand">继续完整试用</p>
+      <h2 className="mt-1 text-base font-semibold text-ink">
+        登录后查看我的机会、材料和日程
+      </h2>
+      <p className="mt-2 text-sm leading-6 text-ink-muted">
+        你刚填写的报考信息会在登录后同步到受邀账号，无需重新填写。机会页会同时说明真实监测范围与虚构试用数据，不会把示例当成真实岗位。
+      </p>
+      <LinkButton
+        href="/login?next=/opportunities"
+        variant="primary"
+        size="md"
+        className="mt-4 w-full sm:w-auto"
+      >
+        登录后查看我的机会
+      </LinkButton>
+      <p className="mt-3 text-xs leading-5 text-ink-muted">
+        当前仅限受邀测试用户登录；请使用项目方提供的试用账号。
+      </p>
+    </Card>
   );
 }
 

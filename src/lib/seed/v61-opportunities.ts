@@ -24,6 +24,7 @@ import type {
   EmploymentNature,
   EvidenceAnchor,
   EvidenceLocator,
+  MaterialItem,
   RecruitmentAnnouncement,
   RegionRef,
   Requirement,
@@ -103,7 +104,36 @@ interface UnitSpec {
   registerUrl?: string;
 }
 
+/** 虚构机会也提供材料清单，便于公开演示完整体验；来源仍明确指向示例地址。 */
+function demoMaterials(officialUrl: string): MaterialItem[] {
+  return [
+    {
+      id: "id-card",
+      label: "身份证",
+      applicableAudience: "以公告为准",
+      required: false,
+      source: officialAnchor("demo-mat-id", officialUrl, "报名一般需提供有效身份证件，具体以公告为准。"),
+    },
+    {
+      id: "edu-cert",
+      label: "学历、学位证书",
+      applicableAudience: "以公告为准",
+      required: false,
+      source: officialAnchor("demo-mat-edu", officialUrl, "学历学位材料要求以公告原文为准。"),
+    },
+    {
+      id: "teacher-cert",
+      label: "教师资格证书",
+      applicableAudience: "以公告为准",
+      required: false,
+      source: officialAnchor("demo-mat-tc", officialUrl, "教师资格及学科要求以公告原文为准。"),
+    },
+  ];
+}
+
 function unit(versionId: string, announcementId: string, spec: UnitSpec): ApplicationUnit {
+  const firstLocator = spec.requirements[0]?.evidence.locator;
+  const officialUrl = firstLocator?.kind === "url" ? firstLocator.url ?? "" : "";
   return {
     id: spec.id,
     code: spec.code,
@@ -120,6 +150,7 @@ function unit(versionId: string, announcementId: string, spec: UnitSpec): Applic
     allocation: spec.allocation,
     registerUrl: spec.registerUrl,
     requirements: spec.requirements,
+    materials: demoMaterials(officialUrl),
   };
 }
 

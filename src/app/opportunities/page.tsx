@@ -18,6 +18,7 @@ import {
 import { OpportunityListItem } from "@/components/opportunities/OpportunityListItem";
 import { CoverageBanner } from "@/components/opportunities/CoverageBanner";
 import { DatasetScopeNotice } from "@/components/opportunities/DatasetScopeNotice";
+import { TrialJourneyGuide } from "@/components/opportunities/TrialJourneyGuide";
 import { StatusMessage, StatusMessageRegion } from "@/components/ui/StatusMessage";
 import { Callout } from "@/components/ui/Callout";
 import { useOnlineStatus } from "@/lib/useOnlineStatus";
@@ -115,6 +116,24 @@ export default function OpportunitiesPage() {
     ...view.notEligible,
     ...view.closed,
   ].some((unit) => unit.announcement.dataset === "demo");
+  const allVisible = [
+    ...actionable,
+    ...view.regionOutOfScope,
+    ...view.notEligible,
+    ...view.closed,
+  ].filter(
+    (unit, index, units) =>
+      units.findIndex((candidate) => candidate.unit.id === unit.unit.id) === index,
+  );
+  const trialEntry =
+    actionable.find((unit) => unit.announcement.dataset === "demo") ??
+    view.regionOutOfScope.find((unit) => unit.announcement.dataset === "demo") ??
+    view.notEligible.find((unit) => unit.announcement.dataset === "demo") ??
+    view.closed.find((unit) => unit.announcement.dataset === "demo") ??
+    null;
+  const hasSavedDemoOpportunity = allVisible.some(
+    (unit) => unit.announcement.dataset === "demo" && unit.follow !== null,
+  );
   const heroConclusion = view.priority
     ? view.conclusion
     : view.needInfoGroups.length > 0
@@ -189,6 +208,12 @@ export default function OpportunitiesPage() {
 
       <CoverageBanner coverage={view.coverage} />
       <DatasetScopeNotice hasDemo={hasDemo} />
+      {trialEntry && (
+        <TrialJourneyGuide
+          unitId={trialEntry.unit.id}
+          hasSavedOpportunity={hasSavedDemoOpportunity}
+        />
+      )}
 
       {view.uncoveredRegions.length > 0 && (
         <div

@@ -210,6 +210,7 @@ export class OpportunitiesService {
           { status: 'considering', at: atIso },
         ] satisfies Prisma.InputJsonValue,
         abandonReason: null,
+        materialStatuses: this.initialMaterialStatuses(unitId) as Prisma.InputJsonValue,
       },
     });
     return this.toDTO(this.fromRow(row));
@@ -265,7 +266,7 @@ export class OpportunitiesService {
           materialStatuses:
             item.materialStatuses && typeof item.materialStatuses === 'object'
               ? (item.materialStatuses as Prisma.InputJsonValue)
-              : Prisma.JsonNull,
+              : (this.initialMaterialStatuses(item.unitId) as Prisma.InputJsonValue),
           consultationNotes:
             item.consultationNotes && typeof item.consultationNotes === 'object'
               ? (item.consultationNotes as Prisma.InputJsonValue)
@@ -626,6 +627,21 @@ export class OpportunitiesService {
     throw new NotFoundException('未找到该报考单元，它可能不属于当前已发布公告');
   }
 
+  /** 新保存机会立即建立材料进度；旧关注记录读取时也得到同样的默认状态。 */
+  private initialMaterialStatuses(unitId: string): Record<string, MaterialStatus> {
+    for (const announcement of PUBLISHED_ANNOUNCEMENTS) {
+      if (announcement.dataset === 'real') continue;
+      for (const version of announcement.versions) {
+        const unit = version.units.find((candidate) => candidate.id === unitId);
+        if (!unit) continue;
+        return Object.fromEntries(
+          (unit.materials ?? []).map((material) => [material.id, 'not_started' as const]),
+        );
+      }
+    }
+    return {};
+  }
+
   /** 纠错展示用：跨全部版本查找单元名与公告标题（旧版本单元也要能显示） */
   private findCatalogUnitMeta(unitId: string): {
     unitName: string;
@@ -718,7 +734,8 @@ export class OpportunitiesService {
       statusHistory: row.statusHistory as unknown as FollowStatusEvent[],
       abandonReason: row.abandonReason,
       materialStatuses:
-        (row.materialStatuses as Record<string, MaterialStatus> | null) ?? null,
+        (row.materialStatuses as Record<string, MaterialStatus> | null) ??
+        this.initialMaterialStatuses(row.unitId),
       consultationNotes:
         (row.consultationNotes as Record<string, string> | null) ?? null,
       version: row.version ?? 0,

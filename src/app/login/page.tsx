@@ -4,13 +4,14 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { BrandMark } from "@/components/layout/BrandMark";
-import { useCurrentUser, DEMO_ACCOUNTS } from "@/lib/auth";
+import { AUTH_MODE, useCurrentUser, DEMO_ACCOUNTS } from "@/lib/auth";
 import { isDemoMode } from "@/lib/demo/config";
 import { opportunitiesApi } from "@/lib/opportunities/api";
 import {
   listGuestFollows,
   clearGuestFollows,
 } from "@/lib/guest/guestFollows";
+import { guestSessionService } from "@/lib/guest/guestSession";
 
 function LoginForm() {
   const router = useRouter();
@@ -42,6 +43,11 @@ function LoginForm() {
   };
   const nextPath = safeNext(nextParam);
   const returningToOpportunity = nextPath?.startsWith("/opportunities/") === true;
+  const continuingTrial = nextPath === "/opportunities";
+  const [hasGuestProfile] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return guestSessionService.isComplete();
+  });
 
   // 已登录用户访问登录页时直接跳转；登录成功后先合并访客本机关注，再跳转。
   useEffect(() => {
@@ -74,6 +80,8 @@ function LoginForm() {
             ? "登录成功，刚才保存的机会已同步到账号。接下来可以查看报名时间。"
             : returningToOpportunity
               ? "登录成功，已回到刚才查看的机会。"
+              : continuingTrial
+                ? "登录成功，已按刚才填写的报考信息进入机会列表。"
               : "登录成功，已回到你的机会列表。",
         );
       }
@@ -122,6 +130,8 @@ function LoginForm() {
           <p className="mt-2 text-sm text-ink-muted">
             {returningToOpportunity
               ? "登录后会回到刚才的机会，继续完成保存"
+              : continuingTrial
+                ? "登录后继续查看机会、材料清单和报考日程"
               : "登录后继续查看已保存机会与报考进度"}
           </p>
         </div>
@@ -143,6 +153,15 @@ function LoginForm() {
             <div className="mb-4 p-3 rounded-lg bg-canvas border border-line">
               <p className="text-xs leading-5 text-ink-muted">
                 登录状态已过期，请重新登录。
+              </p>
+            </div>
+          )}
+
+          {AUTH_MODE === "invited" && continuingTrial && hasGuestProfile && (
+            <div className="mb-4 rounded-lg border border-brand/25 bg-brand-soft/50 p-3">
+              <p className="text-xs leading-5 text-ink-muted">
+                <strong className="text-ink">无需重新填写：</strong>
+                当前设备上的报考信息会在登录后同步到受邀账号，并直接用于生成机会判断。
               </p>
             </div>
           )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal, Modal } from "@/components/ui/Modal";
 import { Textarea } from "@/components/ui/Input";
@@ -62,6 +63,7 @@ export function FollowControls({
   onSetRole,
   onUnfollow,
 }: FollowControlsProps) {
+  const router = useRouter();
   const [showAbandon, setShowAbandon] = useState(false);
   const [abandonReason, setAbandonReason] = useState("");
   const [confirmUnfollow, setConfirmUnfollow] = useState(false);
@@ -141,6 +143,10 @@ export function FollowControls({
         <StatusMessage
           tone="success"
           message={USER_COPY.FOLLOW.ADDED}
+          action={{
+            label: "查看报考进度",
+            onClick: () => router.push("/applications"),
+          }}
           undo={{
             label: USER_COPY.FOLLOW.UNDO,
             onClick: () => {
